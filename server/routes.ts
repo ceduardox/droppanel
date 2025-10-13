@@ -272,7 +272,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { paymentDate, isPaid } = req.body;
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
       
-      const objectStorage = new Client();
+      const objectStorage = new Client({
+        bucketId: process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID
+      });
       let imageComisionUrl: string | undefined;
       let imageCostoUrl: string | undefined;
 

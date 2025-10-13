@@ -233,6 +233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { productId, quantity, date } = req.body;
       
       const product = await storage.getProduct(productId);
+      
       if (!product || product.userId !== req.session.userId) {
         return res.status(404).json({ error: "Producto no encontrado" });
       }
@@ -240,7 +241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sale = await storage.createSale({
         productId,
         quantity: parseInt(quantity),
-        saleDate: new Date(date),
+        saleDate: date,
         userId: req.session.userId!,
       });
       
@@ -261,8 +262,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const salesWithDetails = sales.map(sale => {
         const product = productMap.get(sale.productId);
+        // Normalize date to YYYY-MM-DD format
+        const dateValue: any = sale.saleDate;
+        const saleDate = dateValue instanceof Date 
+          ? dateValue.toISOString().split('T')[0]
+          : typeof dateValue === 'string' && dateValue.includes('T')
+            ? dateValue.split('T')[0]
+            : dateValue;
         return {
           ...sale,
+          saleDate,
           product,
         };
       });

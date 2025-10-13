@@ -11,15 +11,15 @@ export default function Dashboard() {
   }
 
   // Calculate stats
-  const totalSales = salesWithProducts.reduce((sum: number, item: any) => {
+  const totalSales = (salesWithProducts as any[]).reduce((sum: number, item: any) => {
     const price = parseFloat(item.product?.price || 0);
     const quantity = item.quantity;
     return sum + (price * quantity);
   }, 0);
 
-  const totalProducts = salesWithProducts.reduce((sum: number, item: any) => sum + item.quantity, 0);
+  const totalProducts = (salesWithProducts as any[]).reduce((sum: number, item: any) => sum + item.quantity, 0);
 
-  const totalCost = salesWithProducts.reduce((sum: number, item: any) => {
+  const totalCost = (salesWithProducts as any[]).reduce((sum: number, item: any) => {
     const cost = parseFloat(item.product?.cost || 0);
     const quantity = item.quantity;
     return sum + (cost * quantity);
@@ -28,7 +28,7 @@ export default function Dashboard() {
   const totalProfit = totalSales - totalCost;
   const profitPerPartner = totalProfit / 2;
 
-  const recentSales = salesWithProducts
+  const recentSales = (salesWithProducts as any[])
     .filter((item: any) => item.product)
     .slice(0, 3)
     .map((item: any) => ({

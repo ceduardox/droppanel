@@ -15,6 +15,14 @@ interface ReportCardProps {
   sale: Sale;
 }
 
+function formatDateString(dateStr: string): string {
+  // Format YYYY-MM-DD to Spanish date without timezone issues
+  const [year, month, day] = dateStr.split('-');
+  const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const monthName = months[parseInt(month) - 1];
+  return `${parseInt(day)} de ${monthName} de ${year}`;
+}
+
 export default function ReportCard({ sale }: ReportCardProps) {
   const total = sale.price * sale.quantity;
   const totalCost = sale.cost * sale.quantity;
@@ -28,7 +36,7 @@ export default function ReportCard({ sale }: ReportCardProps) {
           <CardTitle className="text-lg">{sale.productName}</CardTitle>
           <Badge variant="outline" className="text-xs">
             <Calendar className="h-3 w-3 mr-1" />
-            {new Date(sale.date).toLocaleDateString('es-BO')}
+            {formatDateString(sale.date)}
           </Badge>
         </div>
       </CardHeader>

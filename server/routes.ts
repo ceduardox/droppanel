@@ -253,6 +253,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Serve images from object storage
+  app.get("/api/storage/:path(*)", requireAuth, async (req, res) => {
+    try {
+      const objectStorage = new Client({
+        bucketId: process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID
+      });
+      const { path } = req.params;
+      const result = await objectStorage.downloadAsBytes(path);
+      
+      if (!result.ok) {
+        return res.status(404).json({ error: "Imagen no encontrada" });
+      }
+      
+      // Determine content type based on file extension
+      const ext = path.split('.').pop()?.toLowerCase();
+      const contentTypes: Record<string, string> = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+      };
+      
+      res.setHeader('Content-Type', contentTypes[ext || 'jpg'] || 'image/jpeg');
+      res.send(Buffer.from(result.value[0]));
+    } catch (error) {
+      console.error("Error fetching image:", error);
+      res.status(500).json({ error: "Error al obtener imagen" });
+    }
+  });
+
   // Daily payments routes
   app.get("/api/daily-payment/:date", requireAuth, async (req, res) => {
     try {

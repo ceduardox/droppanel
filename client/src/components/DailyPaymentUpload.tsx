@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useDailyPayment, useSaveDailyPayment } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, CheckCircle, Image as ImageIcon } from "lucide-react";
+import { Upload, CheckCircle, Image as ImageIcon, Eye, Download } from "lucide-react";
 
 interface DailyPaymentUploadProps {
   selectedDate: string;
@@ -105,10 +105,24 @@ export default function DailyPaymentUpload({ selectedDate }: DailyPaymentUploadP
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="imageComision">
-                Comprobante Comisión José Eduardo
-                {(payment as DailyPayment)?.imageComisionUrl && " ✓"}
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="imageComision">
+                  Comprobante Comisión José Eduardo
+                  {(payment as DailyPayment)?.imageComisionUrl && " ✓"}
+                </Label>
+                {(payment as DailyPayment)?.imageComisionUrl && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(`/api/storage/${(payment as DailyPayment).imageComisionUrl}`, '_blank')}
+                    data-testid="button-view-comision"
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
+                    Ver
+                  </Button>
+                )}
+              </div>
               <Input
                 id="imageComision"
                 type="file"
@@ -119,16 +133,30 @@ export default function DailyPaymentUpload({ selectedDate }: DailyPaymentUploadP
               {(payment as DailyPayment)?.imageComisionUrl && !imageComision && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <ImageIcon className="h-3 w-3" />
-                  Ya existe comprobante
+                  Ya existe comprobante guardado
                 </p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="imageCosto">
-                Comprobante Pago Producto
-                {(payment as DailyPayment)?.imageCostoUrl && " ✓"}
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="imageCosto">
+                  Comprobante Pago Producto
+                  {(payment as DailyPayment)?.imageCostoUrl && " ✓"}
+                </Label>
+                {(payment as DailyPayment)?.imageCostoUrl && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(`/api/storage/${(payment as DailyPayment).imageCostoUrl}`, '_blank')}
+                    data-testid="button-view-costo"
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
+                    Ver
+                  </Button>
+                )}
+              </div>
               <Input
                 id="imageCosto"
                 type="file"
@@ -139,7 +167,7 @@ export default function DailyPaymentUpload({ selectedDate }: DailyPaymentUploadP
               {(payment as DailyPayment)?.imageCostoUrl && !imageCosto && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <ImageIcon className="h-3 w-3" />
-                  Ya existe comprobante
+                  Ya existe comprobante guardado
                 </p>
               )}
             </div>

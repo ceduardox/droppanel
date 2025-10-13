@@ -51,3 +51,21 @@ export const insertSaleSchema = createInsertSchema(sales).omit({
 
 export type InsertSale = z.infer<typeof insertSaleSchema>;
 export type Sale = typeof sales.$inferSelect;
+
+export const dailyPayments = pgTable("daily_payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  paymentDate: date("payment_date").notNull(),
+  imageComisionUrl: text("image_comision_url"),
+  imageCostoUrl: text("image_costo_url"),
+  isPaid: integer("is_paid").default(0).notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDailyPaymentSchema = createInsertSchema(dailyPayments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertDailyPayment = z.infer<typeof insertDailyPaymentSchema>;
+export type DailyPayment = typeof dailyPayments.$inferSelect;

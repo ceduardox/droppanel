@@ -2,11 +2,12 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
-import { insertUserSchema, insertProductSchema, insertSaleSchema } from "@shared/schema";
+import { insertUserSchema, insertProductSchema, insertSaleSchema, insertDailyPaymentSchema } from "@shared/schema";
 import { z } from "zod";
 import session from "express-session";
 import path from "path";
 import fs from "fs/promises";
+import { Client } from "@replit/object-storage";
 
 // Configure session
 declare module 'express-session' {
@@ -249,6 +250,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating sale:", error);
       res.status(500).json({ error: "Error al registrar venta" });
+    }
+  });
+
+  // Daily payments routes
+  app.get("/api/daily-payment/:date", requireAuth, async (req, res) => {
+    try {
+      const { date } = req.params;
+      const payment = await storage.getDailyPayment(req.session.userId!, date);
+      res.json(payment || null);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener pago" });
+    }
+  });
+
+  app.post("/api/daily-payment", requireAuth, upload.fields([
+    { name: 'imageComision', maxCount: 1 },
+    { name: 'imageCosto', maxCount: 1 }
+  ]), async (req, res) => {
+    try {
+      const { paymentDate, isPaid } = req.body;
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      
+      const objectStorage = new Client();
+      let imageComisionUrl: string | undefined;
+      let imageCostoUrl: string | undefined;
+
+      // Upload comision image if provided
+      if (files?.imageComision?.[0]) {
+        const file = files.imageComision[0];
+        const filename = `payments/${Date.now()}-comision-${file.originalname}`;
+        const { ok } = await objectStorage.uploadFromBytes(filename, file.buffer);
+        if (ok) {
+          imageComisionUrl = filename;
+        }
+      }
+
+      // Upload costo image if provided
+      if (files?.imageCosto?.[0]) {
+        const file = files.imageCosto[0];
+        const filename = `payments/${Date.now()}-costo-${file.originalname}`;
+        const { ok } = await objectStorage.uploadFromBytes(filename, file.buffer);
+        if (ok) {
+          imageCostoUrl = filename;
+        }
+      }
+
+      // Get existing payment to preserve URLs if new images not provided
+      const existing = await storage.getDailyPayment(req.session.userId!, paymentDate);
+      
+      const payment = await storage.upsertDailyPayment({
+        paymentDate,
+        imageComisionUrl: imageComisionUrl || existing?.imageComisionUrl,
+        imageCostoUrl: imageCostoUrl || existing?.imageCostoUrl,
+        isPaid: parseInt(isPaid || '0'),
+        userId: req.session.userId!,
+      });
+
+      res.json(payment);
+    } catch (error) {
+      console.error("Error saving payment:", error);
+      res.status(500).json({ error: "Error al guardar pago" });
     }
   });
 

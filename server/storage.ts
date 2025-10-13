@@ -4,12 +4,15 @@ import {
   users, 
   products, 
   sales,
+  dailyPayments,
   type User, 
   type InsertUser,
   type Product,
   type InsertProduct,
   type Sale,
-  type InsertSale
+  type InsertSale,
+  type DailyPayment,
+  type InsertDailyPayment
 } from "@shared/schema";
 import bcrypt from "bcrypt";
 
@@ -33,6 +36,10 @@ export interface IStorage {
   getSales(userId: string): Promise<Sale[]>;
   getSale(id: string): Promise<Sale | undefined>;
   createSale(sale: InsertSale): Promise<Sale>;
+
+  // Daily Payments
+  getDailyPayment(userId: string, paymentDate: string): Promise<DailyPayment | undefined>;
+  upsertDailyPayment(payment: InsertDailyPayment): Promise<DailyPayment>;
 }
 
 export class DbStorage implements IStorage {
@@ -109,6 +116,31 @@ export class DbStorage implements IStorage {
   async createSale(sale: InsertSale): Promise<Sale> {
     const result = await db.insert(sales).values(sale).returning();
     return result[0];
+  }
+
+  // Daily Payments
+  async getDailyPayment(userId: string, paymentDate: string): Promise<DailyPayment | undefined> {
+    const result = await db
+      .select()
+      .from(dailyPayments)
+      .where(and(eq(dailyPayments.userId, userId), eq(dailyPayments.paymentDate, paymentDate)));
+    return result[0];
+  }
+
+  async upsertDailyPayment(payment: InsertDailyPayment): Promise<DailyPayment> {
+    const existing = await this.getDailyPayment(payment.userId, payment.paymentDate);
+    
+    if (existing) {
+      const result = await db
+        .update(dailyPayments)
+        .set(payment)
+        .where(eq(dailyPayments.id, existing.id))
+        .returning();
+      return result[0];
+    } else {
+      const result = await db.insert(dailyPayments).values(payment).returning();
+      return result[0];
+    }
   }
 }
 

@@ -165,16 +165,17 @@ npm run db:push      # Sincronizar esquema de BD
 - Checkbox para marcar día como pagado
 - Indicador visual (checkmark verde) de estado de pago
 - Persistencia de estado después de recargar página
+- Botones "Ver" para visualizar comprobantes guardados en nueva pestaña
+- Endpoint API `/api/storage/:path(*)` para servir imágenes desde object storage
 
 ## Próximas Mejoras Sugeridas
-1. Previsualización de imágenes de comprobantes en UI
-2. Dashboard con gráficos y estadísticas
-3. Exportación de reportes en PDF/Excel
-4. Integración directa con WhatsApp Business API
-5. Notificaciones automáticas por WhatsApp
-6. Sistema de roles (admin, vendedor)
-7. Historial de cambios en productos
-8. Backup automático de datos
+1. Dashboard con gráficos y estadísticas
+2. Exportación de reportes en PDF/Excel
+3. Integración directa con WhatsApp Business API
+4. Notificaciones automáticas por WhatsApp
+5. Sistema de roles (admin, vendedor)
+6. Historial de cambios en productos
+7. Backup automático de datos
 
 ## Notas de Desarrollo
 - Imágenes de productos se guardan localmente en `/uploads`

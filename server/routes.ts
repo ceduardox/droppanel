@@ -1,15 +1,278 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import multer from "multer";
+import { insertUserSchema, insertProductSchema, insertSaleSchema } from "@shared/schema";
+import { z } from "zod";
+import session from "express-session";
+import path from "path";
+import fs from "fs/promises";
+
+// Configure session
+declare module 'express-session' {
+  interface SessionData {
+    userId: string;
+  }
+}
+
+// Configure multer for image uploads
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+});
+
+// Middleware to check authentication
+const requireAuth = (req: any, res: any, next: any) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "No autenticado" });
+  }
+  next();
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // put application routes here
-  // prefix all routes with /api
+  // Session middleware
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET || "dev-secret-change-in-production",
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      },
+    })
+  );
 
-  // use storage to perform CRUD operations on the storage interface
-  // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
+  // Auth routes
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const data = insertUserSchema.parse(req.body);
+      
+      // Check if user exists
+      const existingUser = await storage.getUserByUsername(data.username);
+      if (existingUser) {
+        return res.status(400).json({ error: "El nombre de usuario ya existe" });
+      }
+
+      const user = await storage.createUser(data);
+      req.session.userId = user.id;
+      
+      res.json({ 
+        id: user.id, 
+        name: user.name,
+        username: user.username 
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al crear usuario" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      const user = await storage.verifyPassword(username, password);
+      if (!user) {
+        return res.status(401).json({ error: "Credenciales inválidas" });
+      }
+
+      req.session.userId = user.id;
+      
+      res.json({ 
+        id: user.id, 
+        name: user.name,
+        username: user.username 
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Error al iniciar sesión" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Error al cerrar sesión" });
+      }
+      res.json({ success: true });
+    });
+  });
+
+  app.get("/api/auth/me", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(404).json({ error: "Usuario no encontrado" });
+      }
+      res.json({ 
+        id: user.id, 
+        name: user.name,
+        username: user.username 
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener usuario" });
+    }
+  });
+
+  // Product routes
+  app.get("/api/products", requireAuth, async (req, res) => {
+    try {
+      const products = await storage.getProducts(req.session.userId!);
+      res.json(products);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener productos" });
+    }
+  });
+
+  app.post("/api/products", requireAuth, upload.single("image"), async (req, res) => {
+    try {
+      const { name, price, cost } = req.body;
+      
+      let imageUrl: string | undefined;
+      
+      if (req.file) {
+        // Save to object storage (for now, save locally - will integrate object storage later)
+        const uploadsDir = path.join(process.cwd(), "uploads");
+        await fs.mkdir(uploadsDir, { recursive: true });
+        
+        const filename = `${Date.now()}-${req.file.originalname}`;
+        const filepath = path.join(uploadsDir, filename);
+        await fs.writeFile(filepath, req.file.buffer);
+        
+        imageUrl = `/uploads/${filename}`;
+      }
+      
+      const product = await storage.createProduct({
+        name,
+        price,
+        cost,
+        imageUrl,
+        userId: req.session.userId!,
+      });
+      
+      res.json(product);
+    } catch (error) {
+      console.error("Error creating product:", error);
+      res.status(500).json({ error: "Error al crear producto" });
+    }
+  });
+
+  app.put("/api/products/:id", requireAuth, upload.single("image"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, price, cost } = req.body;
+      
+      const existingProduct = await storage.getProduct(id);
+      if (!existingProduct || existingProduct.userId !== req.session.userId) {
+        return res.status(404).json({ error: "Producto no encontrado" });
+      }
+
+      let imageUrl = existingProduct.imageUrl;
+      
+      if (req.file) {
+        const uploadsDir = path.join(process.cwd(), "uploads");
+        await fs.mkdir(uploadsDir, { recursive: true });
+        
+        const filename = `${Date.now()}-${req.file.originalname}`;
+        const filepath = path.join(uploadsDir, filename);
+        await fs.writeFile(filepath, req.file.buffer);
+        
+        imageUrl = `/uploads/${filename}`;
+      }
+      
+      const product = await storage.updateProduct(id, {
+        name,
+        price,
+        cost,
+        imageUrl,
+      });
+      
+      res.json(product);
+    } catch (error) {
+      res.status(500).json({ error: "Error al actualizar producto" });
+    }
+  });
+
+  app.delete("/api/products/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const product = await storage.getProduct(id);
+      if (!product || product.userId !== req.session.userId) {
+        return res.status(404).json({ error: "Producto no encontrado" });
+      }
+
+      await storage.deleteProduct(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Error al eliminar producto" });
+    }
+  });
+
+  // Serve uploaded files
+  app.use("/uploads", (req, res, next) => {
+    const uploadsDir = path.join(process.cwd(), "uploads");
+    return (req as any).app._router.handle(req, res, next);
+  });
+
+  // Sales routes
+  app.get("/api/sales", requireAuth, async (req, res) => {
+    try {
+      const sales = await storage.getSales(req.session.userId!);
+      res.json(sales);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener ventas" });
+    }
+  });
+
+  app.post("/api/sales", requireAuth, async (req, res) => {
+    try {
+      const { productId, quantity, date } = req.body;
+      
+      const product = await storage.getProduct(productId);
+      if (!product || product.userId !== req.session.userId) {
+        return res.status(404).json({ error: "Producto no encontrado" });
+      }
+
+      const sale = await storage.createSale({
+        productId,
+        quantity: parseInt(quantity),
+        saleDate: new Date(date),
+        userId: req.session.userId!,
+      });
+      
+      res.json(sale);
+    } catch (error) {
+      console.error("Error creating sale:", error);
+      res.status(500).json({ error: "Error al registrar venta" });
+    }
+  });
+
+  // Reports route - get sales with product details
+  app.get("/api/reports", requireAuth, async (req, res) => {
+    try {
+      const sales = await storage.getSales(req.session.userId!);
+      const products = await storage.getProducts(req.session.userId!);
+      
+      const productMap = new Map(products.map(p => [p.id, p]));
+      
+      const salesWithDetails = sales.map(sale => {
+        const product = productMap.get(sale.productId);
+        return {
+          ...sale,
+          product,
+        };
+      });
+      
+      res.json(salesWithDetails);
+    } catch (error) {
+      res.status(500).json({ error: "Error al generar reporte" });
+    }
+  });
 
   const httpServer = createServer(app);
-
   return httpServer;
 }

@@ -1,28 +1,45 @@
 import StatsCard from "@/components/StatsCard";
 import ReportCard from "@/components/ReportCard";
 import { DollarSign, Package, TrendingUp, Users } from "lucide-react";
-
-// TODO: Remove mock data - replace with real data from backend
-const mockSales = [
-  {
-    id: "1",
-    productName: "Berberina",
-    quantity: 9,
-    price: 130,
-    cost: 46.48,
-    date: "2024-10-13",
-  },
-  {
-    id: "2",
-    productName: "Citrato de Magnesio",
-    quantity: 5,
-    price: 150,
-    cost: 81.43,
-    date: "2024-10-12",
-  },
-];
+import { useReports } from "@/lib/api";
 
 export default function Dashboard() {
+  const { data: salesWithProducts = [], isLoading } = useReports();
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-64">Cargando...</div>;
+  }
+
+  // Calculate stats
+  const totalSales = salesWithProducts.reduce((sum: number, item: any) => {
+    const price = parseFloat(item.product?.price || 0);
+    const quantity = item.quantity;
+    return sum + (price * quantity);
+  }, 0);
+
+  const totalProducts = salesWithProducts.reduce((sum: number, item: any) => sum + item.quantity, 0);
+
+  const totalCost = salesWithProducts.reduce((sum: number, item: any) => {
+    const cost = parseFloat(item.product?.cost || 0);
+    const quantity = item.quantity;
+    return sum + (cost * quantity);
+  }, 0);
+
+  const totalProfit = totalSales - totalCost;
+  const profitPerPartner = totalProfit / 2;
+
+  const recentSales = salesWithProducts
+    .filter((item: any) => item.product)
+    .slice(0, 3)
+    .map((item: any) => ({
+      id: item.id,
+      productName: item.product.name,
+      quantity: item.quantity,
+      price: parseFloat(item.product.price),
+      cost: parseFloat(item.product.cost),
+      date: item.saleDate,
+    }));
+
   return (
     <div className="space-y-6">
       <div>
@@ -33,40 +50,40 @@ export default function Dashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           title="Ventas Totales"
-          value="1,920 Bs"
-          subtitle="Este mes"
+          value={`${totalSales.toFixed(2)} Bs`}
+          subtitle="Total acumulado"
           icon={DollarSign}
-          trend={{ value: "+12.5%", positive: true }}
         />
         <StatsCard
           title="Productos Vendidos"
-          value="14"
-          subtitle="Este mes"
+          value={totalProducts.toString()}
+          subtitle="Unidades totales"
           icon={Package}
         />
         <StatsCard
           title="Utilidad Total"
-          value="1,094.96 Bs"
-          subtitle="Este mes"
+          value={`${totalProfit.toFixed(2)} Bs`}
+          subtitle="Ganancia neta"
           icon={TrendingUp}
-          trend={{ value: "+8.2%", positive: true }}
         />
         <StatsCard
           title="Por Socio"
-          value="547.48 Bs"
-          subtitle="Cada uno este mes"
+          value={`${profitPerPartner.toFixed(2)} Bs`}
+          subtitle="50% cada uno"
           icon={Users}
         />
       </div>
 
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Ventas Recientes</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {mockSales.map((sale) => (
-            <ReportCard key={sale.id} sale={sale} />
-          ))}
+      {recentSales.length > 0 && (
+        <div>
+          <h2 className="text-xl font-semibold mb-4">Ventas Recientes</h2>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {recentSales.map((sale) => (
+              <ReportCard key={sale.id} sale={sale} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

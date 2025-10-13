@@ -1,12 +1,43 @@
 import SalesForm from "@/components/SalesForm";
-
-// TODO: Remove mock data - replace with real data from backend
-const mockProducts = [
-  { id: "1", name: "Citrato de Magnesio", price: 150, cost: 81.43 },
-  { id: "2", name: "Berberina", price: 130, cost: 46.48 },
-];
+import { useProducts, useCreateSale } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 export default function Sales() {
+  const { data: products = [], isLoading } = useProducts();
+  const createSale = useCreateSale();
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+
+  const handleSubmit = async (data: { productId: string; quantity: number; date: string }) => {
+    try {
+      await createSale.mutateAsync(data);
+      toast({ 
+        title: "Venta registrada", 
+        description: "La venta ha sido registrada exitosamente" 
+      });
+      // Redirect to reports after successful sale
+      setTimeout(() => setLocation("/reportes"), 1000);
+    } catch (error: any) {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Error al registrar venta", 
+        variant: "destructive" 
+      });
+    }
+  };
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-64">Cargando...</div>;
+  }
+
+  const formattedProducts = products.map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    price: parseFloat(p.price),
+    cost: parseFloat(p.cost),
+  }));
+
   return (
     <div className="space-y-6">
       <div>
@@ -14,10 +45,13 @@ export default function Sales() {
         <p className="text-muted-foreground mt-1">Ingresa los detalles de la nueva venta</p>
       </div>
 
-      <SalesForm
-        products={mockProducts}
-        onSubmit={(data) => console.log("Sale submitted:", data)}
-      />
+      {formattedProducts.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Primero debes agregar productos</p>
+        </div>
+      ) : (
+        <SalesForm products={formattedProducts} onSubmit={handleSubmit} />
+      )}
     </div>
   );
 }

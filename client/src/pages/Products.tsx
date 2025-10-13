@@ -3,15 +3,48 @@ import ProductCard from "@/components/ProductCard";
 import ProductForm from "@/components/ProductForm";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-
-// TODO: Remove mock data - replace with real data from backend
-const mockProducts = [
-  { id: "1", name: "Citrato de Magnesio", price: 150, cost: 81.43 },
-  { id: "2", name: "Berberina", price: 130, cost: 46.48 },
-];
+import { useProducts, useCreateProduct, useDeleteProduct } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Products() {
   const [showForm, setShowForm] = useState(false);
+  const { data: products = [], isLoading } = useProducts();
+  const createProduct = useCreateProduct();
+  const deleteProduct = useDeleteProduct();
+  const { toast } = useToast();
+
+  const handleSubmit = async (data: { name: string; price: number; cost: number; image?: File }) => {
+    const formData = new FormData();
+    formData.append("name", data.name);
+    formData.append("price", data.price.toString());
+    formData.append("cost", data.cost.toString());
+    if (data.image) {
+      formData.append("image", data.image);
+    }
+
+    try {
+      await createProduct.mutateAsync(formData);
+      toast({ title: "Producto creado", description: "El producto ha sido agregado exitosamente" });
+      setShowForm(false);
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("¿Estás seguro de eliminar este producto?")) return;
+    
+    try {
+      await deleteProduct.mutateAsync(id);
+      toast({ title: "Producto eliminado", description: "El producto ha sido eliminado" });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-64">Cargando...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -26,24 +59,35 @@ export default function Products() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {mockProducts.map((product) => (
-          <ProductCard
-            key={product.id}
-            {...product}
-            onEdit={(id) => console.log("Edit", id)}
-            onDelete={(id) => console.log("Delete", id)}
-          />
-        ))}
-      </div>
+      {products.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">No hay productos registrados</p>
+          <Button onClick={() => setShowForm(true)} className="mt-4">
+            <Plus className="h-4 w-4 mr-2" />
+            Agregar tu primer producto
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {products.map((product: any) => (
+            <ProductCard
+              key={product.id}
+              id={product.id}
+              name={product.name}
+              price={parseFloat(product.price)}
+              cost={parseFloat(product.cost)}
+              image={product.imageUrl}
+              onEdit={(id) => console.log("Edit", id)}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
+      )}
 
       <ProductForm
         open={showForm}
         onOpenChange={setShowForm}
-        onSubmit={(data) => {
-          console.log("Product submitted:", data);
-          setShowForm(false);
-        }}
+        onSubmit={handleSubmit}
       />
     </div>
   );

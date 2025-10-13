@@ -64,3 +64,26 @@ export function useReports() {
     queryKey: ["/api/reports"],
   });
 }
+
+// Daily Payments
+export function useDailyPayment(date: string) {
+  return useQuery({
+    queryKey: ["/api/daily-payment", date],
+    enabled: !!date,
+  });
+}
+
+export function useSaveDailyPayment() {
+  return useMutation({
+    mutationFn: async (data: FormData) => {
+      return apiRequest("/api/daily-payment", {
+        method: "POST",
+        body: data,
+        headers: {},
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/daily-payment"] });
+    },
+  });
+}

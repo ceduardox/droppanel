@@ -1,6 +1,7 @@
 import { useState } from "react";
 import ReportCard from "@/components/ReportCard";
 import WhatsAppReport from "@/components/WhatsAppReport";
+import DailyPaymentUpload from "@/components/DailyPaymentUpload";
 import { useReports } from "@/lib/api";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -153,6 +154,7 @@ export default function Reports() {
                 </p>
               )}
             </div>
+            <DailyPaymentUpload selectedDate={selectedDate} />
             <WhatsAppReport reportText={generateReportText(filteredSales)} />
           </div>
         </div>

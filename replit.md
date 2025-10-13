@@ -9,6 +9,8 @@ Sistema web para gestión de ventas con registro de usuarios, catálogo de produ
 - **Registro de Ventas**: Registrar ventas por fecha y cantidad con cálculo automático de utilidades
 - **Reportes Detallados**: Visualización de ventas con desglose de costos y ganancias
 - **Distribución de Utilidades**: Cálculo automático 50/50 entre José Eduardo y Jhonatan
+- **Filtro por Fecha**: Filtrar ventas y reportes por fecha específica
+- **Comprobantes de Pago**: Subir comprobantes de comisión y pago de producto por día, marcar como pagado
 - **WhatsApp**: Generación de reporte en texto formateado listo para compartir por WhatsApp
 
 ## Arquitectura Técnica
@@ -26,12 +28,14 @@ Sistema web para gestión de ventas con registro de usuarios, catálogo de produ
 - Express Session para autenticación
 - Bcrypt para encriptación de contraseñas
 - Multer para carga de imágenes
+- Replit Object Storage para almacenamiento de comprobantes
 
 ### Base de Datos
 **Tablas:**
 - `users`: Usuarios del sistema (id, name, username, password)
 - `products`: Catálogo de productos (id, name, price, cost, imageUrl, userId)
 - `sales`: Registro de ventas (id, productId, quantity, saleDate, userId)
+- `daily_payments`: Comprobantes de pago diarios (id, paymentDate, imageComisionUrl, imageCostoUrl, isPaid, userId)
 
 ## Estructura del Proyecto
 ```
@@ -68,14 +72,20 @@ shared/
   - Utilidad total (venta - costo)
   - Distribución 50/50 entre socios
 
-### 4. Reportes
+### 4. Reportes y Comprobantes
 - Ver todas las ventas registradas
+- Filtrar ventas por fecha específica
 - Desglose detallado por venta
 - Resumen total acumulado
 - Generar texto formateado para WhatsApp con:
   - Detalle de cada venta
   - Totales generales
   - Distribución de utilidad por socio
+- Gestión de comprobantes de pago por día:
+  - Subir comprobante de comisión José Eduardo
+  - Subir comprobante de pago de producto
+  - Marcar día como pagado
+  - Indicador visual de estado de pago
 
 ## Cálculo de Utilidades
 
@@ -124,9 +134,14 @@ Jhonatan = 375.84 Bs
 ### Reportes
 - `GET /api/reports` - Obtener ventas con detalles de productos
 
+### Comprobantes de Pago
+- `GET /api/daily-payment/:date` - Obtener comprobante de pago para una fecha
+- `POST /api/daily-payment` - Subir/actualizar comprobantes e indicador de pago
+
 ## Variables de Entorno
 - `DATABASE_URL` - Conexión a PostgreSQL
 - `SESSION_SECRET` - Secreto para sesiones
+- `DEFAULT_OBJECT_STORAGE_BUCKET_ID` - ID del bucket de object storage
 - `PORT` - Puerto del servidor (default: 5000)
 
 ## Comandos Principales
@@ -136,19 +151,36 @@ npm run build        # Compilar para producción
 npm run db:push      # Sincronizar esquema de BD
 ```
 
+## Cambios Recientes
+
+### Corrección de Zona Horaria (Octubre 2025)
+- Cambiado tipo de columna `saleDate` de `timestamp` a `date`
+- Implementado formateo manual de fechas sin conversión UTC
+- Las fechas ahora se muestran correctamente sin desfase de un día
+
+### Sistema de Comprobantes de Pago (Octubre 2025)
+- Tabla `daily_payments` para registrar pagos por día
+- Subida de dos comprobantes: comisión José Eduardo y pago de producto
+- Almacenamiento en Replit Object Storage
+- Checkbox para marcar día como pagado
+- Indicador visual (checkmark verde) de estado de pago
+- Persistencia de estado después de recargar página
+
 ## Próximas Mejoras Sugeridas
-1. Integración directa con WhatsApp Business API
+1. Previsualización de imágenes de comprobantes en UI
 2. Dashboard con gráficos y estadísticas
-3. Filtros de reportes por fecha/producto
-4. Exportación de reportes en PDF/Excel
+3. Exportación de reportes en PDF/Excel
+4. Integración directa con WhatsApp Business API
 5. Notificaciones automáticas por WhatsApp
 6. Sistema de roles (admin, vendedor)
 7. Historial de cambios en productos
 8. Backup automático de datos
 
 ## Notas de Desarrollo
-- Las imágenes se guardan localmente en `/uploads`
+- Imágenes de productos se guardan localmente en `/uploads`
+- Comprobantes de pago se guardan en Replit Object Storage
 - Sesiones en memoria (usar store persistente en producción)
 - Modo oscuro disponible con toggle en header
 - Diseño responsive para móviles
 - Validación con Zod en frontend y backend
+- Formateo de fechas sin dependencia de zona horaria (formato YYYY-MM-DD)

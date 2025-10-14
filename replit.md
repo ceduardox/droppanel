@@ -174,6 +174,13 @@ npm run db:push      # Sincronizar esquema de BD
 - Cookies configuradas con `secure: false` y `sameSite: "lax"` para compatibilidad total
 - `req.session.save()` explícito en login/register para garantizar cookie antes de respuesta
 
+### SEO y Meta Tags (Octubre 2025)
+- Favicon personalizado agregado (favicon.png)
+- Imagen Open Graph para compartir en redes sociales (og-image.jpg)
+- Meta tags OG (Facebook) implementados con título, descripción e imagen
+- Meta tags Twitter Card implementados para preview en Twitter
+- URL base configurada: https://pro.ryztor.store/
+
 ## Próximas Mejoras Sugeridas
 1. Dashboard con gráficos y estadísticas
 2. Exportación de reportes en PDF/Excel

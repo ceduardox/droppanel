@@ -59,6 +59,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser(data);
       req.session.userId = user.id;
       
+      // Guardar sesión antes de enviar respuesta
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      
       res.json({ 
         id: user.id, 
         name: user.name,
@@ -82,6 +90,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       req.session.userId = user.id;
+      
+      // Guardar sesión antes de enviar respuesta
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
       
       res.json({ 
         id: user.id, 

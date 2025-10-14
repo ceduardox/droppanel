@@ -23,6 +23,21 @@ export function useCreateProduct() {
   });
 }
 
+export function useUpdateProduct() {
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: FormData }) => {
+      return apiRequest(`/api/products/${id}`, {
+        method: "PUT",
+        body: data,
+        headers: {},
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+    },
+  });
+}
+
 export function useDeleteProduct() {
   return useMutation({
     mutationFn: async (id: string) => {

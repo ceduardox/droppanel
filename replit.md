@@ -5,7 +5,7 @@ Sistema web para gestión de ventas con registro de usuarios, catálogo de produ
 
 ## Características Principales
 - **Autenticación**: Registro y login de usuarios con contraseñas encriptadas
-- **Gestión de Productos**: Agregar, editar y eliminar productos con imágenes, precios y costos
+- **Gestión de Productos**: Agregar, **editar** y eliminar productos con imágenes, precios y costos
 - **Registro de Ventas**: Registrar ventas por fecha y cantidad con cálculo automático de utilidades
 - **Reportes Detallados**: Visualización de ventas con desglose de costos y ganancias
 - **Distribución de Utilidades**: Cálculo automático 50/50 entre José Eduardo y Jhonatan
@@ -124,7 +124,7 @@ Jhonatan = 375.84 Bs
 ### Productos
 - `GET /api/products` - Listar productos del usuario
 - `POST /api/products` - Crear producto (con imagen)
-- `PUT /api/products/:id` - Actualizar producto
+- `PUT /api/products/:id` - Actualizar producto (nombre, precio, costo, imagen opcional)
 - `DELETE /api/products/:id` - Eliminar producto
 
 ### Ventas
@@ -180,6 +180,14 @@ npm run db:push      # Sincronizar esquema de BD
 - Meta tags OG (Facebook) implementados con título, descripción e imagen
 - Meta tags Twitter Card implementados para preview en Twitter
 - URL base configurada: https://pro.ryztor.store/
+
+### Funcionalidad de Edición de Productos (Octubre 2025)
+- Hook `useUpdateProduct` agregado en `client/src/lib/api.ts`
+- Botón "Editar" en tarjetas de productos ahora funcional
+- Formulario reutilizado para crear y editar productos
+- Al editar, formulario se pre-llena con datos del producto
+- Actualización de nombre, precio, costo e imagen opcional
+- Notificación toast de confirmación al guardar cambios
 
 ## Próximas Mejoras Sugeridas
 1. Dashboard con gráficos y estadísticas

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,10 +17,25 @@ interface ProductFormProps {
 }
 
 export default function ProductForm({ open, onOpenChange, onSubmit, initialData }: ProductFormProps) {
-  const [name, setName] = useState(initialData?.name || "");
-  const [price, setPrice] = useState(initialData?.price?.toString() || "");
-  const [cost, setCost] = useState(initialData?.cost?.toString() || "");
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+  const [cost, setCost] = useState("");
   const [imageFile, setImageFile] = useState<File | undefined>();
+
+  useEffect(() => {
+    if (open) {
+      if (initialData) {
+        setName(initialData.name);
+        setPrice(initialData.price.toString());
+        setCost(initialData.cost.toString());
+      } else {
+        setName("");
+        setPrice("");
+        setCost("");
+      }
+      setImageFile(undefined);
+    }
+  }, [open, initialData]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

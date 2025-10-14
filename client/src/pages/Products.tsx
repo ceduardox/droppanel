@@ -3,13 +3,15 @@ import ProductCard from "@/components/ProductCard";
 import ProductForm from "@/components/ProductForm";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { useProducts, useCreateProduct, useDeleteProduct } from "@/lib/api";
+import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Products() {
   const [showForm, setShowForm] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
   const { data: products = [], isLoading } = useProducts();
   const createProduct = useCreateProduct();
+  const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
   const { toast } = useToast();
 
@@ -23,11 +25,25 @@ export default function Products() {
     }
 
     try {
-      await createProduct.mutateAsync(formData);
-      toast({ title: "Producto creado", description: "El producto ha sido agregado exitosamente" });
+      if (editingProduct) {
+        await updateProduct.mutateAsync({ id: editingProduct.id, data: formData });
+        toast({ title: "Producto actualizado", description: "Los cambios han sido guardados" });
+      } else {
+        await createProduct.mutateAsync(formData);
+        toast({ title: "Producto creado", description: "El producto ha sido agregado exitosamente" });
+      }
       setShowForm(false);
+      setEditingProduct(null);
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleEdit = (id: string) => {
+    const product = (products as any[]).find((p: any) => p.id === id);
+    if (product) {
+      setEditingProduct(product);
+      setShowForm(true);
     }
   };
 
@@ -59,7 +75,7 @@ export default function Products() {
         </Button>
       </div>
 
-      {products.length === 0 ? (
+      {(products as any[]).length === 0 ? (
         <div className="text-center py-12">
           <p className="text-muted-foreground">No hay productos registrados</p>
           <Button onClick={() => setShowForm(true)} className="mt-4">
@@ -69,7 +85,7 @@ export default function Products() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {products.map((product: any) => (
+          {(products as any[]).map((product: any) => (
             <ProductCard
               key={product.id}
               id={product.id}
@@ -77,7 +93,7 @@ export default function Products() {
               price={parseFloat(product.price)}
               cost={parseFloat(product.cost)}
               image={product.imageUrl}
-              onEdit={(id) => console.log("Edit", id)}
+              onEdit={handleEdit}
               onDelete={handleDelete}
             />
           ))}
@@ -86,8 +102,16 @@ export default function Products() {
 
       <ProductForm
         open={showForm}
-        onOpenChange={setShowForm}
+        onOpenChange={(open) => {
+          setShowForm(open);
+          if (!open) setEditingProduct(null);
+        }}
         onSubmit={handleSubmit}
+        initialData={editingProduct ? {
+          name: editingProduct.name,
+          price: parseFloat(editingProduct.price),
+          cost: parseFloat(editingProduct.cost),
+        } : undefined}
       />
     </div>
   );

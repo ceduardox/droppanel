@@ -168,6 +168,12 @@ npm run db:push      # Sincronizar esquema de BD
 - Botones "Ver" para visualizar comprobantes guardados en nueva pestaña
 - Endpoint API `/api/storage/:path(*)` para servir imágenes desde object storage
 
+### Fix de Autenticación en Producción (Octubre 2025)
+- Configuración de sesión ajustada para funcionar en producción
+- `resave: true` y `saveUninitialized: true` para persistencia garantizada
+- Cookies configuradas con `secure: false` y `sameSite: "lax"` para compatibilidad total
+- `req.session.save()` explícito en login/register para garantizar cookie antes de respuesta
+
 ## Próximas Mejoras Sugeridas
 1. Dashboard con gráficos y estadísticas
 2. Exportación de reportes en PDF/Excel

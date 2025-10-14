@@ -21,6 +21,8 @@ export default function Login() {
         await loginMutation.mutateAsync(data);
         toast({ title: "¡Sesión iniciada!", description: "Bienvenido de vuelta" });
       }
+      // Esperar a que React Query actualice el estado antes de redirigir
+      await new Promise(resolve => setTimeout(resolve, 100));
       setLocation("/dashboard");
     } catch (error: any) {
       toast({ 

@@ -49,7 +49,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const data = insertUserSchema.parse(req.body);
+      const data = insertUserSchema.parse({
+        ...req.body,
+        username: req.body.username?.trim(),
+        name: req.body.name?.trim(),
+      });
       
       // Check if user exists
       const existingUser = await storage.getUserByUsername(data.username);
@@ -85,7 +89,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { username, password } = req.body;
       
-      const user = await storage.verifyPassword(username, password);
+      const user = await storage.verifyPassword(username?.trim(), password);
       if (!user) {
         return res.status(401).json({ error: "Credenciales inválidas" });
       }

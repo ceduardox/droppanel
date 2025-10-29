@@ -189,6 +189,12 @@ npm run db:push      # Sincronizar esquema de BD
 - Actualización de nombre, precio, costo e imagen opcional
 - Notificación toast de confirmación al guardar cambios
 
+### Fix de Login con Espacios Extra (Octubre 2025)
+- Login y registro ahora hacen `.trim()` automático en username y nombre
+- Previene problemas de autenticación por espacios al inicio/final
+- Usuario existente "Jhonattan " actualizado a "Jhonattan" (sin espacio)
+- Asegura login consistente desde cualquier dispositivo
+
 ## Próximas Mejoras Sugeridas
 1. Dashboard con gráficos y estadísticas
 2. Exportación de reportes en PDF/Excel

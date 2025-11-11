@@ -6,12 +6,13 @@ Sistema web para gestión de ventas con registro de usuarios, catálogo de produ
 ## Características Principales
 - **Autenticación**: Registro y login de usuarios con contraseñas encriptadas
 - **Gestión de Productos**: Agregar, **editar** y eliminar productos con imágenes, precios y costos
+  - **Desglose de Costos**: Separación entre "Costo Bruto" y "Aumento de Capital" con cálculo automático del total
 - **Registro de Ventas**: Registrar ventas por fecha y cantidad con cálculo automático de utilidades
 - **Reportes Detallados**: Visualización de ventas con desglose de costos y ganancias
 - **Distribución de Utilidades**: Cálculo automático 50/50 entre José Eduardo y Jhonatan
 - **Filtro por Fecha**: Filtrar ventas y reportes por fecha específica
 - **Comprobantes de Pago**: Subir comprobantes de comisión y pago de producto por día, marcar como pagado
-- **WhatsApp**: Generación de reporte en texto formateado listo para compartir por WhatsApp
+- **WhatsApp**: Generación de reporte en texto formateado listo para compartir por WhatsApp con desglose de costos
 
 ## Arquitectura Técnica
 
@@ -33,7 +34,7 @@ Sistema web para gestión de ventas con registro de usuarios, catálogo de produ
 ### Base de Datos
 **Tablas:**
 - `users`: Usuarios del sistema (id, name, username, password)
-- `products`: Catálogo de productos (id, name, price, cost, imageUrl, userId)
+- `products`: Catálogo de productos (id, name, price, cost, baseCost, capitalIncrease, imageUrl, userId)
 - `sales`: Registro de ventas (id, productId, quantity, saleDate, userId)
 - `daily_payments`: Comprobantes de pago diarios (id, paymentDate, imageComisionUrl, imageCostoUrl, isPaid, userId)
 
@@ -59,8 +60,14 @@ shared/
 - Login valida credenciales y crea sesión
 
 ### 2. Gestión de Productos
-- Agregar productos con nombre, precio de venta, costo y foto opcional
-- Ver lista de productos con cálculo de utilidad por unidad
+- Agregar productos con nombre, precio de venta y foto opcional
+- Desglose de costo en dos componentes:
+  - **Costo Bruto**: Costo base del producto
+  - **Aumento de Capital**: Incremento adicional
+  - **Costo Total**: Se calcula automáticamente (bruto + capital)
+- Ver lista de productos con:
+  - Desglose visual de costos (si están disponibles)
+  - Cálculo de utilidad por unidad
 - Editar o eliminar productos existentes
 
 ### 3. Registro de Ventas
@@ -152,6 +159,15 @@ npm run db:push      # Sincronizar esquema de BD
 ```
 
 ## Cambios Recientes
+
+### Desglose de Costos de Productos (Noviembre 2025)
+- **NUEVA FUNCIONALIDAD**: Desglose detallado de costos en productos
+- Campos agregados al schema: `baseCost` (costo bruto) y `capitalIncrease` (aumento de capital)
+- Formulario actualizado con dos inputs separados y cálculo automático del total
+- Vista de productos muestra desglose condicional con indicadores visuales (↳)
+- Reportes incluyen desglose tanto en UI como en texto WhatsApp
+- Retrocompatibilidad completa: productos antiguos sin desglose siguen funcionando
+- Validación estricta: desglose se muestra incluso cuando baseCost es 0 (usando `!== null && !== undefined`)
 
 ### Migración a Object Storage para Imágenes de Productos (Noviembre 2025)
 - **PROBLEMA RESUELTO**: Imágenes de productos desaparecían después de ~1 día

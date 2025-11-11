@@ -5,6 +5,7 @@ interface User {
   id: string;
   name: string;
   username: string;
+  isAdmin?: boolean;
 }
 
 interface LoginData {

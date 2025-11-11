@@ -12,8 +12,9 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
 
-const menuItems = [
+const allMenuItems = [
   { title: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
   { title: "Productos", icon: Package, path: "/productos" },
   { title: "Ventas", icon: ShoppingCart, path: "/ventas" },
@@ -24,6 +25,14 @@ const menuItems = [
 
 export default function AppSidebar() {
   const [location] = useLocation();
+  const { user } = useAuth();
+  
+  const menuItems = allMenuItems.filter(item => {
+    if (user?.isAdmin && item.path === "/ventas") {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <Sidebar>

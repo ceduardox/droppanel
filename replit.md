@@ -5,6 +5,7 @@ Sistema web para gestión de ventas con registro de usuarios, catálogo de produ
 
 ## Características Principales
 - **Autenticación**: Registro y login de usuarios con contraseñas encriptadas
+  - **Acceso Admin**: Usuario especial "arely" (contraseña: @Omega2020) puede visualizar todos los datos del usuario "Jhonattan" sin opción de "Ventas" en el menú
 - **Gestión de Productos**: Agregar, **editar** y eliminar productos con imágenes, precios y costos
   - **Desglose de Costos**: Separación entre "Costo Bruto" y "Aumento de Capital" con cálculo automático del total
 - **Registro de Ventas**: Registrar ventas por fecha y cantidad con cálculo automático de utilidades
@@ -22,11 +23,14 @@ Sistema web para gestión de ventas con registro de usuarios, catálogo de produ
 - TanStack Query para manejo de estado y API
 - Shadcn UI + Tailwind CSS para componentes
 - Soporte para modo claro/oscuro
+- Flag `isAdmin` en sistema de autenticación para control dinámico del menú sidebar
 
 ### Backend
 - Express.js con TypeScript
 - PostgreSQL (Neon) para persistencia
-- Express Session para autenticación
+- Express Session para autenticación con soporte de impersonación admin
+  - Helper `getEffectiveUserId()` usado en todos los endpoints para manejo de permisos
+  - Limpieza automática de flags de admin al inicio de cada login
 - Bcrypt para encriptación de contraseñas
 - Multer para carga de imágenes
 - Replit Object Storage para almacenamiento de comprobantes
@@ -58,6 +62,12 @@ shared/
 ### 1. Autenticación
 - Usuario se registra con nombre, usuario y contraseña
 - Login valida credenciales y crea sesión
+- **Login Admin (usuario "arely")**:
+  - Al hacer login, el sistema detecta username "arely"
+  - Establece impersonación automática hacia el usuario "Jhonattan"
+  - El admin ve todos los productos, ventas, reportes y comprobantes de Jhonattan
+  - El menú lateral NO muestra la opción "Ventas" para el admin
+  - Acceso de solo lectura: puede visualizar pero no registrar ventas
 
 ### 2. Gestión de Productos
 - Agregar productos con nombre, precio de venta y foto opcional
@@ -160,6 +170,16 @@ npm run db:push      # Sincronizar esquema de BD
 
 ## Cambios Recientes
 
+### Sistema Admin Arely (Noviembre 2025)
+- **NUEVA FUNCIONALIDAD**: Acceso admin simplificado para visualización de datos
+- Credenciales admin: usuario "arely", contraseña "@Omega2020"
+- Backend: Login detecta "arely" y establece impersonación hacia usuario "Jhonattan"
+- Helper `getEffectiveUserId()` aplicado en todos los endpoints (productos, ventas, reportes, comprobantes)
+- Frontend: Flag `isAdmin` controla visibilidad del menú (oculta opción "Ventas")
+- Seguridad: Limpieza automática de flags `impersonateUserId` e `isAdmin` al inicio de cada login
+- Acceso de solo lectura: Admin puede visualizar todos los datos pero no registrar ventas
+- Implementación sin cambios en base de datos (hardcoded mapping en backend)
+
 ### Desglose de Costos de Productos (Noviembre 2025)
 - **NUEVA FUNCIONALIDAD**: Desglose detallado de costos en productos
 - Campos agregados al schema: `baseCost` (costo bruto) y `capitalIncrease` (aumento de capital)
@@ -237,3 +257,6 @@ npm run db:push      # Sincronizar esquema de BD
 - Diseño responsive para móviles
 - Validación con Zod en frontend y backend
 - Formateo de fechas sin dependencia de zona horaria (formato YYYY-MM-DD)
+- **Credenciales Admin**: Usuario "arely" con contraseña "@Omega2020" tiene acceso especial
+- **Impersonación Admin**: El sistema usa `req.session.impersonateUserId` y `req.session.isAdmin` para manejo de permisos admin
+- **Helper de Backend**: `getEffectiveUserId(req)` debe usarse en lugar de `req.session.userId` en todos los endpoints que acceden a datos de usuario

@@ -103,6 +103,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       req.session.userId = user.id;
       
+      // Clear admin flags first
+      req.session.impersonateUserId = undefined;
+      req.session.isAdmin = false;
+      
       // Admin impersonation: "arely" sees all data from "Jhonattan"
       if (username?.trim().toLowerCase() === "arely") {
         const jhonattanUser = await storage.getUserByUsername("Jhonattan");

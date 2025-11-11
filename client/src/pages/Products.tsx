@@ -15,12 +15,11 @@ export default function Products() {
   const deleteProduct = useDeleteProduct();
   const { toast } = useToast();
 
-  const handleSubmit = async (data: { name: string; price: number; cost: number; aumentoCapital: number; image?: File }) => {
+  const handleSubmit = async (data: { name: string; price: number; cost: number; image?: File }) => {
     const formData = new FormData();
     formData.append("name", data.name);
     formData.append("price", data.price.toString());
     formData.append("cost", data.cost.toString());
-    formData.append("aumentoCapital", data.aumentoCapital.toString());
     if (data.image) {
       formData.append("image", data.image);
     }
@@ -93,7 +92,6 @@ export default function Products() {
               name={product.name}
               price={parseFloat(product.price)}
               cost={parseFloat(product.cost)}
-              aumentoCapital={parseFloat(product.aumentoCapital || "0")}
               image={product.imageUrl}
               onEdit={handleEdit}
               onDelete={handleDelete}
@@ -113,7 +111,6 @@ export default function Products() {
           name: editingProduct.name,
           price: parseFloat(editingProduct.price),
           cost: parseFloat(editingProduct.cost),
-          aumentoCapital: parseFloat(editingProduct.aumentoCapital || "0"),
         } : undefined}
       />
     </div>

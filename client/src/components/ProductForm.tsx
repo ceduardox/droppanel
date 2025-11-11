@@ -8,12 +8,11 @@ import { Upload } from "lucide-react";
 interface ProductFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: { name: string; price: number; cost: number; aumentoCapital: number; image?: File }) => void;
+  onSubmit: (data: { name: string; price: number; cost: number; image?: File }) => void;
   initialData?: {
     name: string;
     price: number;
     cost: number;
-    aumentoCapital: number;
   };
 }
 
@@ -21,7 +20,6 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [cost, setCost] = useState("");
-  const [aumentoCapital, setAumentoCapital] = useState("");
   const [imageFile, setImageFile] = useState<File | undefined>();
 
   useEffect(() => {
@@ -30,12 +28,10 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
         setName(initialData.name);
         setPrice(initialData.price.toString());
         setCost(initialData.cost.toString());
-        setAumentoCapital(initialData.aumentoCapital.toString());
       } else {
         setName("");
         setPrice("");
         setCost("");
-        setAumentoCapital("0");
       }
       setImageFile(undefined);
     }
@@ -47,13 +43,11 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
       name,
       price: parseFloat(price),
       cost: parseFloat(cost),
-      aumentoCapital: parseFloat(aumentoCapital) || 0,
       image: imageFile,
     });
     setName("");
     setPrice("");
     setCost("");
-    setAumentoCapital("0");
     setImageFile(undefined);
   };
 
@@ -103,18 +97,6 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
                 value={cost}
                 onChange={(e) => setCost(e.target.value)}
                 required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="product-aumento">Aumento de Capital y Crédito (Bs)</Label>
-              <Input
-                id="product-aumento"
-                data-testid="input-product-aumento"
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={aumentoCapital}
-                onChange={(e) => setAumentoCapital(e.target.value)}
               />
             </div>
             <div className="space-y-2">

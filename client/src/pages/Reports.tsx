@@ -32,9 +32,8 @@ export default function Reports() {
 
     const totalCost = filteredSales.reduce((sum: number, item: any) => {
       const cost = parseFloat(item.product?.cost || 0);
-      const aumentoCapital = parseFloat(item.product?.aumentoCapital || 0);
       const quantity = item.quantity;
-      return sum + ((cost + aumentoCapital) * quantity);
+      return sum + (cost * quantity);
     }, 0);
 
     const totalProfit = totalSales - totalCost;
@@ -56,10 +55,9 @@ export default function Reports() {
       
       const price = parseFloat(product.price);
       const cost = parseFloat(product.cost);
-      const aumentoCapital = parseFloat(product.aumentoCapital || 0);
       const quantity = item.quantity;
       const saleTotal = price * quantity;
-      const saleCost = (cost + aumentoCapital) * quantity;
+      const saleCost = cost * quantity;
       const saleProfit = saleTotal - saleCost;
       const profitPerPartnerSale = saleProfit / 2;
       
@@ -104,7 +102,6 @@ export default function Reports() {
       quantity: item.quantity,
       price: parseFloat(item.product.price),
       cost: parseFloat(item.product.cost),
-      aumentoCapital: parseFloat(item.product.aumentoCapital || 0),
       date: item.saleDate,
     }));
 

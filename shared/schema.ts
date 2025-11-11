@@ -22,6 +22,8 @@ export const products = pgTable("products", {
   name: text("name").notNull(),
   price: numeric("price", { precision: 10, scale: 2 }).notNull(),
   cost: numeric("cost", { precision: 10, scale: 2 }).notNull(),
+  baseCost: numeric("base_cost", { precision: 10, scale: 2 }),
+  capitalIncrease: numeric("capital_increase", { precision: 10, scale: 2 }),
   imageUrl: text("image_url"),
   userId: varchar("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),

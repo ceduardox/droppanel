@@ -151,33 +151,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products", requireAuth, upload.single("image"), async (req, res) => {
     try {
-      const { name, price, cost } = req.body;
+      // FormData sends everything as strings, need to parse numbers manually
+      const validatedData = insertProductSchema.parse({
+        name: req.body.name,
+        price: String(req.body.price || "0"),
+        cost: String(req.body.cost || "0"),
+        aumentoCapital: String(req.body.aumentoCapital || "0"),
+        userId: req.session.userId!,
+      });
       
       let imageUrl: string | undefined;
       
       if (req.file) {
-        // Save to object storage (for now, save locally - will integrate object storage later)
-        const uploadsDir = path.join(process.cwd(), "uploads");
-        await fs.mkdir(uploadsDir, { recursive: true });
-        
-        const filename = `${Date.now()}-${req.file.originalname}`;
-        const filepath = path.join(uploadsDir, filename);
-        await fs.writeFile(filepath, req.file.buffer);
-        
-        imageUrl = `/uploads/${filename}`;
+        const objectStorage = new Client({
+          bucketId: process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID
+        });
+        const filename = `products/${Date.now()}-${req.file.originalname}`;
+        const { ok } = await objectStorage.uploadFromBytes(filename, req.file.buffer);
+        if (!ok) {
+          console.error("Failed to upload image to object storage");
+          return res.status(500).json({ error: "Error al subir imagen" });
+        }
+        imageUrl = filename;
       }
       
       const product = await storage.createProduct({
-        name,
-        price,
-        cost,
+        ...validatedData,
         imageUrl,
-        userId: req.session.userId!,
       });
       
       res.json(product);
     } catch (error) {
       console.error("Error creating product:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
       res.status(500).json({ error: "Error al crear producto" });
     }
   });
@@ -185,35 +193,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/products/:id", requireAuth, upload.single("image"), async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, price, cost } = req.body;
       
       const existingProduct = await storage.getProduct(id);
       if (!existingProduct || existingProduct.userId !== req.session.userId) {
         return res.status(404).json({ error: "Producto no encontrado" });
       }
 
+      // FormData sends everything as strings, need to parse numbers manually
+      const validatedData = insertProductSchema.partial().parse({
+        name: req.body.name,
+        price: req.body.price !== undefined ? String(req.body.price) : undefined,
+        cost: req.body.cost !== undefined ? String(req.body.cost) : undefined,
+        aumentoCapital: req.body.aumentoCapital !== undefined ? String(req.body.aumentoCapital) : undefined,
+      });
+
       let imageUrl = existingProduct.imageUrl;
       
       if (req.file) {
-        const uploadsDir = path.join(process.cwd(), "uploads");
-        await fs.mkdir(uploadsDir, { recursive: true });
-        
-        const filename = `${Date.now()}-${req.file.originalname}`;
-        const filepath = path.join(uploadsDir, filename);
-        await fs.writeFile(filepath, req.file.buffer);
-        
-        imageUrl = `/uploads/${filename}`;
+        const objectStorage = new Client({
+          bucketId: process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID
+        });
+        const filename = `products/${Date.now()}-${req.file.originalname}`;
+        const { ok } = await objectStorage.uploadFromBytes(filename, req.file.buffer);
+        if (!ok) {
+          console.error("Failed to upload image to object storage");
+          return res.status(500).json({ error: "Error al subir imagen" });
+        }
+        imageUrl = filename;
       }
       
       const product = await storage.updateProduct(id, {
-        name,
-        price,
-        cost,
+        ...validatedData,
         imageUrl,
       });
       
       res.json(product);
     } catch (error) {
+      console.error("Error updating product:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
       res.status(500).json({ error: "Error al actualizar producto" });
     }
   });

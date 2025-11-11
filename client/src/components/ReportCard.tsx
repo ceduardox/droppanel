@@ -8,6 +8,7 @@ interface Sale {
   quantity: number;
   price: number;
   cost: number;
+  aumentoCapital: number;
   date: string;
 }
 
@@ -25,7 +26,7 @@ function formatDateString(dateStr: string): string {
 
 export default function ReportCard({ sale }: ReportCardProps) {
   const total = sale.price * sale.quantity;
-  const totalCost = sale.cost * sale.quantity;
+  const totalCost = (sale.cost + sale.aumentoCapital) * sale.quantity;
   const profit = total - totalCost;
   const profitPerPartner = profit / 2;
 

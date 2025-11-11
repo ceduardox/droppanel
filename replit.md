@@ -195,6 +195,23 @@ npm run db:push      # Sincronizar esquema de BD
 - Usuario existente "Jhonattan " actualizado a "Jhonattan" (sin espacio)
 - Asegura login consistente desde cualquier dispositivo
 
+### Migración de Imágenes a Object Storage (Noviembre 2025)
+- Imágenes de productos migradas de `/uploads` local (efímero) a Replit Object Storage (permanente)
+- Compatibilidad con imágenes antiguas: sistema detecta automáticamente path antiguo vs nuevo
+- Manejo robusto de errores: validación Zod + error handling en uploads
+- Las imágenes ahora persisten indefinidamente sin perderse al reiniciar servidor
+
+### Campo "Aumento de Capital y Crédito" (Noviembre 2025)
+- Agregado campo `aumentoCapital` a tabla `products` con default 0
+- Nueva fórmula de utilidad: `Utilidad = Precio - (Costo + Aumento de Capital)`
+- División 50/50 entre José Eduardo y Jhonatan se mantiene igual
+- Productos existentes automáticamente usan aumentoCapital = 0 (compatibilidad total)
+- Cálculo actualizado en:
+  - ProductCard (utilidad por unidad)
+  - Reports.tsx (reporte WhatsApp y totales)
+  - ReportCard.tsx (tarjetas individuales de ventas)
+- **NO afecta ventas pasadas:** Tabla `sales` sin cambios, cálculos solo en frontend
+
 ## Próximas Mejoras Sugeridas
 1. Dashboard con gráficos y estadísticas
 2. Exportación de reportes en PDF/Excel

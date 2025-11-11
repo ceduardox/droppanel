@@ -13,17 +13,30 @@ interface ProductCardProps {
   onDelete?: (id: string) => void;
 }
 
+function getImageUrl(imageUrl?: string): string | undefined {
+  if (!imageUrl) return undefined;
+  
+  // Legacy images from /uploads folder
+  if (imageUrl.startsWith('/uploads/')) return imageUrl;
+  
+  // New images from object storage
+  if (!imageUrl.startsWith('/')) return `/api/storage/${imageUrl}`;
+  
+  return imageUrl;
+}
+
 export default function ProductCard({ id, name, price, cost, image, onEdit, onDelete }: ProductCardProps) {
   const profit = price - cost;
   const profitMargin = ((profit / price) * 100).toFixed(1);
+  const imageUrl = getImageUrl(image);
 
   return (
     <Card className="overflow-hidden hover-elevate" data-testid={`card-product-${id}`}>
       <CardContent className="p-4">
         <div className="flex gap-4">
           <div className="h-20 w-20 rounded-md bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden">
-            {image ? (
-              <img src={image} alt={name} className="h-full w-full object-cover" />
+            {imageUrl ? (
+              <img src={imageUrl} alt={name} className="h-full w-full object-cover" />
             ) : (
               <ImageIcon className="h-8 w-8 text-muted-foreground" />
             )}

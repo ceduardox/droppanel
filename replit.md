@@ -153,6 +153,15 @@ npm run db:push      # Sincronizar esquema de BD
 
 ## Cambios Recientes
 
+### Migración a Object Storage para Imágenes de Productos (Noviembre 2025)
+- **PROBLEMA RESUELTO**: Imágenes de productos desaparecían después de ~1 día
+- Causa: Sistema de archivos local en Replit es efímero (se borra al reiniciar contenedor)
+- Solución: Migración a **Replit Object Storage** (permanente)
+- Backend ahora guarda imágenes en Object Storage como "products/timestamp-nombre.jpg"
+- Frontend transforma rutas automáticamente: "products/..." → "/api/storage/products/..."
+- Compatibilidad con imágenes antiguas: rutas "/uploads/..." siguen funcionando
+- Las imágenes ahora son **permanentes** y nunca se borrarán
+
 ### Corrección de Zona Horaria (Octubre 2025)
 - Cambiado tipo de columna `saleDate` de `timestamp` a `date`
 - Implementado formateo manual de fechas sin conversión UTC

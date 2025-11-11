@@ -156,15 +156,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let imageUrl: string | undefined;
       
       if (req.file) {
-        // Save to object storage (for now, save locally - will integrate object storage later)
-        const uploadsDir = path.join(process.cwd(), "uploads");
-        await fs.mkdir(uploadsDir, { recursive: true });
+        const objectStorage = new Client({
+          bucketId: process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID
+        });
         
-        const filename = `${Date.now()}-${req.file.originalname}`;
-        const filepath = path.join(uploadsDir, filename);
-        await fs.writeFile(filepath, req.file.buffer);
+        const filename = `products/${Date.now()}-${req.file.originalname}`;
+        const { ok } = await objectStorage.uploadFromBytes(filename, req.file.buffer);
         
-        imageUrl = `/uploads/${filename}`;
+        if (ok) {
+          imageUrl = filename;
+        }
       }
       
       const product = await storage.createProduct({
@@ -195,14 +196,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let imageUrl = existingProduct.imageUrl;
       
       if (req.file) {
-        const uploadsDir = path.join(process.cwd(), "uploads");
-        await fs.mkdir(uploadsDir, { recursive: true });
+        const objectStorage = new Client({
+          bucketId: process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID
+        });
         
-        const filename = `${Date.now()}-${req.file.originalname}`;
-        const filepath = path.join(uploadsDir, filename);
-        await fs.writeFile(filepath, req.file.buffer);
+        const filename = `products/${Date.now()}-${req.file.originalname}`;
+        const { ok } = await objectStorage.uploadFromBytes(filename, req.file.buffer);
         
-        imageUrl = `/uploads/${filename}`;
+        if (ok) {
+          imageUrl = filename;
+        }
       }
       
       const product = await storage.updateProduct(id, {

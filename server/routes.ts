@@ -13,6 +13,8 @@ import { Client } from "@replit/object-storage";
 declare module 'express-session' {
   interface SessionData {
     userId: string;
+    impersonateUserId?: string;
+    isAdmin?: boolean;
   }
 }
 
@@ -28,6 +30,11 @@ const requireAuth = (req: any, res: any, next: any) => {
     return res.status(401).json({ error: "No autenticado" });
   }
   next();
+};
+
+// Helper to get effective user ID (for admin impersonation)
+const getEffectiveUserId = (req: any): string => {
+  return req.session.impersonateUserId || req.session.userId;
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -96,6 +103,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       req.session.userId = user.id;
       
+      // Admin impersonation: "arely" sees all data from "Jhonattan"
+      if (username?.trim().toLowerCase() === "arely") {
+        const jhonattanUser = await storage.getUserByUsername("Jhonattan");
+        if (jhonattanUser) {
+          req.session.impersonateUserId = jhonattanUser.id;
+          req.session.isAdmin = true;
+        }
+      }
+      
       // Guardar sesión antes de enviar respuesta
       await new Promise<void>((resolve, reject) => {
         req.session.save((err) => {
@@ -107,7 +123,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ 
         id: user.id, 
         name: user.name,
-        username: user.username 
+        username: user.username,
+        isAdmin: req.session.isAdmin || false
       });
     } catch (error) {
       res.status(500).json({ error: "Error al iniciar sesión" });

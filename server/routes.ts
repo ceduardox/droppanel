@@ -149,7 +149,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ 
         id: user.id, 
         name: user.name,
-        username: user.username 
+        username: user.username,
+        isAdmin: req.session.isAdmin || false
       });
     } catch (error) {
       res.status(500).json({ error: "Error al obtener usuario" });
@@ -159,7 +160,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Product routes
   app.get("/api/products", requireAuth, async (req, res) => {
     try {
-      const products = await storage.getProducts(req.session.userId!);
+      const products = await storage.getProducts(getEffectiveUserId(req));
       res.json(products);
     } catch (error) {
       res.status(500).json({ error: "Error al obtener productos" });
@@ -197,7 +198,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         baseCost: baseCost || null,
         capitalIncrease: capitalIncrease || null,
         imageUrl,
-        userId: req.session.userId!,
+        userId: getEffectiveUserId(req),
       });
       
       res.json(product);
@@ -213,7 +214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { name, price, baseCost, capitalIncrease } = req.body;
       
       const existingProduct = await storage.getProduct(id);
-      if (!existingProduct || existingProduct.userId !== req.session.userId) {
+      if (!existingProduct || existingProduct.userId !== getEffectiveUserId(req)) {
         return res.status(404).json({ error: "Producto no encontrado" });
       }
 
@@ -257,7 +258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       
       const product = await storage.getProduct(id);
-      if (!product || product.userId !== req.session.userId) {
+      if (!product || product.userId !== getEffectiveUserId(req)) {
         return res.status(404).json({ error: "Producto no encontrado" });
       }
 
@@ -277,7 +278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sales routes
   app.get("/api/sales", requireAuth, async (req, res) => {
     try {
-      const sales = await storage.getSales(req.session.userId!);
+      const sales = await storage.getSales(getEffectiveUserId(req));
       res.json(sales);
     } catch (error) {
       res.status(500).json({ error: "Error al obtener ventas" });
@@ -290,7 +291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const product = await storage.getProduct(productId);
       
-      if (!product || product.userId !== req.session.userId) {
+      if (!product || product.userId !== getEffectiveUserId(req)) {
         return res.status(404).json({ error: "Producto no encontrado" });
       }
 
@@ -298,7 +299,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         productId,
         quantity: parseInt(quantity),
         saleDate: date,
-        userId: req.session.userId!,
+        userId: getEffectiveUserId(req),
       });
       
       res.json(sale);
@@ -343,7 +344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/daily-payment/:date", requireAuth, async (req, res) => {
     try {
       const { date } = req.params;
-      const payment = await storage.getDailyPayment(req.session.userId!, date);
+      const payment = await storage.getDailyPayment(getEffectiveUserId(req), date);
       res.json(payment || null);
     } catch (error) {
       res.status(500).json({ error: "Error al obtener pago" });
@@ -385,14 +386,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get existing payment to preserve URLs if new images not provided
-      const existing = await storage.getDailyPayment(req.session.userId!, paymentDate);
+      const existing = await storage.getDailyPayment(getEffectiveUserId(req), paymentDate);
       
       const payment = await storage.upsertDailyPayment({
         paymentDate,
         imageComisionUrl: imageComisionUrl || existing?.imageComisionUrl,
         imageCostoUrl: imageCostoUrl || existing?.imageCostoUrl,
         isPaid: parseInt(isPaid || '0'),
-        userId: req.session.userId!,
+        userId: getEffectiveUserId(req),
       });
 
       res.json(payment);
@@ -405,8 +406,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Reports route - get sales with product details
   app.get("/api/reports", requireAuth, async (req, res) => {
     try {
-      const sales = await storage.getSales(req.session.userId!);
-      const products = await storage.getProducts(req.session.userId!);
+      const sales = await storage.getSales(getEffectiveUserId(req));
+      const products = await storage.getProducts(getEffectiveUserId(req));
       
       const productMap = new Map(products.map(p => [p.id, p]));
       

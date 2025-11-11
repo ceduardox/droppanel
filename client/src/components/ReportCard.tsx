@@ -8,6 +8,8 @@ interface Sale {
   quantity: number;
   price: number;
   cost: number;
+  baseCost?: number;
+  capitalIncrease?: number;
   date: string;
 }
 
@@ -28,6 +30,7 @@ export default function ReportCard({ sale }: ReportCardProps) {
   const totalCost = sale.cost * sale.quantity;
   const profit = total - totalCost;
   const profitPerPartner = profit / 2;
+  const hasBreakdown = sale.baseCost !== undefined && sale.baseCost !== null;
 
   return (
     <Card data-testid={`card-sale-${sale.id}`}>
@@ -60,6 +63,18 @@ export default function ReportCard({ sale }: ReportCardProps) {
             <span className="text-sm text-muted-foreground">Costo Total:</span>
             <span className="font-medium" data-testid={`text-sale-cost-${sale.id}`}>{totalCost.toFixed(2)} Bs</span>
           </div>
+          {hasBreakdown && (
+            <>
+              <div className="flex justify-between pl-4">
+                <span className="text-xs text-muted-foreground">↳ Bruto:</span>
+                <span className="text-xs" data-testid={`text-base-cost-total-${sale.id}`}>{(sale.baseCost! * sale.quantity).toFixed(2)} Bs</span>
+              </div>
+              <div className="flex justify-between pl-4">
+                <span className="text-xs text-muted-foreground">↳ Capital:</span>
+                <span className="text-xs" data-testid={`text-capital-increase-total-${sale.id}`}>{((sale.capitalIncrease || 0) * sale.quantity).toFixed(2)} Bs</span>
+              </div>
+            </>
+          )}
           <div className="flex justify-between pt-2 border-t">
             <span className="font-medium">Utilidad:</span>
             <span className="font-bold text-chart-2" data-testid={`text-sale-profit-${sale.id}`}>{profit.toFixed(2)} Bs</span>

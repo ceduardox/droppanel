@@ -67,7 +67,18 @@ export default function Reports() {
       report += `Cantidad: ${quantity} unidades\n`;
       report += `Precio Unitario: ${price.toFixed(2)} Bs\n`;
       report += `Total: ${saleTotal.toFixed(2)} Bs\n`;
-      report += `Costo: ${saleCost.toFixed(2)} Bs\n`;
+      
+      // Mostrar desglose de costo si está disponible
+      if (product.baseCost !== null && product.baseCost !== undefined) {
+        const baseCost = parseFloat(product.baseCost);
+        const capitalIncrease = parseFloat(product.capitalIncrease || 0);
+        report += `Costo: ${saleCost.toFixed(2)} Bs\n`;
+        report += `  - Bruto: ${(baseCost * quantity).toFixed(2)} Bs\n`;
+        report += `  - Capital: ${(capitalIncrease * quantity).toFixed(2)} Bs\n`;
+      } else {
+        report += `Costo: ${saleCost.toFixed(2)} Bs\n`;
+      }
+      
       report += `Utilidad: ${saleProfit.toFixed(2)} Bs\n`;
       report += `  - José Eduardo: ${profitPerPartnerSale.toFixed(2)} Bs\n`;
       report += `  - Jhonatan: ${profitPerPartnerSale.toFixed(2)} Bs\n\n`;
@@ -102,6 +113,8 @@ export default function Reports() {
       quantity: item.quantity,
       price: parseFloat(item.product.price),
       cost: parseFloat(item.product.cost),
+      baseCost: item.product.baseCost ? parseFloat(item.product.baseCost) : undefined,
+      capitalIncrease: item.product.capitalIncrease ? parseFloat(item.product.capitalIncrease) : undefined,
       date: item.saleDate,
     }));
 

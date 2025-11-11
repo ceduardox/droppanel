@@ -151,7 +151,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products", requireAuth, upload.single("image"), async (req, res) => {
     try {
-      const { name, price, cost } = req.body;
+      const { name, price, baseCost, capitalIncrease } = req.body;
+      
+      // Calcular cost total
+      const base = parseFloat(baseCost || '0');
+      const capital = parseFloat(capitalIncrease || '0');
+      const cost = base + capital;
       
       let imageUrl: string | undefined;
       
@@ -171,7 +176,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const product = await storage.createProduct({
         name,
         price,
-        cost,
+        cost: cost.toString(),
+        baseCost: baseCost || null,
+        capitalIncrease: capitalIncrease || null,
         imageUrl,
         userId: req.session.userId!,
       });
@@ -186,12 +193,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/products/:id", requireAuth, upload.single("image"), async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, price, cost } = req.body;
+      const { name, price, baseCost, capitalIncrease } = req.body;
       
       const existingProduct = await storage.getProduct(id);
       if (!existingProduct || existingProduct.userId !== req.session.userId) {
         return res.status(404).json({ error: "Producto no encontrado" });
       }
+
+      // Calcular cost total
+      const base = parseFloat(baseCost || '0');
+      const capital = parseFloat(capitalIncrease || '0');
+      const cost = base + capital;
 
       let imageUrl = existingProduct.imageUrl;
       
@@ -211,7 +223,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const product = await storage.updateProduct(id, {
         name,
         price,
-        cost,
+        cost: cost.toString(),
+        baseCost: baseCost || null,
+        capitalIncrease: capitalIncrease || null,
         imageUrl,
       });
       

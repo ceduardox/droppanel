@@ -8,6 +8,8 @@ interface ProductCardProps {
   name: string;
   price: number;
   cost: number;
+  baseCost?: number;
+  capitalIncrease?: number;
   image?: string;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -25,10 +27,11 @@ function getImageUrl(imageUrl?: string): string | undefined {
   return imageUrl;
 }
 
-export default function ProductCard({ id, name, price, cost, image, onEdit, onDelete }: ProductCardProps) {
+export default function ProductCard({ id, name, price, cost, baseCost, capitalIncrease, image, onEdit, onDelete }: ProductCardProps) {
   const profit = price - cost;
   const profitMargin = ((profit / price) * 100).toFixed(1);
   const imageUrl = getImageUrl(image);
+  const hasBreakdown = baseCost !== undefined && baseCost !== null;
 
   return (
     <Card className="overflow-hidden hover-elevate" data-testid={`card-product-${id}`}>
@@ -50,8 +53,20 @@ export default function ProductCard({ id, name, price, cost, image, onEdit, onDe
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-muted-foreground">Costo:</span>
-                <span className="text-sm" data-testid={`text-cost-${id}`}>{cost.toFixed(2)} Bs</span>
+                <span className="text-sm font-medium" data-testid={`text-cost-${id}`}>{cost.toFixed(2)} Bs</span>
               </div>
+              {hasBreakdown && (
+                <>
+                  <div className="flex items-center justify-between gap-2 pl-4">
+                    <span className="text-xs text-muted-foreground">↳ Bruto:</span>
+                    <span className="text-xs" data-testid={`text-base-cost-${id}`}>{baseCost.toFixed(2)} Bs</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pl-4">
+                    <span className="text-xs text-muted-foreground">↳ Capital:</span>
+                    <span className="text-xs" data-testid={`text-capital-increase-${id}`}>{(capitalIncrease || 0).toFixed(2)} Bs</span>
+                  </div>
+                </>
+              )}
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-muted-foreground">Utilidad:</span>
                 <Badge variant="secondary" className="text-xs" data-testid={`text-profit-${id}`}>

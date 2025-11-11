@@ -93,6 +93,8 @@ export default function Products() {
               name={product.name}
               price={parseFloat(product.price)}
               cost={parseFloat(product.cost)}
+              baseCost={product.baseCost ? parseFloat(product.baseCost) : undefined}
+              capitalIncrease={product.capitalIncrease ? parseFloat(product.capitalIncrease) : undefined}
               image={product.imageUrl}
               onEdit={handleEdit}
               onDelete={handleDelete}

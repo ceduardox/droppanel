@@ -156,3 +156,93 @@ export function useExpensesSummary(startDate: string, endDate: string) {
     enabled: !!startDate && !!endDate,
   });
 }
+
+// Deliveries
+export function useDeliveries() {
+  return useQuery({
+    queryKey: ["/api/deliveries"],
+  });
+}
+
+export function useCreateDelivery() {
+  return useMutation({
+    mutationFn: async (data: { name: string }) => {
+      return apiRequest("/api/deliveries", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/deliveries"] });
+    },
+  });
+}
+
+// Delivery Stock Entries
+export function useDeliveryStockEntries() {
+  return useQuery({
+    queryKey: ["/api/delivery-stock"],
+  });
+}
+
+export function useCreateDeliveryStockEntry() {
+  return useMutation({
+    mutationFn: async (data: { productId: string; quantity: number; note?: string }) => {
+      return apiRequest("/api/delivery-stock", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-stock"] });
+    },
+  });
+}
+
+// Delivery Assignments
+export function useDeliveryAssignments() {
+  return useQuery({
+    queryKey: ["/api/delivery-assignments"],
+  });
+}
+
+export function useCreateDeliveryAssignment() {
+  return useMutation({
+    mutationFn: async (data: { deliveryId: string; productId: string; quantity: number; unitPriceSnapshot: string; note?: string; isPaid?: number }) => {
+      return apiRequest("/api/delivery-assignments", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-assignments", "report"] });
+    },
+  });
+}
+
+export function useUpdateDeliveryAssignmentPaid() {
+  return useMutation({
+    mutationFn: async ({ id, isPaid }: { id: string; isPaid: number }) => {
+      return apiRequest(`/api/delivery-assignments/${id}/paid`, {
+        method: "PATCH",
+        body: JSON.stringify({ isPaid }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-assignments", "report"] });
+    },
+  });
+}
+
+// Delivery Assignments Report
+export function useDeliveryAssignmentsReport(startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ["/api/delivery-assignments", "report", startDate, endDate],
+    queryFn: async () => {
+      return apiRequest(`/api/delivery-assignments/report?startDate=${startDate}&endDate=${endDate}`);
+    },
+    enabled: !!startDate && !!endDate,
+  });
+}

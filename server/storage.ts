@@ -241,14 +241,16 @@ export class DbStorage implements IStorage {
   }
 
   async getDeliveryAssignmentsByDateRange(userId: string, startDate: string, endDate: string): Promise<DeliveryAssignment[]> {
+    const start = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T23:59:59');
     return db
       .select()
       .from(deliveryAssignments)
       .where(
         and(
           eq(deliveryAssignments.userId, userId),
-          gte(deliveryAssignments.assignedAt, startDate),
-          lte(deliveryAssignments.assignedAt, endDate)
+          gte(deliveryAssignments.assignedAt, start.toISOString()),
+          lte(deliveryAssignments.assignedAt, end.toISOString())
         )
       )
       .orderBy(desc(deliveryAssignments.assignedAt));

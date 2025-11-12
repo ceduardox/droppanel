@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
-import { insertUserSchema, insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema } from "@shared/schema";
+import { insertUserSchema, insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema } from "@shared/schema";
 import { z } from "zod";
 import session from "express-session";
 import path from "path";
@@ -522,6 +522,153 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: "Error al generar reporte de gastos" });
+    }
+  });
+
+  // Deliveries routes
+  app.get("/api/deliveries", requireAuth, async (req, res) => {
+    try {
+      const deliveries = await storage.getDeliveries(getEffectiveUserId(req));
+      res.json(deliveries);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener deliveries" });
+    }
+  });
+
+  app.post("/api/deliveries", requireAuth, async (req, res) => {
+    try {
+      const data = insertDeliverySchema.parse({
+        ...req.body,
+        userId: getEffectiveUserId(req),
+      });
+      const delivery = await storage.createDelivery(data);
+      res.json(delivery);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al crear delivery" });
+    }
+  });
+
+  // Delivery Stock Entries routes
+  app.get("/api/delivery-stock", requireAuth, async (req, res) => {
+    try {
+      const entries = await storage.getDeliveryStockEntries(getEffectiveUserId(req));
+      res.json(entries);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener entradas de stock" });
+    }
+  });
+
+  app.post("/api/delivery-stock", requireAuth, async (req, res) => {
+    try {
+      const data = insertDeliveryStockEntrySchema.parse({
+        ...req.body,
+        userId: getEffectiveUserId(req),
+      });
+      const entry = await storage.createDeliveryStockEntry(data);
+      res.json(entry);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al crear entrada de stock" });
+    }
+  });
+
+  // Delivery Assignments routes
+  app.get("/api/delivery-assignments", requireAuth, async (req, res) => {
+    try {
+      const assignments = await storage.getDeliveryAssignments(getEffectiveUserId(req));
+      res.json(assignments);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener asignaciones" });
+    }
+  });
+
+  app.post("/api/delivery-assignments", requireAuth, async (req, res) => {
+    try {
+      const data = insertDeliveryAssignmentSchema.parse({
+        ...req.body,
+        userId: getEffectiveUserId(req),
+      });
+      const assignment = await storage.createDeliveryAssignment(data);
+      res.json(assignment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al crear asignación" });
+    }
+  });
+
+  app.patch("/api/delivery-assignments/:id/paid", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { isPaid } = req.body;
+      const assignment = await storage.updateDeliveryAssignmentPaid(id, isPaid);
+      if (!assignment) {
+        return res.status(404).json({ error: "Asignación no encontrada" });
+      }
+      res.json(assignment);
+    } catch (error) {
+      res.status(500).json({ error: "Error al actualizar estado de pago" });
+    }
+  });
+
+  // Delivery Assignments Report
+  app.get("/api/delivery-assignments/report", requireAuth, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({ error: "Se requieren fechas de inicio y fin" });
+      }
+
+      const assignments = await storage.getDeliveryAssignmentsByDateRange(
+        getEffectiveUserId(req),
+        startDate as string,
+        endDate as string
+      );
+
+      const deliveries = await storage.getDeliveries(getEffectiveUserId(req));
+      const products = await storage.getProducts(getEffectiveUserId(req));
+
+      const deliveryMap = new Map(deliveries.map(d => [d.id, d]));
+      const productMap = new Map(products.map(p => [p.id, p]));
+
+      const assignmentsWithDetails = assignments.map(assignment => ({
+        ...assignment,
+        delivery: deliveryMap.get(assignment.deliveryId),
+        product: productMap.get(assignment.productId),
+      }));
+
+      // Group by delivery
+      const byDelivery = new Map<string, any>();
+      assignmentsWithDetails.forEach(assignment => {
+        const deliveryId = assignment.deliveryId;
+        if (!byDelivery.has(deliveryId)) {
+          byDelivery.set(deliveryId, {
+            delivery: assignment.delivery,
+            assignments: [],
+            total: 0,
+          });
+        }
+        const deliveryData = byDelivery.get(deliveryId);
+        deliveryData.assignments.push(assignment);
+        deliveryData.total += assignment.quantity * parseFloat(assignment.unitPriceSnapshot as any);
+      });
+
+      const grandTotal = Array.from(byDelivery.values()).reduce((sum, d) => sum + d.total, 0);
+
+      res.json({
+        assignments: assignmentsWithDetails,
+        byDelivery: Array.from(byDelivery.values()),
+        grandTotal: grandTotal.toFixed(2),
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Error al generar reporte de deliveries" });
     }
   });
 

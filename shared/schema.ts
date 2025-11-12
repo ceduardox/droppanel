@@ -103,3 +103,55 @@ export const insertExpenseSchema = createInsertSchema(expenses).omit({
 
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
 export type Expense = typeof expenses.$inferSelect;
+
+export const deliveries = pgTable("deliveries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDeliverySchema = createInsertSchema(deliveries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertDelivery = z.infer<typeof insertDeliverySchema>;
+export type Delivery = typeof deliveries.$inferSelect;
+
+export const deliveryStockEntries = pgTable("delivery_stock_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  productId: varchar("product_id").notNull().references(() => products.id),
+  quantity: integer("quantity").notNull(),
+  note: text("note"),
+  recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+});
+
+export const insertDeliveryStockEntrySchema = createInsertSchema(deliveryStockEntries).omit({
+  id: true,
+  recordedAt: true,
+});
+
+export type InsertDeliveryStockEntry = z.infer<typeof insertDeliveryStockEntrySchema>;
+export type DeliveryStockEntry = typeof deliveryStockEntries.$inferSelect;
+
+export const deliveryAssignments = pgTable("delivery_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deliveryId: varchar("delivery_id").notNull().references(() => deliveries.id),
+  productId: varchar("product_id").notNull().references(() => products.id),
+  quantity: integer("quantity").notNull(),
+  unitPriceSnapshot: numeric("unit_price_snapshot", { precision: 10, scale: 2 }).notNull(),
+  note: text("note"),
+  assignedAt: timestamp("assigned_at").defaultNow().notNull(),
+  isPaid: integer("is_paid").default(0).notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+});
+
+export const insertDeliveryAssignmentSchema = createInsertSchema(deliveryAssignments).omit({
+  id: true,
+  assignedAt: true,
+});
+
+export type InsertDeliveryAssignment = z.infer<typeof insertDeliveryAssignmentSchema>;
+export type DeliveryAssignment = typeof deliveryAssignments.$inferSelect;

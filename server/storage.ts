@@ -7,6 +7,9 @@ import {
   dailyPayments,
   expenseCategories,
   expenses,
+  deliveries,
+  deliveryStockEntries,
+  deliveryAssignments,
   type User, 
   type InsertUser,
   type Product,
@@ -18,7 +21,13 @@ import {
   type ExpenseCategory,
   type InsertExpenseCategory,
   type Expense,
-  type InsertExpense
+  type InsertExpense,
+  type Delivery,
+  type InsertDelivery,
+  type DeliveryStockEntry,
+  type InsertDeliveryStockEntry,
+  type DeliveryAssignment,
+  type InsertDeliveryAssignment
 } from "@shared/schema";
 import bcrypt from "bcrypt";
 
@@ -55,6 +64,20 @@ export interface IStorage {
   getExpenses(userId: string): Promise<Expense[]>;
   getExpensesByDateRange(userId: string, startDate: string, endDate: string): Promise<Expense[]>;
   createExpense(expense: InsertExpense): Promise<Expense>;
+
+  // Deliveries
+  getDeliveries(userId: string): Promise<Delivery[]>;
+  createDelivery(delivery: InsertDelivery): Promise<Delivery>;
+
+  // Delivery Stock Entries
+  getDeliveryStockEntries(userId: string): Promise<DeliveryStockEntry[]>;
+  createDeliveryStockEntry(entry: InsertDeliveryStockEntry): Promise<DeliveryStockEntry>;
+
+  // Delivery Assignments
+  getDeliveryAssignments(userId: string): Promise<DeliveryAssignment[]>;
+  getDeliveryAssignmentsByDateRange(userId: string, startDate: string, endDate: string): Promise<DeliveryAssignment[]>;
+  createDeliveryAssignment(assignment: InsertDeliveryAssignment): Promise<DeliveryAssignment>;
+  updateDeliveryAssignmentPaid(id: string, isPaid: number): Promise<DeliveryAssignment | undefined>;
 }
 
 export class DbStorage implements IStorage {
@@ -189,6 +212,59 @@ export class DbStorage implements IStorage {
 
   async createExpense(expense: InsertExpense): Promise<Expense> {
     const result = await db.insert(expenses).values(expense).returning();
+    return result[0];
+  }
+
+  // Deliveries
+  async getDeliveries(userId: string): Promise<Delivery[]> {
+    return db.select().from(deliveries).where(eq(deliveries.userId, userId)).orderBy(desc(deliveries.createdAt));
+  }
+
+  async createDelivery(delivery: InsertDelivery): Promise<Delivery> {
+    const result = await db.insert(deliveries).values(delivery).returning();
+    return result[0];
+  }
+
+  // Delivery Stock Entries
+  async getDeliveryStockEntries(userId: string): Promise<DeliveryStockEntry[]> {
+    return db.select().from(deliveryStockEntries).where(eq(deliveryStockEntries.userId, userId)).orderBy(desc(deliveryStockEntries.recordedAt));
+  }
+
+  async createDeliveryStockEntry(entry: InsertDeliveryStockEntry): Promise<DeliveryStockEntry> {
+    const result = await db.insert(deliveryStockEntries).values(entry).returning();
+    return result[0];
+  }
+
+  // Delivery Assignments
+  async getDeliveryAssignments(userId: string): Promise<DeliveryAssignment[]> {
+    return db.select().from(deliveryAssignments).where(eq(deliveryAssignments.userId, userId)).orderBy(desc(deliveryAssignments.assignedAt));
+  }
+
+  async getDeliveryAssignmentsByDateRange(userId: string, startDate: string, endDate: string): Promise<DeliveryAssignment[]> {
+    return db
+      .select()
+      .from(deliveryAssignments)
+      .where(
+        and(
+          eq(deliveryAssignments.userId, userId),
+          gte(deliveryAssignments.assignedAt, startDate),
+          lte(deliveryAssignments.assignedAt, endDate)
+        )
+      )
+      .orderBy(desc(deliveryAssignments.assignedAt));
+  }
+
+  async createDeliveryAssignment(assignment: InsertDeliveryAssignment): Promise<DeliveryAssignment> {
+    const result = await db.insert(deliveryAssignments).values(assignment).returning();
+    return result[0];
+  }
+
+  async updateDeliveryAssignmentPaid(id: string, isPaid: number): Promise<DeliveryAssignment | undefined> {
+    const result = await db
+      .update(deliveryAssignments)
+      .set({ isPaid })
+      .where(eq(deliveryAssignments.id, id))
+      .returning();
     return result[0];
   }
 }

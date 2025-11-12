@@ -102,3 +102,57 @@ export function useSaveDailyPayment() {
     },
   });
 }
+
+// Expense Categories
+export function useExpenseCategories() {
+  return useQuery({
+    queryKey: ["/api/expense-categories"],
+  });
+}
+
+export function useCreateExpenseCategory() {
+  return useMutation({
+    mutationFn: async (data: { name: string }) => {
+      return apiRequest("/api/expense-categories", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/expense-categories"] });
+    },
+  });
+}
+
+// Expenses
+export function useExpenses() {
+  return useQuery({
+    queryKey: ["/api/expenses"],
+  });
+}
+
+export function useCreateExpense() {
+  return useMutation({
+    mutationFn: async (data: { categoryId: string; amount: string; expenseDate: string }) => {
+      return apiRequest("/api/expenses", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses", "summary"] });
+    },
+  });
+}
+
+// Expenses Summary
+export function useExpensesSummary(startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ["/api/expenses", "summary", startDate, endDate],
+    queryFn: async () => {
+      return apiRequest(`/api/expenses/summary?startDate=${startDate}&endDate=${endDate}`);
+    },
+    enabled: !!startDate && !!endDate,
+  });
+}

@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
-import { insertUserSchema, insertProductSchema, insertSaleSchema, insertDailyPaymentSchema } from "@shared/schema";
+import { insertUserSchema, insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema } from "@shared/schema";
 import { z } from "zod";
 import session from "express-session";
 import path from "path";
@@ -434,6 +434,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(salesWithDetails);
     } catch (error) {
       res.status(500).json({ error: "Error al generar reporte" });
+    }
+  });
+
+  // Expense Categories routes
+  app.get("/api/expense-categories", requireAuth, async (req, res) => {
+    try {
+      const categories = await storage.getExpenseCategories(getEffectiveUserId(req));
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener categorías" });
+    }
+  });
+
+  app.post("/api/expense-categories", requireAuth, async (req, res) => {
+    try {
+      const data = insertExpenseCategorySchema.parse({
+        ...req.body,
+        userId: getEffectiveUserId(req),
+      });
+      const category = await storage.createExpenseCategory(data);
+      res.json(category);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al crear categoría" });
+    }
+  });
+
+  // Expenses routes
+  app.get("/api/expenses", requireAuth, async (req, res) => {
+    try {
+      const expenses = await storage.getExpenses(getEffectiveUserId(req));
+      res.json(expenses);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener gastos" });
+    }
+  });
+
+  app.post("/api/expenses", requireAuth, async (req, res) => {
+    try {
+      const data = insertExpenseSchema.parse({
+        ...req.body,
+        userId: getEffectiveUserId(req),
+      });
+      const expense = await storage.createExpense(data);
+      res.json(expense);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al crear gasto" });
+    }
+  });
+
+  // Expenses summary with date filter
+  app.get("/api/expenses/summary", requireAuth, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({ error: "Se requieren fechas de inicio y fin" });
+      }
+
+      const expenses = await storage.getExpensesByDateRange(
+        getEffectiveUserId(req),
+        startDate as string,
+        endDate as string
+      );
+
+      const categories = await storage.getExpenseCategories(getEffectiveUserId(req));
+      const categoryMap = new Map(categories.map(c => [c.id, c]));
+
+      const expensesWithCategory = expenses.map(expense => ({
+        ...expense,
+        category: categoryMap.get(expense.categoryId),
+      }));
+
+      const total = expenses.reduce((sum, expense) => {
+        return sum + parseFloat(expense.amount as any);
+      }, 0);
+
+      res.json({
+        expenses: expensesWithCategory,
+        total: total.toFixed(2),
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Error al generar reporte de gastos" });
     }
   });
 

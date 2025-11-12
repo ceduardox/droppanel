@@ -16,6 +16,7 @@ import Sales from "@/pages/Sales";
 import Reports from "@/pages/Reports";
 import CapitalIncrease from "@/pages/CapitalIncrease";
 import Expenses from "@/pages/Expenses";
+import Delivery from "@/pages/Delivery";
 import { useAuth, useLogout } from "@/lib/auth";
 
 function ProtectedRoute({ component: Component }: { component: () => JSX.Element }) {
@@ -76,6 +77,7 @@ function AuthenticatedLayout() {
               <Route path="/reportes" component={() => <ProtectedRoute component={Reports} />} />
               <Route path="/aumento-capital" component={() => <ProtectedRoute component={CapitalIncrease} />} />
               <Route path="/gastos" component={() => <ProtectedRoute component={Expenses} />} />
+              <Route path="/delivery" component={() => <ProtectedRoute component={Delivery} />} />
               <Route component={NotFound} />
             </Switch>
           </main>
@@ -107,6 +109,7 @@ function Router() {
       <Route path="/reportes" component={AuthenticatedLayout} />
       <Route path="/aumento-capital" component={AuthenticatedLayout} />
       <Route path="/gastos" component={AuthenticatedLayout} />
+      <Route path="/delivery" component={AuthenticatedLayout} />
       <Route component={NotFound} />
     </Switch>
   );

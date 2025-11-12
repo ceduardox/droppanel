@@ -1,10 +1,12 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte, lte, sum } from "drizzle-orm";
 import { db } from "./db";
 import { 
   users, 
   products, 
   sales,
   dailyPayments,
+  expenseCategories,
+  expenses,
   type User, 
   type InsertUser,
   type Product,
@@ -12,7 +14,11 @@ import {
   type Sale,
   type InsertSale,
   type DailyPayment,
-  type InsertDailyPayment
+  type InsertDailyPayment,
+  type ExpenseCategory,
+  type InsertExpenseCategory,
+  type Expense,
+  type InsertExpense
 } from "@shared/schema";
 import bcrypt from "bcrypt";
 
@@ -40,6 +46,15 @@ export interface IStorage {
   // Daily Payments
   getDailyPayment(userId: string, paymentDate: string): Promise<DailyPayment | undefined>;
   upsertDailyPayment(payment: InsertDailyPayment): Promise<DailyPayment>;
+
+  // Expense Categories
+  getExpenseCategories(userId: string): Promise<ExpenseCategory[]>;
+  createExpenseCategory(category: InsertExpenseCategory): Promise<ExpenseCategory>;
+
+  // Expenses
+  getExpenses(userId: string): Promise<Expense[]>;
+  getExpensesByDateRange(userId: string, startDate: string, endDate: string): Promise<Expense[]>;
+  createExpense(expense: InsertExpense): Promise<Expense>;
 }
 
 export class DbStorage implements IStorage {
@@ -141,6 +156,40 @@ export class DbStorage implements IStorage {
       const result = await db.insert(dailyPayments).values(payment).returning();
       return result[0];
     }
+  }
+
+  // Expense Categories
+  async getExpenseCategories(userId: string): Promise<ExpenseCategory[]> {
+    return db.select().from(expenseCategories).where(eq(expenseCategories.userId, userId)).orderBy(desc(expenseCategories.createdAt));
+  }
+
+  async createExpenseCategory(category: InsertExpenseCategory): Promise<ExpenseCategory> {
+    const result = await db.insert(expenseCategories).values(category).returning();
+    return result[0];
+  }
+
+  // Expenses
+  async getExpenses(userId: string): Promise<Expense[]> {
+    return db.select().from(expenses).where(eq(expenses.userId, userId)).orderBy(desc(expenses.expenseDate));
+  }
+
+  async getExpensesByDateRange(userId: string, startDate: string, endDate: string): Promise<Expense[]> {
+    return db
+      .select()
+      .from(expenses)
+      .where(
+        and(
+          eq(expenses.userId, userId),
+          gte(expenses.expenseDate, startDate),
+          lte(expenses.expenseDate, endDate)
+        )
+      )
+      .orderBy(desc(expenses.expenseDate));
+  }
+
+  async createExpense(expense: InsertExpense): Promise<Expense> {
+    const result = await db.insert(expenses).values(expense).returning();
+    return result[0];
   }
 }
 

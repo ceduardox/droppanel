@@ -24,7 +24,7 @@ export default function Expenses() {
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
 
-  const { data: categories = [], isLoading: categoriesLoading } = useExpenseCategories();
+  const { data: categories = [], isLoading: categoriesLoading } = useExpenseCategories() as { data: any[], isLoading: boolean };
   const createCategory = useCreateExpenseCategory();
   const createExpense = useCreateExpense();
   const { data: summary, isLoading: summaryLoading } = useExpensesSummary(startDate, endDate);

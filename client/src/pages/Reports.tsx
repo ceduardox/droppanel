@@ -36,6 +36,12 @@ export default function Reports() {
       return sum + (cost * quantity);
     }, 0);
 
+    const totalBaseCost = filteredSales.reduce((sum: number, item: any) => {
+      const baseCost = parseFloat(item.product?.baseCost || 0);
+      const quantity = item.quantity;
+      return sum + (baseCost * quantity);
+    }, 0);
+
     const totalProfit = totalSales - totalCost;
     const profitPerPartner = totalProfit / 2;
 
@@ -87,6 +93,7 @@ export default function Reports() {
     report += `💰 RESUMEN TOTAL:\n`;
     report += `Total Ventas: ${totalSales.toFixed(2)} Bs\n`;
     report += `Costo Total: ${totalCost.toFixed(2)} Bs\n`;
+    report += `Total Bruto: ${totalBaseCost.toFixed(2)} Bs\n`;
     report += `Utilidad Total: ${totalProfit.toFixed(2)} Bs\n\n`;
     report += `👥 DISTRIBUCIÓN (50/50):\n`;
     report += `José Eduardo: ${profitPerPartner.toFixed(2)} Bs\n`;

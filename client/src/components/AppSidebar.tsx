@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Package, ShoppingCart, FileText, TrendingUp, Settings, LogOut, Receipt, TruckIcon } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, FileText, TrendingUp, Settings, LogOut, Receipt, TruckIcon, BarChart3 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -19,6 +19,7 @@ const allMenuItems = [
   { title: "Productos", icon: Package, path: "/productos" },
   { title: "Ventas", icon: ShoppingCart, path: "/ventas" },
   { title: "Reportes", icon: FileText, path: "/reportes" },
+  { title: "Reporte Ventas", icon: BarChart3, path: "/reporte-ventas" },
   { title: "Aumento de Capital", icon: TrendingUp, path: "/aumento-capital" },
   { title: "Gastos", icon: Receipt, path: "/gastos" },
   { title: "Delivery", icon: TruckIcon, path: "/delivery" },

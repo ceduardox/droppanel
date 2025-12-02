@@ -2,7 +2,8 @@ import { useState } from "react";
 import ReportCard from "@/components/ReportCard";
 import WhatsAppReport from "@/components/WhatsAppReport";
 import DailyPaymentUpload from "@/components/DailyPaymentUpload";
-import { useReports } from "@/lib/api";
+import { useReports, useUpdateSaleDate } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "lucide-react";
@@ -18,6 +19,24 @@ function formatDateString(dateStr: string): string {
 export default function Reports() {
   const { data: salesWithProducts = [], isLoading } = useReports();
   const [selectedDate, setSelectedDate] = useState("");
+  const updateSaleDate = useUpdateSaleDate();
+  const { toast } = useToast();
+
+  const handleEditDate = async (saleId: string, newDate: string) => {
+    try {
+      await updateSaleDate.mutateAsync({ id: saleId, saleDate: newDate });
+      toast({
+        title: "Fecha actualizada",
+        description: "La fecha de la venta se ha cambiado correctamente",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la fecha",
+        variant: "destructive",
+      });
+    }
+  };
 
   const generateReportText = (filteredSales: any[]) => {
     if (filteredSales.length === 0) return selectedDate 
@@ -147,7 +166,7 @@ export default function Reports() {
                 </div>
               ) : (
                 salesForDisplay.map((sale: any) => (
-                  <ReportCard key={sale.id} sale={sale} />
+                  <ReportCard key={sale.id} sale={sale} onEditDate={handleEditDate} />
                 ))
               )}
             </div>

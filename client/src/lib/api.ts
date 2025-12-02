@@ -73,6 +73,21 @@ export function useCreateSale() {
   });
 }
 
+export function useUpdateSaleDate() {
+  return useMutation({
+    mutationFn: async ({ id, saleDate }: { id: string; saleDate: string }) => {
+      return apiRequest(`/api/sales/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ saleDate }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sales"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reports"] });
+    },
+  });
+}
+
 // Reports
 export function useReports() {
   return useQuery({

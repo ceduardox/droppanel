@@ -1,6 +1,11 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Calendar, Pencil } from "lucide-react";
 
 interface Sale {
   id: string;
@@ -15,32 +20,76 @@ interface Sale {
 
 interface ReportCardProps {
   sale: Sale;
+  onEditDate?: (id: string, newDate: string) => void;
 }
 
 function formatDateString(dateStr: string): string {
-  // Format YYYY-MM-DD to Spanish date without timezone issues
   const [year, month, day] = dateStr.split('-');
   const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   const monthName = months[parseInt(month) - 1];
   return `${parseInt(day)} de ${monthName} de ${year}`;
 }
 
-export default function ReportCard({ sale }: ReportCardProps) {
+export default function ReportCard({ sale, onEditDate }: ReportCardProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [newDate, setNewDate] = useState(sale.date);
+  
   const total = sale.price * sale.quantity;
   const totalCost = sale.cost * sale.quantity;
   const profit = total - totalCost;
   const profitPerPartner = profit / 2;
   const hasBreakdown = sale.baseCost !== undefined && sale.baseCost !== null;
 
+  const handleSaveDate = () => {
+    if (onEditDate && newDate) {
+      onEditDate(sale.id, newDate);
+      setIsOpen(false);
+    }
+  };
+
   return (
     <Card data-testid={`card-sale-${sale.id}`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-lg">{sale.productName}</CardTitle>
-          <Badge variant="outline" className="text-xs">
-            <Calendar className="h-3 w-3 mr-1" />
-            {formatDateString(sale.date)}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {onEditDate && (
+              <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" data-testid={`button-edit-date-${sale.id}`}>
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Cambiar Fecha de Venta</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <p className="text-sm text-muted-foreground">
+                      Producto: <span className="font-medium">{sale.productName}</span>
+                    </p>
+                    <div className="space-y-2">
+                      <Label htmlFor="newDate">Nueva Fecha</Label>
+                      <Input
+                        id="newDate"
+                        type="date"
+                        value={newDate}
+                        onChange={(e) => setNewDate(e.target.value)}
+                        data-testid="input-new-date"
+                      />
+                    </div>
+                    <Button onClick={handleSaveDate} className="w-full" data-testid="button-save-date">
+                      Guardar
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+            <Badge variant="outline" className="text-xs">
+              <Calendar className="h-3 w-3 mr-1" />
+              {formatDateString(sale.date)}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">

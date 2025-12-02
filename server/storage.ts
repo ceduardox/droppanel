@@ -51,6 +51,7 @@ export interface IStorage {
   getSales(userId: string): Promise<Sale[]>;
   getSale(id: string): Promise<Sale | undefined>;
   createSale(sale: InsertSale): Promise<Sale>;
+  updateSaleDate(id: string, saleDate: string): Promise<Sale | undefined>;
 
   // Daily Payments
   getDailyPayment(userId: string, paymentDate: string): Promise<DailyPayment | undefined>;
@@ -153,6 +154,15 @@ export class DbStorage implements IStorage {
 
   async createSale(sale: InsertSale): Promise<Sale> {
     const result = await db.insert(sales).values(sale).returning();
+    return result[0];
+  }
+
+  async updateSaleDate(id: string, saleDate: string): Promise<Sale | undefined> {
+    const result = await db
+      .update(sales)
+      .set({ saleDate })
+      .where(eq(sales.id, id))
+      .returning();
     return result[0];
   }
 

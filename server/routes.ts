@@ -408,6 +408,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Reports route - get sales with product details
+  // Update sale date
+  app.patch("/api/sales/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { saleDate } = req.body;
+      
+      if (!saleDate) {
+        return res.status(400).json({ error: "Se requiere la fecha" });
+      }
+
+      const sale = await storage.updateSaleDate(id, saleDate);
+      if (!sale) {
+        return res.status(404).json({ error: "Venta no encontrada" });
+      }
+      res.json(sale);
+    } catch (error) {
+      res.status(500).json({ error: "Error al actualizar la fecha" });
+    }
+  });
+
   app.get("/api/reports", requireAuth, async (req, res) => {
     try {
       const sales = await storage.getSales(getEffectiveUserId(req));

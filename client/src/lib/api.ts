@@ -313,3 +313,45 @@ export function useCreateGrossCapitalMovement() {
     },
   });
 }
+
+// Sellers
+export function useSellers() {
+  return useQuery({
+    queryKey: ["/api/sellers"],
+  });
+}
+
+export function useCreateSeller() {
+  return useMutation({
+    mutationFn: async (data: { name: string }) => {
+      return apiRequest("/api/sellers", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sellers"] });
+    },
+  });
+}
+
+// Seller Sales
+export function useSellerSales() {
+  return useQuery({
+    queryKey: ["/api/seller-sales"],
+  });
+}
+
+export function useCreateSellerSale() {
+  return useMutation({
+    mutationFn: async (data: { sellerId: string; productId: string; quantity: number; unitPrice: string; saleDate: string }) => {
+      return apiRequest("/api/seller-sales", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/seller-sales"] });
+    },
+  });
+}

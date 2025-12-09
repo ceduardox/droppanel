@@ -16,6 +16,7 @@ import Sales from "@/pages/Sales";
 import Reports from "@/pages/Reports";
 import CapitalIncrease from "@/pages/CapitalIncrease";
 import GrossCapitalReport from "@/pages/GrossCapitalReport";
+import SellerReport from "@/pages/SellerReport";
 import Expenses from "@/pages/Expenses";
 import Delivery from "@/pages/Delivery";
 import SalesReport from "@/pages/SalesReport";
@@ -81,6 +82,7 @@ function AuthenticatedLayout() {
               <Route path="/reporte-ventas" component={() => <ProtectedRoute component={SalesReport} />} />
               <Route path="/aumento-capital" component={() => <ProtectedRoute component={CapitalIncrease} />} />
               <Route path="/capital-bruto" component={() => <ProtectedRoute component={GrossCapitalReport} />} />
+              <Route path="/reporte-vendedores" component={() => <ProtectedRoute component={SellerReport} />} />
               <Route path="/gastos" component={() => <ProtectedRoute component={Expenses} />} />
               <Route path="/delivery" component={() => <ProtectedRoute component={Delivery} />} />
               <Route path="/reporte-gastos" component={() => <ProtectedRoute component={ExpensesReport} />} />
@@ -116,6 +118,7 @@ function Router() {
       <Route path="/reporte-ventas" component={AuthenticatedLayout} />
       <Route path="/aumento-capital" component={AuthenticatedLayout} />
       <Route path="/capital-bruto" component={AuthenticatedLayout} />
+      <Route path="/reporte-vendedores" component={AuthenticatedLayout} />
       <Route path="/gastos" component={AuthenticatedLayout} />
       <Route path="/delivery" component={AuthenticatedLayout} />
       <Route path="/reporte-gastos" component={AuthenticatedLayout} />

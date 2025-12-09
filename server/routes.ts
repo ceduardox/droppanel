@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
-import { insertUserSchema, insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema, insertGrossCapitalMovementSchema } from "@shared/schema";
+import { insertUserSchema, insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema, insertGrossCapitalMovementSchema, insertSellerSchema, insertSellerSaleSchema } from "@shared/schema";
 import { z } from "zod";
 import session from "express-session";
 import path from "path";
@@ -780,6 +780,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error creating gross capital movement:", error);
       res.status(500).json({ error: "Error al crear movimiento de capital bruto" });
+    }
+  });
+
+  // Sellers routes
+  app.get("/api/sellers", requireAuth, async (req, res) => {
+    try {
+      const sellersList = await storage.getSellers(getEffectiveUserId(req));
+      res.json(sellersList);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener vendedores" });
+    }
+  });
+
+  app.post("/api/sellers", requireAuth, async (req, res) => {
+    try {
+      const data = insertSellerSchema.parse({
+        name: req.body.name,
+        userId: getEffectiveUserId(req),
+      });
+      const seller = await storage.createSeller(data);
+      res.json(seller);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al crear vendedor" });
+    }
+  });
+
+  // Seller Sales routes
+  app.get("/api/seller-sales", requireAuth, async (req, res) => {
+    try {
+      const sales = await storage.getSellerSales(getEffectiveUserId(req));
+      res.json(sales);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener ventas de vendedores" });
+    }
+  });
+
+  app.post("/api/seller-sales", requireAuth, async (req, res) => {
+    try {
+      const data = insertSellerSaleSchema.parse({
+        sellerId: req.body.sellerId,
+        productId: req.body.productId,
+        quantity: parseInt(req.body.quantity),
+        unitPrice: req.body.unitPrice,
+        saleDate: req.body.saleDate,
+        userId: getEffectiveUserId(req),
+      });
+      const sale = await storage.createSellerSale(data);
+      res.json(sale);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating seller sale:", error);
+      res.status(500).json({ error: "Error al crear venta de vendedor" });
     }
   });
 

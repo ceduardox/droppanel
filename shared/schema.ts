@@ -193,3 +193,39 @@ export const insertGrossCapitalMovementSchema = createInsertSchema(grossCapitalM
 
 export type InsertGrossCapitalMovement = z.infer<typeof insertGrossCapitalMovementSchema>;
 export type GrossCapitalMovement = typeof grossCapitalMovements.$inferSelect;
+
+// Vendedores
+export const sellers = pgTable("sellers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSellerSchema = createInsertSchema(sellers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertSeller = z.infer<typeof insertSellerSchema>;
+export type Seller = typeof sellers.$inferSelect;
+
+// Ventas de vendedores
+export const sellerSales = pgTable("seller_sales", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sellerId: varchar("seller_id").notNull().references(() => sellers.id),
+  productId: varchar("product_id").notNull().references(() => products.id),
+  quantity: integer("quantity").notNull(),
+  unitPrice: numeric("unit_price", { precision: 10, scale: 2 }).notNull(),
+  saleDate: date("sale_date").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSellerSaleSchema = createInsertSchema(sellerSales).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertSellerSale = z.infer<typeof insertSellerSaleSchema>;
+export type SellerSale = typeof sellerSales.$inferSelect;

@@ -12,6 +12,8 @@ import {
   deliveryAssignments,
   capitalMovements,
   grossCapitalMovements,
+  sellers,
+  sellerSales,
   type User, 
   type InsertUser,
   type Product,
@@ -33,7 +35,11 @@ import {
   type CapitalMovement,
   type InsertCapitalMovement,
   type GrossCapitalMovement,
-  type InsertGrossCapitalMovement
+  type InsertGrossCapitalMovement,
+  type Seller,
+  type InsertSeller,
+  type SellerSale,
+  type InsertSellerSale
 } from "@shared/schema";
 import bcrypt from "bcrypt";
 
@@ -93,6 +99,14 @@ export interface IStorage {
   // Gross Capital Movements (retiros de capital bruto)
   getGrossCapitalMovements(userId: string): Promise<GrossCapitalMovement[]>;
   createGrossCapitalMovement(movement: InsertGrossCapitalMovement): Promise<GrossCapitalMovement>;
+
+  // Sellers
+  getSellers(userId: string): Promise<Seller[]>;
+  createSeller(seller: InsertSeller): Promise<Seller>;
+
+  // Seller Sales
+  getSellerSales(userId: string): Promise<SellerSale[]>;
+  createSellerSale(sale: InsertSellerSale): Promise<SellerSale>;
 }
 
 export class DbStorage implements IStorage {
@@ -311,6 +325,26 @@ export class DbStorage implements IStorage {
 
   async createGrossCapitalMovement(movement: InsertGrossCapitalMovement): Promise<GrossCapitalMovement> {
     const result = await db.insert(grossCapitalMovements).values(movement).returning();
+    return result[0];
+  }
+
+  // Sellers
+  async getSellers(userId: string): Promise<Seller[]> {
+    return db.select().from(sellers).where(eq(sellers.userId, userId)).orderBy(desc(sellers.createdAt));
+  }
+
+  async createSeller(seller: InsertSeller): Promise<Seller> {
+    const result = await db.insert(sellers).values(seller).returning();
+    return result[0];
+  }
+
+  // Seller Sales
+  async getSellerSales(userId: string): Promise<SellerSale[]> {
+    return db.select().from(sellerSales).where(eq(sellerSales.userId, userId)).orderBy(desc(sellerSales.saleDate));
+  }
+
+  async createSellerSale(sale: InsertSellerSale): Promise<SellerSale> {
+    const result = await db.insert(sellerSales).values(sale).returning();
     return result[0];
   }
 }

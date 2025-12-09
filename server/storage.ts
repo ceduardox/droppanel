@@ -10,6 +10,7 @@ import {
   deliveries,
   deliveryStockEntries,
   deliveryAssignments,
+  capitalMovements,
   type User, 
   type InsertUser,
   type Product,
@@ -27,7 +28,9 @@ import {
   type DeliveryStockEntry,
   type InsertDeliveryStockEntry,
   type DeliveryAssignment,
-  type InsertDeliveryAssignment
+  type InsertDeliveryAssignment,
+  type CapitalMovement,
+  type InsertCapitalMovement
 } from "@shared/schema";
 import bcrypt from "bcrypt";
 
@@ -79,6 +82,10 @@ export interface IStorage {
   getDeliveryAssignmentsByDateRange(userId: string, startDate: string, endDate: string): Promise<DeliveryAssignment[]>;
   createDeliveryAssignment(assignment: InsertDeliveryAssignment): Promise<DeliveryAssignment>;
   updateDeliveryAssignmentPaid(id: string, isPaid: number): Promise<DeliveryAssignment | undefined>;
+
+  // Capital Movements
+  getCapitalMovements(userId: string): Promise<CapitalMovement[]>;
+  createCapitalMovement(movement: InsertCapitalMovement): Promise<CapitalMovement>;
 }
 
 export class DbStorage implements IStorage {
@@ -277,6 +284,16 @@ export class DbStorage implements IStorage {
       .set({ isPaid })
       .where(eq(deliveryAssignments.id, id))
       .returning();
+    return result[0];
+  }
+
+  // Capital Movements
+  async getCapitalMovements(userId: string): Promise<CapitalMovement[]> {
+    return db.select().from(capitalMovements).where(eq(capitalMovements.userId, userId)).orderBy(desc(capitalMovements.movementDate));
+  }
+
+  async createCapitalMovement(movement: InsertCapitalMovement): Promise<CapitalMovement> {
+    const result = await db.insert(capitalMovements).values(movement).returning();
     return result[0];
   }
 }

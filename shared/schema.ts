@@ -155,3 +155,22 @@ export const insertDeliveryAssignmentSchema = createInsertSchema(deliveryAssignm
 
 export type InsertDeliveryAssignment = z.infer<typeof insertDeliveryAssignmentSchema>;
 export type DeliveryAssignment = typeof deliveryAssignments.$inferSelect;
+
+export const capitalMovements = pgTable("capital_movements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").notNull(), // "credito" o "retiro"
+  description: text("description"),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  movementDate: date("movement_date").notNull(),
+  imageUrl: text("image_url"),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCapitalMovementSchema = createInsertSchema(capitalMovements).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCapitalMovement = z.infer<typeof insertCapitalMovementSchema>;
+export type CapitalMovement = typeof capitalMovements.$inferSelect;

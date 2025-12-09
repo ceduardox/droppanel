@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
-import { insertUserSchema, insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema } from "@shared/schema";
+import { insertUserSchema, insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema } from "@shared/schema";
 import { z } from "zod";
 import session from "express-session";
 import path from "path";
@@ -696,6 +696,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: "Error al generar reporte de deliveries" });
+    }
+  });
+
+  // Capital Movements routes
+  app.get("/api/capital-movements", requireAuth, async (req, res) => {
+    try {
+      const movements = await storage.getCapitalMovements(getEffectiveUserId(req));
+      res.json(movements);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener movimientos de capital" });
+    }
+  });
+
+  app.post("/api/capital-movements", requireAuth, upload.single("image"), async (req, res) => {
+    try {
+      let imageUrl = null;
+      
+      if (req.file) {
+        const fileName = `capital/${Date.now()}-${req.file.originalname}`;
+        await objectStorageClient.uploadFromBytes(fileName, req.file.buffer);
+        imageUrl = fileName;
+      }
+
+      const data = insertCapitalMovementSchema.parse({
+        type: req.body.type,
+        description: req.body.description || null,
+        amount: req.body.amount,
+        movementDate: req.body.movementDate,
+        imageUrl,
+        userId: getEffectiveUserId(req),
+      });
+      
+      const movement = await storage.createCapitalMovement(data);
+      res.json(movement);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al crear movimiento de capital" });
     }
   });
 

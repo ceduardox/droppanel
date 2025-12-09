@@ -5,12 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Calendar } from "lucide-react";
+import { Plus, Pencil, Check, X } from "lucide-react";
 import {
   useExpenseCategories,
   useCreateExpenseCategory,
   useCreateExpense,
   useExpensesSummary,
+  useUpdateExpense,
 } from "@/lib/api";
 
 export default function Expenses() {
@@ -24,9 +25,14 @@ export default function Expenses() {
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editCategory, setEditCategory] = useState("");
+
   const { data: categories = [], isLoading: categoriesLoading } = useExpenseCategories() as { data: any[], isLoading: boolean };
   const createCategory = useCreateExpenseCategory();
   const createExpense = useCreateExpense();
+  const updateExpense = useUpdateExpense();
   const { data: summary, isLoading: summaryLoading } = useExpensesSummary(startDate, endDate);
 
   const handleCreateCategory = async (e: React.FormEvent) => {
@@ -75,11 +81,36 @@ export default function Expenses() {
     }
   };
 
+  const startEdit = (expense: any) => {
+    setEditingId(expense.id);
+    setEditDate(expense.expenseDate);
+    setEditCategory(expense.categoryId);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDate("");
+    setEditCategory("");
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    try {
+      await updateExpense.mutateAsync({
+        id: editingId,
+        data: { categoryId: editCategory, expenseDate: editDate },
+      });
+      toast({ title: "Éxito", description: "Gasto actualizado" });
+      cancelEdit();
+    } catch {
+      toast({ title: "Error", description: "No se pudo actualizar", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <h1 className="text-3xl font-bold">Gestión de Gastos</h1>
 
-      {/* Crear Categorías */}
       <Card>
         <CardHeader>
           <CardTitle>Crear Categoría de Gasto</CardTitle>
@@ -100,7 +131,6 @@ export default function Expenses() {
         </CardContent>
       </Card>
 
-      {/* Registrar Gasto */}
       <Card>
         <CardHeader>
           <CardTitle>Registrar Gasto</CardTitle>
@@ -160,7 +190,6 @@ export default function Expenses() {
         </CardContent>
       </Card>
 
-      {/* Reporte de Gastos */}
       <Card>
         <CardHeader>
           <CardTitle>Reporte de Gastos</CardTitle>
@@ -200,14 +229,59 @@ export default function Expenses() {
                       <th className="p-3 text-left font-medium">Categoría</th>
                       <th className="p-3 text-left font-medium">Fecha</th>
                       <th className="p-3 text-right font-medium">Monto (Bs)</th>
+                      <th className="p-3 text-center font-medium w-20">Editar</th>
                     </tr>
                   </thead>
                   <tbody>
                     {summary.expenses.map((expense: any) => (
                       <tr key={expense.id} className="border-b" data-testid={`row-expense-${expense.id}`}>
-                        <td className="p-3">{expense.category?.name}</td>
-                        <td className="p-3">{expense.expenseDate}</td>
-                        <td className="p-3 text-right font-mono">{parseFloat(expense.amount).toFixed(2)}</td>
+                        {editingId === expense.id ? (
+                          <>
+                            <td className="p-2">
+                              <Select value={editCategory} onValueChange={setEditCategory}>
+                                <SelectTrigger className="h-8" data-testid="select-edit-category">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {categories.map((cat: any) => (
+                                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="p-2">
+                              <Input
+                                type="date"
+                                value={editDate}
+                                onChange={(e) => setEditDate(e.target.value)}
+                                className="h-8"
+                                data-testid="input-edit-date"
+                              />
+                            </td>
+                            <td className="p-3 text-right font-mono">{parseFloat(expense.amount).toFixed(2)}</td>
+                            <td className="p-2 text-center">
+                              <div className="flex justify-center gap-1">
+                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={saveEdit} disabled={updateExpense.isPending} data-testid="button-save-edit">
+                                  <Check className="h-4 w-4 text-green-600" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={cancelEdit} data-testid="button-cancel-edit">
+                                  <X className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </div>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="p-3">{expense.category?.name}</td>
+                            <td className="p-3">{expense.expenseDate}</td>
+                            <td className="p-3 text-right font-mono">{parseFloat(expense.amount).toFixed(2)}</td>
+                            <td className="p-3 text-center">
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(expense)} data-testid={`button-edit-${expense.id}`}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          </>
+                        )}
                       </tr>
                     ))}
                   </tbody>

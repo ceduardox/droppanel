@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
-import { insertUserSchema, insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema } from "@shared/schema";
+import { insertUserSchema, insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema, insertGrossCapitalMovementSchema } from "@shared/schema";
 import { z } from "zod";
 import session from "express-session";
 import path from "path";
@@ -738,6 +738,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Error al crear movimiento de capital" });
+    }
+  });
+
+  // Gross Capital Movements routes (retiros de capital bruto)
+  app.get("/api/gross-capital-movements", requireAuth, async (req, res) => {
+    try {
+      const movements = await storage.getGrossCapitalMovements(getEffectiveUserId(req));
+      res.json(movements);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener movimientos de capital bruto" });
+    }
+  });
+
+  app.post("/api/gross-capital-movements", requireAuth, upload.single("image"), async (req, res) => {
+    try {
+      let imageUrl = null;
+      
+      if (req.file) {
+        const objectStorage = new Client({
+          bucketId: process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID!,
+        });
+        const fileName = `gross-capital/${Date.now()}-${req.file.originalname}`;
+        await objectStorage.uploadFromBytes(fileName, req.file.buffer);
+        imageUrl = fileName;
+      }
+
+      const data = insertGrossCapitalMovementSchema.parse({
+        description: req.body.description || null,
+        amount: req.body.amount,
+        movementDate: req.body.movementDate,
+        imageUrl,
+        userId: getEffectiveUserId(req),
+      });
+      
+      const movement = await storage.createGrossCapitalMovement(data);
+      res.json(movement);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating gross capital movement:", error);
+      res.status(500).json({ error: "Error al crear movimiento de capital bruto" });
     }
   });
 

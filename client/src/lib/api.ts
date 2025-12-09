@@ -287,3 +287,29 @@ export function useCreateCapitalMovement() {
     },
   });
 }
+
+// Gross Capital Movements (retiros de capital bruto)
+export function useGrossCapitalMovements() {
+  return useQuery({
+    queryKey: ["/api/gross-capital-movements"],
+  });
+}
+
+export function useCreateGrossCapitalMovement() {
+  return useMutation({
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch("/api/gross-capital-movements", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("Error al crear retiro");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/gross-capital-movements"] });
+    },
+  });
+}

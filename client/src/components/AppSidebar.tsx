@@ -22,6 +22,7 @@ const allMenuItems = [
   { title: "Reporte Ventas", icon: BarChart3, path: "/reporte-ventas" },
   { title: "Aumento de Capital", icon: TrendingUp, path: "/aumento-capital" },
   { title: "Gastos", icon: Receipt, path: "/gastos" },
+  { title: "Reporte Gastos", icon: FileText, path: "/reporte-gastos" },
   { title: "Delivery", icon: TruckIcon, path: "/delivery" },
   { title: "Configuración", icon: Settings, path: "/configuracion" },
 ];

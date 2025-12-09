@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Plus, UserPlus, Send, ShoppingCart, X, Save } from "lucide-react";
+import { Calendar, Plus, UserPlus, ShoppingCart, X, Save } from "lucide-react";
+import WhatsAppReport from "@/components/WhatsAppReport";
 
 interface Seller {
   id: string;
@@ -175,11 +176,7 @@ export default function SellerReport() {
     return text;
   };
 
-  const handleWhatsApp = () => {
-    const text = generateWhatsAppText();
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
-  };
-
+  
   const selectedProductData = selectedProduct 
     ? (products as Product[]).find(p => p.id === selectedProduct)
     : null;
@@ -338,10 +335,6 @@ export default function SellerReport() {
               className="w-auto"
               data-testid="input-filter-date"
             />
-            <Button variant="outline" onClick={handleWhatsApp} disabled={filteredSales.length === 0} data-testid="button-whatsapp">
-              <Send className="h-4 w-4 mr-2" />
-              WhatsApp
-            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -374,6 +367,10 @@ export default function SellerReport() {
           )}
         </CardContent>
       </Card>
+
+      {filteredSales.length > 0 && (
+        <WhatsAppReport reportText={generateWhatsAppText()} />
+      )}
     </div>
   );
 }

@@ -161,6 +161,21 @@ export function useCreateExpense() {
   });
 }
 
+export function useUpdateExpense() {
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { categoryId?: string; expenseDate?: string } }) => {
+      return apiRequest(`/api/expenses/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses", "summary"] });
+    },
+  });
+}
+
 // Expenses Summary
 export function useExpensesSummary(startDate: string, endDate: string) {
   return useQuery({

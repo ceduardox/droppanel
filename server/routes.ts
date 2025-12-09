@@ -516,6 +516,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/expenses/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { categoryId, expenseDate } = req.body;
+      const expense = await storage.updateExpense(id, { categoryId, expenseDate });
+      res.json(expense);
+    } catch (error) {
+      console.error("Error updating expense:", error);
+      res.status(500).json({ error: "Error al actualizar gasto" });
+    }
+  });
+
   // Expenses summary with date filter
   app.get("/api/expenses/summary", requireAuth, async (req, res) => {
     try {

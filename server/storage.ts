@@ -77,6 +77,7 @@ export interface IStorage {
   getExpenses(userId: string): Promise<Expense[]>;
   getExpensesByDateRange(userId: string, startDate: string, endDate: string): Promise<Expense[]>;
   createExpense(expense: InsertExpense): Promise<Expense>;
+  updateExpense(id: string, data: { categoryId?: string; expenseDate?: string }): Promise<Expense>;
 
   // Deliveries
   getDeliveries(userId: string): Promise<Delivery[]>;
@@ -250,6 +251,11 @@ export class DbStorage implements IStorage {
 
   async createExpense(expense: InsertExpense): Promise<Expense> {
     const result = await db.insert(expenses).values(expense).returning();
+    return result[0];
+  }
+
+  async updateExpense(id: string, data: { categoryId?: string; expenseDate?: string }): Promise<Expense> {
+    const result = await db.update(expenses).set(data).where(eq(expenses.id, id)).returning();
     return result[0];
   }
 

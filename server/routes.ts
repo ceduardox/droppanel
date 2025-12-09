@@ -487,7 +487,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/expenses", requireAuth, async (req, res) => {
     try {
       const expenses = await storage.getExpenses(getEffectiveUserId(req));
-      res.json(expenses);
+      const categories = await storage.getExpenseCategories(getEffectiveUserId(req));
+      const categoryMap = new Map(categories.map(c => [c.id, c.name]));
+      
+      const expensesWithCategory = expenses.map(expense => ({
+        ...expense,
+        category: categoryMap.get(expense.categoryId) || "Sin categoría",
+      }));
+      res.json(expensesWithCategory);
     } catch (error) {
       res.status(500).json({ error: "Error al obtener gastos" });
     }

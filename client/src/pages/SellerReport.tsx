@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Plus, UserPlus, Send, ShoppingCart } from "lucide-react";
+import { Calendar, Plus, UserPlus, Send, ShoppingCart, X, Save } from "lucide-react";
 
 interface Seller {
   id: string;
@@ -26,6 +26,14 @@ interface SellerSale {
   quantity: number;
   unitPrice: string;
   saleDate: string;
+}
+
+interface CartItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: string;
+  total: number;
 }
 
 function formatDateString(dateStr: string): string {
@@ -50,6 +58,8 @@ export default function SellerReport() {
   const [selectedProduct, setSelectedProduct] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [saleDate, setSaleDate] = useState(today);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [saving, setSaving] = useState(false);
 
   const handleAddSeller = async () => {
     if (!newSellerName.trim()) {
@@ -65,28 +75,69 @@ export default function SellerReport() {
     }
   };
 
-  const handleAddSale = async () => {
-    if (!selectedSeller || !selectedProduct) {
-      toast({ title: "Error", description: "Selecciona vendedor y producto", variant: "destructive" });
+  const handleAddToCart = () => {
+    if (!selectedProduct) {
+      toast({ title: "Error", description: "Selecciona un producto", variant: "destructive" });
       return;
     }
     const product = (products as Product[]).find(p => p.id === selectedProduct);
     if (!product) return;
 
-    try {
-      await createSale.mutateAsync({
-        sellerId: selectedSeller,
-        productId: selectedProduct,
-        quantity: parseInt(quantity),
+    const qty = parseInt(quantity) || 1;
+    const existingIdx = cart.findIndex(c => c.productId === selectedProduct);
+    
+    if (existingIdx >= 0) {
+      const newCart = [...cart];
+      newCart[existingIdx].quantity += qty;
+      newCart[existingIdx].total = parseFloat(newCart[existingIdx].unitPrice) * newCart[existingIdx].quantity;
+      setCart(newCart);
+    } else {
+      setCart([...cart, {
+        productId: product.id,
+        productName: product.name,
+        quantity: qty,
         unitPrice: product.price,
-        saleDate,
-      });
-      toast({ title: "Éxito", description: "Venta registrada" });
-      setQuantity("1");
-    } catch {
-      toast({ title: "Error", description: "No se pudo registrar la venta", variant: "destructive" });
+        total: parseFloat(product.price) * qty,
+      }]);
     }
+    setSelectedProduct("");
+    setQuantity("1");
   };
+
+  const removeFromCart = (idx: number) => {
+    setCart(cart.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveAll = async () => {
+    if (!selectedSeller) {
+      toast({ title: "Error", description: "Selecciona un vendedor", variant: "destructive" });
+      return;
+    }
+    if (cart.length === 0) {
+      toast({ title: "Error", description: "Agrega al menos un producto", variant: "destructive" });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      for (const item of cart) {
+        await createSale.mutateAsync({
+          sellerId: selectedSeller,
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          saleDate,
+        });
+      }
+      toast({ title: "Éxito", description: `${cart.length} ventas registradas` });
+      setCart([]);
+    } catch {
+      toast({ title: "Error", description: "No se pudieron guardar las ventas", variant: "destructive" });
+    }
+    setSaving(false);
+  };
+
+  const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
 
   const filteredSales = (sellerSales as SellerSale[]).filter(s => s.saleDate === filterDate);
 
@@ -129,10 +180,10 @@ export default function SellerReport() {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
-  const selectedProductPrice = selectedProduct 
-    ? (products as Product[]).find(p => p.id === selectedProduct)?.price || "0"
-    : "0";
-  const saleTotal = parseFloat(selectedProductPrice) * parseInt(quantity || "0");
+  const selectedProductData = selectedProduct 
+    ? (products as Product[]).find(p => p.id === selectedProduct)
+    : null;
+  const currentItemTotal = selectedProductData ? parseFloat(selectedProductData.price) * parseInt(quantity || "0") : 0;
 
   if (loadingSellers || loadingProducts || loadingSales) {
     return <div className="flex items-center justify-center h-64">Cargando...</div>;
@@ -182,11 +233,11 @@ export default function SellerReport() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <ShoppingCart className="h-5 w-5" />
-              Registrar Venta
+              Registrar Ventas
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label>Vendedor</Label>
                 <Select value={selectedSeller} onValueChange={setSelectedSeller}>
@@ -201,29 +252,6 @@ export default function SellerReport() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Producto</Label>
-                <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                  <SelectTrigger data-testid="select-product">
-                    <SelectValue placeholder="Seleccionar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(products as Product[]).map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name} - {parseFloat(p.price).toFixed(2)} Bs</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Cantidad</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  data-testid="input-quantity"
-                />
-              </div>
-              <div className="space-y-2">
                 <Label>Fecha</Label>
                 <Input
                   type="date"
@@ -233,15 +261,66 @@ export default function SellerReport() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Total</Label>
-                <div className="h-9 flex items-center px-3 border rounded-md bg-muted font-bold">
-                  {saleTotal.toFixed(2)} Bs
+                <Label>Total Carrito</Label>
+                <div className="h-9 flex items-center px-3 border rounded-md bg-primary/10 font-bold text-primary">
+                  {cartTotal.toFixed(2)} Bs
                 </div>
               </div>
             </div>
-            <Button onClick={handleAddSale} className="mt-4 w-full" disabled={createSale.isPending} data-testid="button-add-sale">
-              <Plus className="h-4 w-4 mr-2" />
-              {createSale.isPending ? "Guardando..." : "Registrar Venta"}
+
+            <div className="border-t pt-4">
+              <Label className="text-sm text-muted-foreground mb-2 block">Agregar productos:</Label>
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                    <SelectTrigger data-testid="select-product">
+                      <SelectValue placeholder="Producto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(products as Product[]).map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name} - {parseFloat(p.price).toFixed(2)} Bs</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-20">
+                  <Input
+                    type="number"
+                    min="1"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    placeholder="Cant."
+                    data-testid="input-quantity"
+                  />
+                </div>
+                <div className="w-24 text-right text-sm font-medium">
+                  {currentItemTotal.toFixed(2)} Bs
+                </div>
+                <Button onClick={handleAddToCart} size="icon" data-testid="button-add-to-cart">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {cart.length > 0 && (
+              <div className="border rounded-lg p-3 bg-muted/50 space-y-2">
+                {cart.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center text-sm" data-testid={`cart-item-${idx}`}>
+                    <span>{item.productName} x{item.quantity}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{item.total.toFixed(2)} Bs</span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeFromCart(idx)} data-testid={`button-remove-${idx}`}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Button onClick={handleSaveAll} className="w-full" disabled={saving || cart.length === 0} data-testid="button-save-all">
+              <Save className="h-4 w-4 mr-2" />
+              {saving ? "Guardando..." : `Guardar ${cart.length} producto${cart.length !== 1 ? 's' : ''}`}
             </Button>
           </CardContent>
         </Card>

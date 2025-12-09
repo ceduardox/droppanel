@@ -261,3 +261,29 @@ export function useDeliveryAssignmentsReport(startDate: string, endDate: string)
     enabled: !!startDate && !!endDate,
   });
 }
+
+// Capital Movements
+export function useCapitalMovements() {
+  return useQuery({
+    queryKey: ["/api/capital-movements"],
+  });
+}
+
+export function useCreateCapitalMovement() {
+  return useMutation({
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch("/api/capital-movements", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("Error al crear movimiento");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/capital-movements"] });
+    },
+  });
+}

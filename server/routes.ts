@@ -714,8 +714,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let imageUrl = null;
       
       if (req.file) {
+        const objectStorage = new Client({
+          bucketId: process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID!,
+        });
         const fileName = `capital/${Date.now()}-${req.file.originalname}`;
-        await objectStorageClient.uploadFromBytes(fileName, req.file.buffer);
+        await objectStorage.uploadFromBytes(fileName, req.file.buffer);
         imageUrl = fileName;
       }
 

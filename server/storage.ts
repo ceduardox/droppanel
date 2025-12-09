@@ -11,6 +11,7 @@ import {
   deliveryStockEntries,
   deliveryAssignments,
   capitalMovements,
+  grossCapitalMovements,
   type User, 
   type InsertUser,
   type Product,
@@ -30,7 +31,9 @@ import {
   type DeliveryAssignment,
   type InsertDeliveryAssignment,
   type CapitalMovement,
-  type InsertCapitalMovement
+  type InsertCapitalMovement,
+  type GrossCapitalMovement,
+  type InsertGrossCapitalMovement
 } from "@shared/schema";
 import bcrypt from "bcrypt";
 
@@ -86,6 +89,10 @@ export interface IStorage {
   // Capital Movements
   getCapitalMovements(userId: string): Promise<CapitalMovement[]>;
   createCapitalMovement(movement: InsertCapitalMovement): Promise<CapitalMovement>;
+
+  // Gross Capital Movements (retiros de capital bruto)
+  getGrossCapitalMovements(userId: string): Promise<GrossCapitalMovement[]>;
+  createGrossCapitalMovement(movement: InsertGrossCapitalMovement): Promise<GrossCapitalMovement>;
 }
 
 export class DbStorage implements IStorage {
@@ -294,6 +301,16 @@ export class DbStorage implements IStorage {
 
   async createCapitalMovement(movement: InsertCapitalMovement): Promise<CapitalMovement> {
     const result = await db.insert(capitalMovements).values(movement).returning();
+    return result[0];
+  }
+
+  // Gross Capital Movements
+  async getGrossCapitalMovements(userId: string): Promise<GrossCapitalMovement[]> {
+    return db.select().from(grossCapitalMovements).where(eq(grossCapitalMovements.userId, userId)).orderBy(desc(grossCapitalMovements.movementDate));
+  }
+
+  async createGrossCapitalMovement(movement: InsertGrossCapitalMovement): Promise<GrossCapitalMovement> {
+    const result = await db.insert(grossCapitalMovements).values(movement).returning();
     return result[0];
   }
 }

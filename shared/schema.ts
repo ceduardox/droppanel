@@ -174,3 +174,22 @@ export const insertCapitalMovementSchema = createInsertSchema(capitalMovements).
 
 export type InsertCapitalMovement = z.infer<typeof insertCapitalMovementSchema>;
 export type CapitalMovement = typeof capitalMovements.$inferSelect;
+
+// Movimientos de Capital Bruto (retiros del costo bruto de productos)
+export const grossCapitalMovements = pgTable("gross_capital_movements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  description: text("description"),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  movementDate: date("movement_date").notNull(),
+  imageUrl: text("image_url"),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertGrossCapitalMovementSchema = createInsertSchema(grossCapitalMovements).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertGrossCapitalMovement = z.infer<typeof insertGrossCapitalMovementSchema>;
+export type GrossCapitalMovement = typeof grossCapitalMovements.$inferSelect;

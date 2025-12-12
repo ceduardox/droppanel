@@ -202,8 +202,24 @@ export default function GrossCapitalReport() {
             </div>
             
             <div className="border-t pt-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Costo Bruto por Ventas:</span>
+              <p className="text-sm font-medium text-muted-foreground mb-2">Costo Bruto por Producto:</p>
+              {Object.entries(
+                filteredSales.reduce((acc: Record<string, { name: string; total: number; qty: number }>, item: any) => {
+                  const name = item.product.name;
+                  const baseCost = parseFloat(item.product.baseCost || 0);
+                  if (!acc[name]) acc[name] = { name, total: 0, qty: 0 };
+                  acc[name].total += baseCost * item.quantity;
+                  acc[name].qty += item.quantity;
+                  return acc;
+                }, {})
+              ).map(([name, data]: [string, any]) => (
+                <div key={name} className="flex justify-between text-sm pl-2">
+                  <span className="text-muted-foreground">{name} ({data.qty}u)</span>
+                  <span className="font-medium text-blue-600">+{data.total.toFixed(2)} Bs</span>
+                </div>
+              ))}
+              <div className="flex justify-between text-sm pt-1 border-t border-dashed">
+                <span className="text-muted-foreground font-medium">Subtotal Costo Bruto:</span>
                 <span className="font-medium text-blue-600">+{totalBrutoFromSales.toFixed(2)} Bs</span>
               </div>
               <div className="flex justify-between text-sm">

@@ -795,6 +795,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/gross-capital-movements/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { description, amount, movementDate } = req.body;
+      const movement = await storage.updateGrossCapitalMovement(id, { description, amount, movementDate });
+      if (!movement) {
+        return res.status(404).json({ error: "Retiro no encontrado" });
+      }
+      res.json(movement);
+    } catch (error) {
+      console.error("Error updating gross capital movement:", error);
+      res.status(500).json({ error: "Error al actualizar retiro" });
+    }
+  });
+
+  app.delete("/api/gross-capital-movements/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteGrossCapitalMovement(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Retiro no encontrado" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting gross capital movement:", error);
+      res.status(500).json({ error: "Error al eliminar retiro" });
+    }
+  });
+
   // Sellers routes
   app.get("/api/sellers", requireAuth, async (req, res) => {
     try {

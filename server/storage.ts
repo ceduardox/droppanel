@@ -100,6 +100,8 @@ export interface IStorage {
   // Gross Capital Movements (retiros de capital bruto)
   getGrossCapitalMovements(userId: string): Promise<GrossCapitalMovement[]>;
   createGrossCapitalMovement(movement: InsertGrossCapitalMovement): Promise<GrossCapitalMovement>;
+  updateGrossCapitalMovement(id: string, data: { description?: string; amount?: string; movementDate?: string }): Promise<GrossCapitalMovement | undefined>;
+  deleteGrossCapitalMovement(id: string): Promise<boolean>;
 
   // Sellers
   getSellers(userId: string): Promise<Seller[]>;
@@ -334,6 +336,16 @@ export class DbStorage implements IStorage {
   async createGrossCapitalMovement(movement: InsertGrossCapitalMovement): Promise<GrossCapitalMovement> {
     const result = await db.insert(grossCapitalMovements).values(movement).returning();
     return result[0];
+  }
+
+  async updateGrossCapitalMovement(id: string, data: { description?: string; amount?: string; movementDate?: string }): Promise<GrossCapitalMovement | undefined> {
+    const result = await db.update(grossCapitalMovements).set(data).where(eq(grossCapitalMovements.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteGrossCapitalMovement(id: string): Promise<boolean> {
+    const result = await db.delete(grossCapitalMovements).where(eq(grossCapitalMovements.id, id)).returning();
+    return result.length > 0;
   }
 
   // Sellers

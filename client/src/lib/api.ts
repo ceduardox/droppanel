@@ -329,6 +329,33 @@ export function useCreateGrossCapitalMovement() {
   });
 }
 
+export function useUpdateGrossCapitalMovement() {
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { description?: string; amount?: string; movementDate?: string } }) => {
+      return apiRequest(`/api/gross-capital-movements/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/gross-capital-movements"] });
+    },
+  });
+}
+
+export function useDeleteGrossCapitalMovement() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/gross-capital-movements/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/gross-capital-movements"] });
+    },
+  });
+}
+
 // Sellers
 export function useSellers() {
   return useQuery({

@@ -1,11 +1,11 @@
 import { useState, useRef } from "react";
-import { useGrossCapitalMovements, useCreateGrossCapitalMovement, useReports } from "@/lib/api";
+import { useGrossCapitalMovements, useCreateGrossCapitalMovement, useUpdateGrossCapitalMovement, useDeleteGrossCapitalMovement, useReports } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Calendar, Eye, Upload, Minus } from "lucide-react";
+import { Calendar, Eye, Upload, Minus, Pencil, Trash2, Check, X } from "lucide-react";
 
 interface GrossCapitalMovement {
   id: string;
@@ -25,6 +25,8 @@ export default function GrossCapitalReport() {
   const { data: movements = [], isLoading } = useGrossCapitalMovements();
   const { data: salesWithProducts = [] } = useReports();
   const createMovement = useCreateGrossCapitalMovement();
+  const updateMovement = useUpdateGrossCapitalMovement();
+  const deleteMovement = useDeleteGrossCapitalMovement();
   const { toast } = useToast();
   
   const today = new Date().toISOString().split('T')[0];
@@ -36,6 +38,11 @@ export default function GrossCapitalReport() {
   const [movementDate, setMovementDate] = useState(today);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDescription, setEditDescription] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editDate, setEditDate] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,6 +102,43 @@ export default function GrossCapitalReport() {
 
   const handleViewImage = (imageUrl: string) => {
     window.open(`/api/storage/${imageUrl}`, "_blank");
+  };
+
+  const handleStartEdit = (m: GrossCapitalMovement) => {
+    setEditingId(m.id);
+    setEditDescription(m.description || "");
+    setEditAmount(m.amount);
+    setEditDate(m.movementDate);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditDescription("");
+    setEditAmount("");
+    setEditDate("");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    try {
+      await updateMovement.mutateAsync({
+        id: editingId,
+        data: { description: editDescription, amount: editAmount, movementDate: editDate },
+      });
+      toast({ title: "Éxito", description: "Retiro actualizado" });
+      handleCancelEdit();
+    } catch {
+      toast({ title: "Error", description: "No se pudo actualizar", variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteMovement.mutateAsync(id);
+      toast({ title: "Éxito", description: "Retiro eliminado" });
+    } catch {
+      toast({ title: "Error", description: "No se pudo eliminar", variant: "destructive" });
+    }
   };
 
   if (isLoading) {
@@ -253,38 +297,101 @@ export default function GrossCapitalReport() {
                     <th className="p-3 text-left font-medium">Descripción</th>
                     <th className="p-3 text-right font-medium">Monto</th>
                     <th className="p-3 text-center font-medium">Comprobante</th>
+                    <th className="p-3 text-center font-medium">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredMovements.map((movement) => (
                     <tr key={movement.id} className="border-b" data-testid={`row-movement-${movement.id}`}>
-                      <td className="p-3 text-sm">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          {formatDateString(movement.movementDate)}
-                        </div>
-                      </td>
-                      <td className="p-3 text-muted-foreground">{movement.description || "-"}</td>
-                      <td className="p-3 text-right font-mono font-medium text-red-600">
-                        <span className="inline-flex items-center gap-1">
-                          <Minus className="h-3 w-3" />
-                          {parseFloat(movement.amount).toFixed(2)} Bs
-                        </span>
-                      </td>
-                      <td className="p-3 text-center">
-                        {movement.imageUrl ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewImage(movement.imageUrl!)}
-                            data-testid={`button-view-image-${movement.id}`}
-                          >
-                            <Eye className="h-4 w-4 mr-1" /> Ver
-                          </Button>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
-                        )}
-                      </td>
+                      {editingId === movement.id ? (
+                        <>
+                          <td className="p-3">
+                            <Input
+                              type="date"
+                              value={editDate}
+                              onChange={(e) => setEditDate(e.target.value)}
+                              className="h-8"
+                              data-testid="edit-input-date"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <Input
+                              value={editDescription}
+                              onChange={(e) => setEditDescription(e.target.value)}
+                              placeholder="Descripción"
+                              className="h-8"
+                              data-testid="edit-input-description"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={editAmount}
+                              onChange={(e) => setEditAmount(e.target.value)}
+                              className="h-8 text-right"
+                              data-testid="edit-input-amount"
+                            />
+                          </td>
+                          <td className="p-3 text-center">
+                            {movement.imageUrl ? (
+                              <Button variant="outline" size="sm" onClick={() => handleViewImage(movement.imageUrl!)}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            ) : "-"}
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex justify-center gap-1">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveEdit} data-testid="button-save-edit">
+                                <Check className="h-4 w-4 text-green-600" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCancelEdit} data-testid="button-cancel-edit">
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="p-3 text-sm">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3 text-muted-foreground" />
+                              {formatDateString(movement.movementDate)}
+                            </div>
+                          </td>
+                          <td className="p-3 text-muted-foreground">{movement.description || "-"}</td>
+                          <td className="p-3 text-right font-mono font-medium text-red-600">
+                            <span className="inline-flex items-center gap-1">
+                              <Minus className="h-3 w-3" />
+                              {parseFloat(movement.amount).toFixed(2)} Bs
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            {movement.imageUrl ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleViewImage(movement.imageUrl!)}
+                                data-testid={`button-view-image-${movement.id}`}
+                              >
+                                <Eye className="h-4 w-4 mr-1" /> Ver
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">-</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex justify-center gap-1">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEdit(movement)} data-testid={`button-edit-${movement.id}`}>
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(movement.id)} data-testid={`button-delete-${movement.id}`}>
+                                <Trash2 className="h-3 w-3 text-red-500" />
+                              </Button>
+                            </div>
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>

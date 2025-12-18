@@ -108,6 +108,8 @@ export interface IStorage {
   // Seller Sales
   getSellerSales(userId: string): Promise<SellerSale[]>;
   createSellerSale(sale: InsertSellerSale): Promise<SellerSale>;
+  updateSellerSale(id: string, data: { productId?: string; quantity?: number; unitPrice?: string }): Promise<SellerSale | undefined>;
+  deleteSellerSale(id: string): Promise<boolean>;
 }
 
 export class DbStorage implements IStorage {
@@ -352,6 +354,16 @@ export class DbStorage implements IStorage {
   async createSellerSale(sale: InsertSellerSale): Promise<SellerSale> {
     const result = await db.insert(sellerSales).values(sale).returning();
     return result[0];
+  }
+
+  async updateSellerSale(id: string, data: { productId?: string; quantity?: number; unitPrice?: string }): Promise<SellerSale | undefined> {
+    const result = await db.update(sellerSales).set(data).where(eq(sellerSales.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteSellerSale(id: string): Promise<boolean> {
+    const result = await db.delete(sellerSales).where(eq(sellerSales.id, id)).returning();
+    return result.length > 0;
   }
 }
 

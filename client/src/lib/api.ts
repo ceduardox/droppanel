@@ -370,3 +370,30 @@ export function useCreateSellerSale() {
     },
   });
 }
+
+export function useUpdateSellerSale() {
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { productId?: string; quantity?: number; unitPrice?: string } }) => {
+      return apiRequest(`/api/seller-sales/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/seller-sales"] });
+    },
+  });
+}
+
+export function useDeleteSellerSale() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/seller-sales/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/seller-sales"] });
+    },
+  });
+}

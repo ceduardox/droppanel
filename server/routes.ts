@@ -852,6 +852,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/seller-sales/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { productId, quantity, unitPrice } = req.body;
+      const sale = await storage.updateSellerSale(id, { 
+        productId, 
+        quantity: quantity ? parseInt(quantity) : undefined, 
+        unitPrice 
+      });
+      if (!sale) {
+        return res.status(404).json({ error: "Venta no encontrada" });
+      }
+      res.json(sale);
+    } catch (error) {
+      console.error("Error updating seller sale:", error);
+      res.status(500).json({ error: "Error al actualizar venta" });
+    }
+  });
+
+  app.delete("/api/seller-sales/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteSellerSale(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Venta no encontrada" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting seller sale:", error);
+      res.status(500).json({ error: "Error al eliminar venta" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

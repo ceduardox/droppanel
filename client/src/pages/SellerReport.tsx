@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { useSellers, useCreateSeller, useProducts, useSellerSales, useCreateSellerSale } from "@/lib/api";
+import { useSellers, useCreateSeller, useProducts, useSellerSales, useCreateSellerSale, useUpdateSellerSale, useDeleteSellerSale } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Plus, UserPlus, ShoppingCart, X, Save } from "lucide-react";
+import { Calendar, Plus, UserPlus, ShoppingCart, X, Save, Pencil, Trash2, Check } from "lucide-react";
 import WhatsAppReport from "@/components/WhatsAppReport";
 
 interface Seller {
@@ -49,11 +49,17 @@ export default function SellerReport() {
   const { data: sellerSales = [], isLoading: loadingSales } = useSellerSales();
   const createSeller = useCreateSeller();
   const createSale = useCreateSellerSale();
+  const updateSale = useUpdateSellerSale();
+  const deleteSale = useDeleteSellerSale();
   const { toast } = useToast();
 
   const today = new Date().toISOString().split('T')[0];
   const [filterDate, setFilterDate] = useState(today);
   const [newSellerName, setNewSellerName] = useState("");
+  
+  const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
+  const [editProductId, setEditProductId] = useState("");
+  const [editQuantity, setEditQuantity] = useState("");
   
   const [selectedSeller, setSelectedSeller] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
@@ -140,6 +146,47 @@ export default function SellerReport() {
 
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
 
+  const handleStartEdit = (sale: SellerSale) => {
+    setEditingSaleId(sale.id);
+    setEditProductId(sale.productId);
+    setEditQuantity(sale.quantity.toString());
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSaleId(null);
+    setEditProductId("");
+    setEditQuantity("");
+  };
+
+  const handleSaveEdit = async (saleId: string) => {
+    const product = (products as Product[]).find(p => p.id === editProductId);
+    if (!product) return;
+    
+    try {
+      await updateSale.mutateAsync({
+        id: saleId,
+        data: {
+          productId: editProductId,
+          quantity: parseInt(editQuantity),
+          unitPrice: product.price,
+        },
+      });
+      toast({ title: "Éxito", description: "Venta actualizada" });
+      handleCancelEdit();
+    } catch {
+      toast({ title: "Error", description: "No se pudo actualizar", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteSale = async (saleId: string) => {
+    try {
+      await deleteSale.mutateAsync(saleId);
+      toast({ title: "Éxito", description: "Venta eliminada" });
+    } catch {
+      toast({ title: "Error", description: "No se pudo eliminar", variant: "destructive" });
+    }
+  };
+
   const filteredSales = (sellerSales as SellerSale[]).filter(s => s.saleDate === filterDate);
 
   const salesByDay = filteredSales.reduce((acc, sale) => {
@@ -151,10 +198,17 @@ export default function SellerReport() {
     if (!acc[seller.name]) {
       acc[seller.name] = { sales: [], total: 0 };
     }
-    acc[seller.name].sales.push({ product: product.name, quantity: sale.quantity, unitPrice: sale.unitPrice, total });
+    acc[seller.name].sales.push({ 
+      id: sale.id, 
+      productId: sale.productId,
+      product: product.name, 
+      quantity: sale.quantity, 
+      unitPrice: sale.unitPrice, 
+      total 
+    });
     acc[seller.name].total += total;
     return acc;
-  }, {} as Record<string, { sales: { product: string; quantity: number; unitPrice: string; total: number }[]; total: number }>);
+  }, {} as Record<string, { sales: { id: string; productId: string; product: string; quantity: number; unitPrice: string; total: number }[]; total: number }>);
 
   const grandTotal = Object.values(salesByDay).reduce((sum, s) => sum + s.total, 0);
 
@@ -349,10 +403,49 @@ export default function SellerReport() {
                     <span className="text-lg font-bold text-primary">{data.total.toFixed(2)} Bs</span>
                   </div>
                   <div className="space-y-2">
-                    {data.sales.map((sale, idx) => (
-                      <div key={idx} className="flex justify-between text-sm text-muted-foreground">
-                        <span>{sale.product} x{sale.quantity}</span>
-                        <span>{sale.total.toFixed(2)} Bs</span>
+                    {data.sales.map((sale) => (
+                      <div key={sale.id} className="flex justify-between items-center text-sm" data-testid={`row-sale-${sale.id}`}>
+                        {editingSaleId === sale.id ? (
+                          <div className="flex items-center gap-2 flex-1">
+                            <Select value={editProductId} onValueChange={setEditProductId}>
+                              <SelectTrigger className="h-8 flex-1" data-testid="edit-select-product">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(products as Product[]).map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={editQuantity}
+                              onChange={(e) => setEditQuantity(e.target.value)}
+                              className="h-8 w-16"
+                              data-testid="edit-input-quantity"
+                            />
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSaveEdit(sale.id)} data-testid="button-save-edit">
+                              <Check className="h-4 w-4 text-green-600" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCancelEdit} data-testid="button-cancel-edit">
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="text-muted-foreground">{sale.product} x{sale.quantity}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">{sale.total.toFixed(2)} Bs</span>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleStartEdit({ id: sale.id, productId: sale.productId, quantity: sale.quantity } as SellerSale)} data-testid={`button-edit-${sale.id}`}>
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDeleteSale(sale.id)} data-testid={`button-delete-${sale.id}`}>
+                                <Trash2 className="h-3 w-3 text-red-500" />
+                              </Button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>

@@ -616,6 +616,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/delivery-stock/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { productId, quantity, entryDate } = req.body;
+      const entry = await storage.updateDeliveryStockEntry(id, { productId, quantity, entryDate });
+      res.json(entry);
+    } catch (error) {
+      res.status(500).json({ error: "Error al actualizar entrada de stock" });
+    }
+  });
+
+  app.delete("/api/delivery-stock/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteDeliveryStockEntry(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Error al eliminar entrada de stock" });
+    }
+  });
+
   // Delivery Assignments routes
   app.get("/api/delivery-assignments", requireAuth, async (req, res) => {
     try {

@@ -217,10 +217,37 @@ export function useDeliveryStockEntries() {
 
 export function useCreateDeliveryStockEntry() {
   return useMutation({
-    mutationFn: async (data: { productId: string; quantity: number; note?: string }) => {
+    mutationFn: async (data: { productId: string; quantity: number; note?: string; entryDate?: string }) => {
       return apiRequest("/api/delivery-stock", {
         method: "POST",
         body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-stock"] });
+    },
+  });
+}
+
+export function useUpdateDeliveryStockEntry() {
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { productId?: string; quantity?: number; entryDate?: string | null } }) => {
+      return apiRequest(`/api/delivery-stock/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-stock"] });
+    },
+  });
+}
+
+export function useDeleteDeliveryStockEntry() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/delivery-stock/${id}`, {
+        method: "DELETE",
       });
     },
     onSuccess: () => {

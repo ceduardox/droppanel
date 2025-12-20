@@ -86,6 +86,8 @@ export interface IStorage {
   // Delivery Stock Entries
   getDeliveryStockEntries(userId: string): Promise<DeliveryStockEntry[]>;
   createDeliveryStockEntry(entry: InsertDeliveryStockEntry): Promise<DeliveryStockEntry>;
+  updateDeliveryStockEntry(id: string, data: { productId?: string; quantity?: number; entryDate?: string | null }): Promise<DeliveryStockEntry>;
+  deleteDeliveryStockEntry(id: string): Promise<void>;
 
   // Delivery Assignments
   getDeliveryAssignments(userId: string): Promise<DeliveryAssignment[]>;
@@ -281,6 +283,15 @@ export class DbStorage implements IStorage {
   async createDeliveryStockEntry(entry: InsertDeliveryStockEntry): Promise<DeliveryStockEntry> {
     const result = await db.insert(deliveryStockEntries).values(entry).returning();
     return result[0];
+  }
+
+  async updateDeliveryStockEntry(id: string, data: { productId?: string; quantity?: number; entryDate?: string | null }): Promise<DeliveryStockEntry> {
+    const result = await db.update(deliveryStockEntries).set(data).where(eq(deliveryStockEntries.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteDeliveryStockEntry(id: string): Promise<void> {
+    await db.delete(deliveryStockEntries).where(eq(deliveryStockEntries.id, id));
   }
 
   // Delivery Assignments

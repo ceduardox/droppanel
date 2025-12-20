@@ -7,13 +7,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, TruckIcon, Package, FileText } from "lucide-react";
+import { Plus, TruckIcon, Package, FileText, Pencil, Trash2, Check, X, Calendar } from "lucide-react";
 import {
   useDeliveries,
   useCreateDelivery,
   useProducts,
   useDeliveryStockEntries,
   useCreateDeliveryStockEntry,
+  useUpdateDeliveryStockEntry,
+  useDeleteDeliveryStockEntry,
   useCreateDeliveryAssignment,
   useDeliveryAssignmentsReport,
   useUpdateDeliveryAssignmentPaid,
@@ -30,6 +32,13 @@ export default function Delivery() {
   const [stockProductId, setStockProductId] = useState("");
   const [stockQuantity, setStockQuantity] = useState("");
   const [stockNote, setStockNote] = useState("");
+  const [stockEntryDate, setStockEntryDate] = useState("");
+
+  // Stock editing state
+  const [editingStockId, setEditingStockId] = useState<string | null>(null);
+  const [editStockProductId, setEditStockProductId] = useState("");
+  const [editStockQuantity, setEditStockQuantity] = useState("");
+  const [editStockEntryDate, setEditStockEntryDate] = useState("");
   
   // Assignment state
   const [assignDeliveryId, setAssignDeliveryId] = useState("");
@@ -51,6 +60,8 @@ export default function Delivery() {
   // Mutations
   const createDelivery = useCreateDelivery();
   const createStockEntry = useCreateDeliveryStockEntry();
+  const updateStockEntry = useUpdateDeliveryStockEntry();
+  const deleteStockEntry = useDeleteDeliveryStockEntry();
   const createAssignment = useCreateDeliveryAssignment();
   const updatePaidStatus = useUpdateDeliveryAssignmentPaid();
 
@@ -84,10 +95,12 @@ export default function Delivery() {
         productId: stockProductId,
         quantity: parseInt(stockQuantity),
         note: stockNote || undefined,
+        entryDate: stockEntryDate || undefined,
       });
       setStockProductId("");
       setStockQuantity("");
       setStockNote("");
+      setStockEntryDate("");
       toast({
         title: "Stock agregado",
         description: "El stock se ha registrado correctamente",
@@ -98,6 +111,47 @@ export default function Delivery() {
         description: "No se pudo agregar el stock",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleStartEditStock = (entry: any) => {
+    setEditingStockId(entry.id);
+    setEditStockProductId(entry.productId);
+    setEditStockQuantity(entry.quantity.toString());
+    setEditStockEntryDate(entry.entryDate || "");
+  };
+
+  const handleCancelEditStock = () => {
+    setEditingStockId(null);
+    setEditStockProductId("");
+    setEditStockQuantity("");
+    setEditStockEntryDate("");
+  };
+
+  const handleSaveEditStock = async () => {
+    if (!editingStockId) return;
+    try {
+      await updateStockEntry.mutateAsync({
+        id: editingStockId,
+        data: {
+          productId: editStockProductId,
+          quantity: parseInt(editStockQuantity),
+          entryDate: editStockEntryDate || null,
+        },
+      });
+      toast({ title: "Éxito", description: "Stock actualizado" });
+      handleCancelEditStock();
+    } catch {
+      toast({ title: "Error", description: "No se pudo actualizar", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteStock = async (id: string) => {
+    try {
+      await deleteStockEntry.mutateAsync(id);
+      toast({ title: "Éxito", description: "Entrada eliminada" });
+    } catch {
+      toast({ title: "Error", description: "No se pudo eliminar", variant: "destructive" });
     }
   };
 
@@ -273,6 +327,17 @@ export default function Delivery() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="stockEntryDate">Fecha de Entrega (opcional)</Label>
+                  <Input
+                    id="stockEntryDate"
+                    type="date"
+                    value={stockEntryDate}
+                    onChange={(e) => setStockEntryDate(e.target.value)}
+                    data-testid="input-stock-entry-date"
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="stockNote">Nota (opcional)</Label>
                   <Textarea
                     id="stockNote"
@@ -320,6 +385,106 @@ export default function Delivery() {
                 </div>
               ) : (
                 <p className="text-center text-muted-foreground py-8">No hay productos registrados</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Historial de Entradas de Stock</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {stockEntries.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No hay entradas de stock registradas</p>
+              ) : (
+                <div className="rounded-lg border">
+                  <table className="w-full">
+                    <thead className="border-b bg-muted/50">
+                      <tr>
+                        <th className="p-3 text-left font-medium">Producto</th>
+                        <th className="p-3 text-center font-medium">Cantidad</th>
+                        <th className="p-3 text-center font-medium">Fecha Entrega</th>
+                        <th className="p-3 text-center font-medium">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stockEntries.map((entry: any) => {
+                        const product = products.find((p: any) => p.id === entry.productId);
+                        return (
+                          <tr key={entry.id} className="border-b" data-testid={`row-stock-${entry.id}`}>
+                            {editingStockId === entry.id ? (
+                              <>
+                                <td className="p-3">
+                                  <Select value={editStockProductId} onValueChange={setEditStockProductId}>
+                                    <SelectTrigger className="h-8">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {products.map((p: any) => (
+                                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                                <td className="p-3">
+                                  <Input
+                                    type="number"
+                                    value={editStockQuantity}
+                                    onChange={(e) => setEditStockQuantity(e.target.value)}
+                                    className="h-8 text-center"
+                                    data-testid="edit-input-stock-quantity"
+                                  />
+                                </td>
+                                <td className="p-3">
+                                  <Input
+                                    type="date"
+                                    value={editStockEntryDate}
+                                    onChange={(e) => setEditStockEntryDate(e.target.value)}
+                                    className="h-8"
+                                    data-testid="edit-input-stock-date"
+                                  />
+                                </td>
+                                <td className="p-3 text-center">
+                                  <div className="flex justify-center gap-1">
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveEditStock} data-testid="button-save-stock">
+                                      <Check className="h-4 w-4 text-green-600" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCancelEditStock} data-testid="button-cancel-stock">
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="p-3 font-medium">{product?.name || "Producto eliminado"}</td>
+                                <td className="p-3 text-center font-mono">{entry.quantity}</td>
+                                <td className="p-3 text-center">
+                                  {entry.entryDate ? (
+                                    <span className="inline-flex items-center gap-1 text-sm">
+                                      <Calendar className="h-3 w-3" />
+                                      {entry.entryDate}
+                                    </span>
+                                  ) : "-"}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <div className="flex justify-center gap-1">
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEditStock(entry)} data-testid={`button-edit-stock-${entry.id}`}>
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteStock(entry.id)} data-testid={`button-delete-stock-${entry.id}`}>
+                                      <Trash2 className="h-3 w-3 text-red-500" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </CardContent>
           </Card>

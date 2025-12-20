@@ -124,6 +124,7 @@ export const deliveryStockEntries = pgTable("delivery_stock_entries", {
   productId: varchar("product_id").notNull().references(() => products.id),
   quantity: integer("quantity").notNull(),
   note: text("note"),
+  entryDate: date("entry_date"),
   recordedAt: timestamp("recorded_at").defaultNow().notNull(),
   userId: varchar("user_id").notNull().references(() => users.id),
 });

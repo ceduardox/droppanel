@@ -21,7 +21,7 @@ declare module 'express-session' {
 // Configure multer for image uploads
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 8 * 1024 * 1024 }, // 8MB limit
 });
 
 // Middleware to check authentication

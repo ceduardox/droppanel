@@ -428,6 +428,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/sales/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteSale(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Venta no encontrada" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Error al eliminar la venta" });
+    }
+  });
+
   app.get("/api/reports", requireAuth, async (req, res) => {
     try {
       const sales = await storage.getSales(getEffectiveUserId(req));

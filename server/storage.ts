@@ -64,6 +64,7 @@ export interface IStorage {
   getSale(id: string): Promise<Sale | undefined>;
   createSale(sale: InsertSale): Promise<Sale>;
   updateSaleDate(id: string, saleDate: string): Promise<Sale | undefined>;
+  deleteSale(id: string): Promise<boolean>;
 
   // Daily Payments
   getDailyPayment(userId: string, paymentDate: string): Promise<DailyPayment | undefined>;
@@ -199,6 +200,11 @@ export class DbStorage implements IStorage {
       .where(eq(sales.id, id))
       .returning();
     return result[0];
+  }
+
+  async deleteSale(id: string): Promise<boolean> {
+    const result = await db.delete(sales).where(eq(sales.id, id)).returning();
+    return result.length > 0;
   }
 
   // Daily Payments

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Calendar, Pencil } from "lucide-react";
+import { Calendar, Pencil, Trash2 } from "lucide-react";
 
 interface Sale {
   id: string;
@@ -21,6 +21,7 @@ interface Sale {
 interface ReportCardProps {
   sale: Sale;
   onEditDate?: (id: string, newDate: string) => void;
+  onDelete?: (id: string) => void;
 }
 
 function formatDateString(dateStr: string): string {
@@ -30,7 +31,7 @@ function formatDateString(dateStr: string): string {
   return `${parseInt(day)} de ${monthName} de ${year}`;
 }
 
-export default function ReportCard({ sale, onEditDate }: ReportCardProps) {
+export default function ReportCard({ sale, onEditDate, onDelete }: ReportCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [newDate, setNewDate] = useState(sale.date);
   
@@ -84,6 +85,17 @@ export default function ReportCard({ sale, onEditDate }: ReportCardProps) {
                   </div>
                 </DialogContent>
               </Dialog>
+            )}
+            {onDelete && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6" 
+                onClick={() => onDelete(sale.id)}
+                data-testid={`button-delete-sale-${sale.id}`}
+              >
+                <Trash2 className="h-3 w-3 text-red-500" />
+              </Button>
             )}
             <Badge variant="outline" className="text-xs">
               <Calendar className="h-3 w-3 mr-1" />

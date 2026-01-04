@@ -2,7 +2,7 @@ import { useState } from "react";
 import ReportCard from "@/components/ReportCard";
 import WhatsAppReport from "@/components/WhatsAppReport";
 import DailyPaymentUpload from "@/components/DailyPaymentUpload";
-import { useReports, useUpdateSaleDate } from "@/lib/api";
+import { useReports, useUpdateSaleDate, useDeleteSale } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ export default function Reports() {
   const { data: salesWithProducts = [], isLoading } = useReports();
   const [selectedDate, setSelectedDate] = useState("");
   const updateSaleDate = useUpdateSaleDate();
+  const deleteSale = useDeleteSale();
   const { toast } = useToast();
 
   const handleEditDate = async (saleId: string, newDate: string) => {
@@ -33,6 +34,22 @@ export default function Reports() {
       toast({
         title: "Error",
         description: "No se pudo actualizar la fecha",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteSale = async (saleId: string) => {
+    try {
+      await deleteSale.mutateAsync(saleId);
+      toast({
+        title: "Venta eliminada",
+        description: "La venta se ha eliminado correctamente",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la venta",
         variant: "destructive",
       });
     }
@@ -166,7 +183,7 @@ export default function Reports() {
                 </div>
               ) : (
                 salesForDisplay.map((sale: any) => (
-                  <ReportCard key={sale.id} sale={sale} onEditDate={handleEditDate} />
+                  <ReportCard key={sale.id} sale={sale} onEditDate={handleEditDate} onDelete={handleDeleteSale} />
                 ))
               )}
             </div>

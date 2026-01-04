@@ -88,6 +88,20 @@ export function useUpdateSaleDate() {
   });
 }
 
+export function useDeleteSale() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/sales/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sales"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reports"] });
+    },
+  });
+}
+
 // Reports
 export function useReports() {
   return useQuery({

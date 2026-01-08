@@ -92,6 +92,7 @@ export const expenses = pgTable("expenses", {
   categoryId: varchar("category_id").notNull().references(() => expenseCategories.id),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   expenseDate: date("expense_date").notNull(),
+  imageUrl: varchar("image_url"),
   userId: varchar("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

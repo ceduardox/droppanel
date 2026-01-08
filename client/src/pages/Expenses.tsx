@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Check, X } from "lucide-react";
+import { Plus, Pencil, Check, X, Image, Eye } from "lucide-react";
 import {
   useExpenseCategories,
   useCreateExpenseCategory,
@@ -20,6 +20,7 @@ export default function Expenses() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [expenseImage, setExpenseImage] = useState<File | null>(null);
   
   const today = new Date().toISOString().split('T')[0];
   const [startDate, setStartDate] = useState(today);
@@ -60,14 +61,21 @@ export default function Expenses() {
     if (!selectedCategory || !amount || !expenseDate) return;
 
     try {
-      await createExpense.mutateAsync({
-        categoryId: selectedCategory,
-        amount,
-        expenseDate,
-      });
+      const formData = new FormData();
+      formData.append("categoryId", selectedCategory);
+      formData.append("amount", amount);
+      formData.append("expenseDate", expenseDate);
+      if (expenseImage) {
+        formData.append("image", expenseImage);
+      }
+
+      await createExpense.mutateAsync(formData);
       setSelectedCategory("");
       setAmount("");
       setExpenseDate(new Date().toISOString().split('T')[0]);
+      setExpenseImage(null);
+      const fileInput = document.getElementById("expenseImage") as HTMLInputElement;
+      if (fileInput) fileInput.value = "";
       toast({
         title: "Gasto registrado",
         description: "El gasto se ha registrado correctamente",
@@ -178,6 +186,23 @@ export default function Expenses() {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="expenseImage">Comprobante (opcional)</Label>
+              <Input
+                id="expenseImage"
+                type="file"
+                accept="image/*"
+                onChange={(e) => setExpenseImage(e.target.files?.[0] || null)}
+                data-testid="input-expense-image"
+              />
+              {expenseImage && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Image className="h-3 w-3" />
+                  {expenseImage.name}
+                </p>
+              )}
+            </div>
+
             <Button
               type="submit"
               disabled={createExpense.isPending || !selectedCategory || !amount}
@@ -229,6 +254,7 @@ export default function Expenses() {
                       <th className="p-3 text-left font-medium">Categoría</th>
                       <th className="p-3 text-left font-medium">Fecha</th>
                       <th className="p-3 text-right font-medium">Monto (Bs)</th>
+                      <th className="p-3 text-center font-medium">Comprobante</th>
                       <th className="p-3 text-center font-medium w-20">Editar</th>
                     </tr>
                   </thead>
@@ -259,6 +285,19 @@ export default function Expenses() {
                               />
                             </td>
                             <td className="p-3 text-right font-mono">{parseFloat(expense.amount).toFixed(2)}</td>
+                            <td className="p-3 text-center">
+                              {expense.imageUrl && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  onClick={() => window.open(`/api/storage/${expense.imageUrl}`, '_blank')}
+                                  data-testid={`button-view-receipt-${expense.id}`}
+                                >
+                                  <Eye className="h-4 w-4 text-blue-500" />
+                                </Button>
+                              )}
+                            </td>
                             <td className="p-2 text-center">
                               <div className="flex justify-center gap-1">
                                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={saveEdit} disabled={updateExpense.isPending} data-testid="button-save-edit">
@@ -275,6 +314,21 @@ export default function Expenses() {
                             <td className="p-3">{expense.category?.name}</td>
                             <td className="p-3">{expense.expenseDate}</td>
                             <td className="p-3 text-right font-mono">{parseFloat(expense.amount).toFixed(2)}</td>
+                            <td className="p-3 text-center">
+                              {expense.imageUrl ? (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  onClick={() => window.open(`/api/storage/${expense.imageUrl}`, '_blank')}
+                                  data-testid={`button-view-receipt-${expense.id}`}
+                                >
+                                  <Eye className="h-4 w-4 text-blue-500" />
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </td>
                             <td className="p-3 text-center">
                               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(expense)} data-testid={`button-edit-${expense.id}`}>
                                 <Pencil className="h-4 w-4" />

@@ -162,10 +162,11 @@ export function useExpenses() {
 
 export function useCreateExpense() {
   return useMutation({
-    mutationFn: async (data: { categoryId: string; amount: string; expenseDate: string }) => {
+    mutationFn: async (formData: FormData) => {
       return apiRequest("/api/expenses", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: formData,
+        headers: {},
       });
     },
     onSuccess: () => {

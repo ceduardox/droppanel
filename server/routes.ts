@@ -513,10 +513,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/expenses", requireAuth, async (req, res) => {
+  app.post("/api/expenses", requireAuth, upload.single("image"), async (req, res) => {
     try {
+      let imageUrl = null;
+      
+      if (req.file) {
+        const fileName = `expenses/${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        await objectStorage.uploadFromBytes(fileName, req.file.buffer);
+        imageUrl = fileName;
+      }
+
       const data = insertExpenseSchema.parse({
         ...req.body,
+        imageUrl,
         userId: getEffectiveUserId(req),
       });
       const expense = await storage.createExpense(data);
@@ -525,6 +534,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
+      console.error("Error creating expense:", error);
       res.status(500).json({ error: "Error al crear gasto" });
     }
   });

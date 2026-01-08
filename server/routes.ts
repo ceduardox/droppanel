@@ -515,6 +515,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/expenses", requireAuth, upload.single("image"), async (req, res) => {
     try {
+      console.log("Creating expense, body:", req.body, "file:", req.file?.originalname);
+      
       let imageUrl = null;
       
       if (req.file) {
@@ -523,15 +525,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         imageUrl = fileName;
       }
 
-      const data = insertExpenseSchema.parse({
-        ...req.body,
+      const dataToValidate = {
+        categoryId: req.body.categoryId,
+        amount: req.body.amount,
+        expenseDate: req.body.expenseDate,
         imageUrl,
         userId: getEffectiveUserId(req),
-      });
+      };
+      console.log("Data to validate:", dataToValidate);
+      
+      const data = insertExpenseSchema.parse(dataToValidate);
       const expense = await storage.createExpense(data);
       res.json(expense);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error("Zod validation error:", error.errors);
         return res.status(400).json({ error: error.errors });
       }
       console.error("Error creating expense:", error);

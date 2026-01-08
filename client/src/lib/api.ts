@@ -163,11 +163,16 @@ export function useExpenses() {
 export function useCreateExpense() {
   return useMutation({
     mutationFn: async (formData: FormData) => {
-      return apiRequest("/api/expenses", {
+      const res = await fetch("/api/expenses", {
         method: "POST",
         body: formData,
-        headers: {},
+        credentials: "include",
       });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: "Error desconocido" }));
+        throw new Error(error.error || "Error al crear gasto");
+      }
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });

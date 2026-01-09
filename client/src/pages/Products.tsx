@@ -15,12 +15,20 @@ export default function Products() {
   const deleteProduct = useDeleteProduct();
   const { toast } = useToast();
 
-  const handleSubmit = async (data: { name: string; price: number; baseCost: number; capitalIncrease: number; image?: File }) => {
+  const handleSubmit = async (data: { name: string; price: number; baseCost: number; capitalIncrease: number; costBreakdown: any; image?: File }) => {
     const formData = new FormData();
     formData.append("name", data.name);
     formData.append("price", data.price.toString());
     formData.append("baseCost", data.baseCost.toString());
     formData.append("capitalIncrease", data.capitalIncrease.toString());
+    if (data.costBreakdown.costProduct) formData.append("costProduct", data.costBreakdown.costProduct.toString());
+    if (data.costBreakdown.costTransport) formData.append("costTransport", data.costBreakdown.costTransport.toString());
+    if (data.costBreakdown.costLabel) formData.append("costLabel", data.costBreakdown.costLabel.toString());
+    if (data.costBreakdown.costShrink) formData.append("costShrink", data.costBreakdown.costShrink.toString());
+    if (data.costBreakdown.costBag) formData.append("costBag", data.costBreakdown.costBag.toString());
+    if (data.costBreakdown.costLabelRemover) formData.append("costLabelRemover", data.costBreakdown.costLabelRemover.toString());
+    if (data.costBreakdown.costExtraName) formData.append("costExtraName", data.costBreakdown.costExtraName);
+    if (data.costBreakdown.costExtraAmount) formData.append("costExtraAmount", data.costBreakdown.costExtraAmount.toString());
     if (data.image) {
       formData.append("image", data.image);
     }
@@ -116,6 +124,14 @@ export default function Products() {
           cost: parseFloat(editingProduct.cost),
           baseCost: editingProduct.baseCost ? parseFloat(editingProduct.baseCost) : undefined,
           capitalIncrease: editingProduct.capitalIncrease ? parseFloat(editingProduct.capitalIncrease) : undefined,
+          costProduct: editingProduct.costProduct ? parseFloat(editingProduct.costProduct) : undefined,
+          costTransport: editingProduct.costTransport ? parseFloat(editingProduct.costTransport) : undefined,
+          costLabel: editingProduct.costLabel ? parseFloat(editingProduct.costLabel) : undefined,
+          costShrink: editingProduct.costShrink ? parseFloat(editingProduct.costShrink) : undefined,
+          costBag: editingProduct.costBag ? parseFloat(editingProduct.costBag) : undefined,
+          costLabelRemover: editingProduct.costLabelRemover ? parseFloat(editingProduct.costLabelRemover) : undefined,
+          costExtraName: editingProduct.costExtraName || undefined,
+          costExtraAmount: editingProduct.costExtraAmount ? parseFloat(editingProduct.costExtraAmount) : undefined,
         } : undefined}
       />
     </div>

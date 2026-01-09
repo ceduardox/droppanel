@@ -173,7 +173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products", requireAuth, upload.single("image"), async (req, res) => {
     try {
-      const { name, price, baseCost, capitalIncrease } = req.body;
+      const { name, price, baseCost, capitalIncrease, costProduct, costTransport, costLabel, costShrink, costBag, costLabelRemover, costExtraName, costExtraAmount } = req.body;
       
       // Calcular cost total
       const base = parseFloat(baseCost || '0');
@@ -201,6 +201,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cost: cost.toString(),
         baseCost: baseCost || null,
         capitalIncrease: capitalIncrease || null,
+        costProduct: costProduct || null,
+        costTransport: costTransport || null,
+        costLabel: costLabel || null,
+        costShrink: costShrink || null,
+        costBag: costBag || null,
+        costLabelRemover: costLabelRemover || null,
+        costExtraName: costExtraName || null,
+        costExtraAmount: costExtraAmount || null,
         imageUrl,
         userId: getEffectiveUserId(req),
       });
@@ -215,7 +223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/products/:id", requireAuth, upload.single("image"), async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, price, baseCost, capitalIncrease } = req.body;
+      const { name, price, baseCost, capitalIncrease, costProduct, costTransport, costLabel, costShrink, costBag, costLabelRemover, costExtraName, costExtraAmount } = req.body;
       
       const existingProduct = await storage.getProduct(id);
       if (!existingProduct || existingProduct.userId !== getEffectiveUserId(req)) {
@@ -248,6 +256,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cost: cost.toString(),
         baseCost: baseCost || null,
         capitalIncrease: capitalIncrease || null,
+        costProduct: costProduct || null,
+        costTransport: costTransport || null,
+        costLabel: costLabel || null,
+        costShrink: costShrink || null,
+        costBag: costBag || null,
+        costLabelRemover: costLabelRemover || null,
+        costExtraName: costExtraName || null,
+        costExtraAmount: costExtraAmount || null,
         imageUrl,
       });
       

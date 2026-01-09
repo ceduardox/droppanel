@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, numeric, timestamp, integer, date } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, numeric, timestamp, integer, date, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -30,8 +30,7 @@ export const products = pgTable("products", {
   costShrink: numeric("cost_shrink", { precision: 10, scale: 2 }),
   costBag: numeric("cost_bag", { precision: 10, scale: 2 }),
   costLabelRemover: numeric("cost_label_remover", { precision: 10, scale: 2 }),
-  costExtraName: text("cost_extra_name"),
-  costExtraAmount: numeric("cost_extra_amount", { precision: 10, scale: 2 }),
+  costExtras: jsonb("cost_extras").$type<{ name: string; amount: number }[]>(),
   imageUrl: text("image_url"),
   userId: varchar("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),

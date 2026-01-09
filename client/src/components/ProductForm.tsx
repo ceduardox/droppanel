@@ -1,10 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Upload, ChevronDown, ChevronUp } from "lucide-react";
+import { Upload, ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+
+interface CostExtra {
+  id: string;
+  name: string;
+  amount: string;
+}
 
 interface CostBreakdown {
   costProduct?: number;
@@ -13,8 +19,7 @@ interface CostBreakdown {
   costShrink?: number;
   costBag?: number;
   costLabelRemover?: number;
-  costExtraName?: string;
-  costExtraAmount?: number;
+  costExtras?: { name: string; amount: number }[];
 }
 
 interface ProductFormProps {
@@ -40,10 +45,34 @@ interface ProductFormProps {
     costShrink?: number;
     costBag?: number;
     costLabelRemover?: number;
-    costExtraName?: string;
-    costExtraAmount?: number;
+    costExtras?: { name: string; amount: number }[];
   };
 }
+
+interface CostInputProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  testId: string;
+}
+
+const CostInput = memo(function CostInput({ label, value, onChange, placeholder, testId }: CostInputProps) {
+  return (
+    <div className="flex items-center gap-2">
+      <Label className="w-32 text-xs text-muted-foreground shrink-0">{label}</Label>
+      <Input
+        data-testid={testId}
+        type="number"
+        step="0.01"
+        placeholder={placeholder || "0.00"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 text-sm"
+      />
+    </div>
+  );
+});
 
 export default function ProductForm({ open, onOpenChange, onSubmit, initialData }: ProductFormProps) {
   const [name, setName] = useState("");
@@ -58,8 +87,11 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
   const [costShrink, setCostShrink] = useState("");
   const [costBag, setCostBag] = useState("");
   const [costLabelRemover, setCostLabelRemover] = useState("");
-  const [costExtraName, setCostExtraName] = useState("");
-  const [costExtraAmount, setCostExtraAmount] = useState("");
+  const [costExtras, setCostExtras] = useState<CostExtra[]>([]);
+
+  const generateId = () => Math.random().toString(36).substring(2, 9);
+
+  const extrasTotal = costExtras.reduce((sum, extra) => sum + (parseFloat(extra.amount) || 0), 0);
 
   const baseCostTotal = 
     (parseFloat(costProduct) || 0) +
@@ -68,7 +100,7 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
     (parseFloat(costShrink) || 0) +
     (parseFloat(costBag) || 0) +
     (parseFloat(costLabelRemover) || 0) +
-    (parseFloat(costExtraAmount) || 0);
+    extrasTotal;
 
   const totalCost = baseCostTotal + (parseFloat(capitalIncrease) || 0);
 
@@ -85,12 +117,20 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
         setCostShrink((initialData.costShrink || 0).toString());
         setCostBag((initialData.costBag || 0).toString());
         setCostLabelRemover((initialData.costLabelRemover || 0).toString());
-        setCostExtraName(initialData.costExtraName || "");
-        setCostExtraAmount((initialData.costExtraAmount || 0).toString());
+        
+        if (initialData.costExtras && initialData.costExtras.length > 0) {
+          setCostExtras(initialData.costExtras.map(e => ({
+            id: generateId(),
+            name: e.name,
+            amount: e.amount.toString()
+          })));
+        } else {
+          setCostExtras([]);
+        }
         
         const hasBreakdown = initialData.costProduct || initialData.costTransport || 
           initialData.costLabel || initialData.costShrink || initialData.costBag || 
-          initialData.costLabelRemover || initialData.costExtraAmount;
+          initialData.costLabelRemover || (initialData.costExtras && initialData.costExtras.length > 0);
         setShowBreakdown(!!hasBreakdown);
       } else {
         setName("");
@@ -102,8 +142,7 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
         setCostShrink("");
         setCostBag("");
         setCostLabelRemover("");
-        setCostExtraName("");
-        setCostExtraAmount("");
+        setCostExtras([]);
         setShowBreakdown(false);
       }
       setImageFile(undefined);
@@ -112,6 +151,11 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const validExtras = costExtras
+      .filter(e => e.name.trim() && parseFloat(e.amount))
+      .map(e => ({ name: e.name.trim(), amount: parseFloat(e.amount) }));
+    
     onSubmit({
       name,
       price: parseFloat(price),
@@ -124,8 +168,7 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
         costShrink: parseFloat(costShrink) || undefined,
         costBag: parseFloat(costBag) || undefined,
         costLabelRemover: parseFloat(costLabelRemover) || undefined,
-        costExtraName: costExtraName || undefined,
-        costExtraAmount: parseFloat(costExtraAmount) || undefined,
+        costExtras: validExtras.length > 0 ? validExtras : undefined,
       },
       image: imageFile,
     });
@@ -138,31 +181,32 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
     setCostShrink("");
     setCostBag("");
     setCostLabelRemover("");
-    setCostExtraName("");
-    setCostExtraAmount("");
+    setCostExtras([]);
     setImageFile(undefined);
   };
 
-  const CostInput = ({ label, value, onChange, placeholder, testId }: { 
-    label: string; 
-    value: string; 
-    onChange: (v: string) => void; 
-    placeholder?: string;
-    testId: string;
-  }) => (
-    <div className="flex items-center gap-2">
-      <Label className="w-32 text-xs text-muted-foreground shrink-0">{label}</Label>
-      <Input
-        data-testid={testId}
-        type="number"
-        step="0.01"
-        placeholder={placeholder || "0.00"}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-8 text-sm"
-      />
-    </div>
-  );
+  const handleCostProductChange = useCallback((v: string) => setCostProduct(v), []);
+  const handleCostTransportChange = useCallback((v: string) => setCostTransport(v), []);
+  const handleCostLabelChange = useCallback((v: string) => setCostLabel(v), []);
+  const handleCostShrinkChange = useCallback((v: string) => setCostShrink(v), []);
+  const handleCostBagChange = useCallback((v: string) => setCostBag(v), []);
+  const handleCostLabelRemoverChange = useCallback((v: string) => setCostLabelRemover(v), []);
+
+  const addExtra = useCallback(() => {
+    setCostExtras(prev => [...prev, { id: generateId(), name: "", amount: "" }]);
+  }, []);
+
+  const removeExtra = useCallback((id: string) => {
+    setCostExtras(prev => prev.filter(e => e.id !== id));
+  }, []);
+
+  const updateExtraName = useCallback((id: string, name: string) => {
+    setCostExtras(prev => prev.map(e => e.id === id ? { ...e, name } : e));
+  }, []);
+
+  const updateExtraAmount = useCallback((id: string, amount: string) => {
+    setCostExtras(prev => prev.map(e => e.id === id ? { ...e, amount } : e));
+  }, []);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -208,33 +252,65 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-3 space-y-2 rounded-md border p-3 bg-muted/30">
-                <CostInput label="Costo Producto" value={costProduct} onChange={setCostProduct} testId="input-cost-product" />
-                <CostInput label="Transporte" value={costTransport} onChange={setCostTransport} testId="input-cost-transport" />
-                <CostInput label="Etiqueta" value={costLabel} onChange={setCostLabel} testId="input-cost-label" />
-                <CostInput label="Termocontraíble" value={costShrink} onChange={setCostShrink} testId="input-cost-shrink" />
-                <CostInput label="Bolsa" value={costBag} onChange={setCostBag} testId="input-cost-bag" />
-                <CostInput label="Removedor Etiq." value={costLabelRemover} onChange={setCostLabelRemover} testId="input-cost-label-remover" />
+                <CostInput label="Costo Producto" value={costProduct} onChange={handleCostProductChange} testId="input-cost-product" />
+                <CostInput label="Transporte" value={costTransport} onChange={handleCostTransportChange} testId="input-cost-transport" />
+                <CostInput label="Etiqueta" value={costLabel} onChange={handleCostLabelChange} testId="input-cost-label" />
+                <CostInput label="Termocontraíble" value={costShrink} onChange={handleCostShrinkChange} testId="input-cost-shrink" />
+                <CostInput label="Bolsa" value={costBag} onChange={handleCostBagChange} testId="input-cost-bag" />
+                <CostInput label="Removedor Etiq." value={costLabelRemover} onChange={handleCostLabelRemoverChange} testId="input-cost-label-remover" />
                 
                 <div className="border-t pt-2 mt-2">
-                  <Label className="text-xs text-muted-foreground mb-1 block">Campo Extra (opcional)</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      data-testid="input-cost-extra-name"
-                      placeholder="Nombre"
-                      value={costExtraName}
-                      onChange={(e) => setCostExtraName(e.target.value)}
-                      className="h-8 text-sm flex-1"
-                    />
-                    <Input
-                      data-testid="input-cost-extra-amount"
-                      type="number"
-                      step="0.01"
-                      placeholder="Monto"
-                      value={costExtraAmount}
-                      onChange={(e) => setCostExtraAmount(e.target.value)}
-                      className="h-8 text-sm w-24"
-                    />
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-xs text-muted-foreground">Campos Extra</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addExtra}
+                      className="h-7 text-xs"
+                      data-testid="button-add-extra"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Agregar
+                    </Button>
                   </div>
+                  
+                  {costExtras.length === 0 && (
+                    <p className="text-xs text-muted-foreground text-center py-2">
+                      Sin campos extra. Haz clic en "Agregar" para añadir uno.
+                    </p>
+                  )}
+                  
+                  {costExtras.map((extra) => (
+                    <div key={extra.id} className="flex gap-2 items-center mb-2">
+                      <Input
+                        data-testid={`input-extra-name-${extra.id}`}
+                        placeholder="Nombre"
+                        value={extra.name}
+                        onChange={(e) => updateExtraName(extra.id, e.target.value)}
+                        className="h-8 text-sm flex-1"
+                      />
+                      <Input
+                        data-testid={`input-extra-amount-${extra.id}`}
+                        type="number"
+                        step="0.01"
+                        placeholder="Monto"
+                        value={extra.amount}
+                        onChange={(e) => updateExtraAmount(extra.id, e.target.value)}
+                        className="h-8 text-sm w-24"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeExtra(extra.id)}
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        data-testid={`button-remove-extra-${extra.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
                 
                 <div className="flex items-center justify-between pt-2 border-t">

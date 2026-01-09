@@ -27,8 +27,9 @@ export default function Products() {
     if (data.costBreakdown.costShrink) formData.append("costShrink", data.costBreakdown.costShrink.toString());
     if (data.costBreakdown.costBag) formData.append("costBag", data.costBreakdown.costBag.toString());
     if (data.costBreakdown.costLabelRemover) formData.append("costLabelRemover", data.costBreakdown.costLabelRemover.toString());
-    if (data.costBreakdown.costExtraName) formData.append("costExtraName", data.costBreakdown.costExtraName);
-    if (data.costBreakdown.costExtraAmount) formData.append("costExtraAmount", data.costBreakdown.costExtraAmount.toString());
+    if (data.costBreakdown.costExtras && data.costBreakdown.costExtras.length > 0) {
+      formData.append("costExtras", JSON.stringify(data.costBreakdown.costExtras));
+    }
     if (data.image) {
       formData.append("image", data.image);
     }
@@ -130,8 +131,7 @@ export default function Products() {
           costShrink: editingProduct.costShrink ? parseFloat(editingProduct.costShrink) : undefined,
           costBag: editingProduct.costBag ? parseFloat(editingProduct.costBag) : undefined,
           costLabelRemover: editingProduct.costLabelRemover ? parseFloat(editingProduct.costLabelRemover) : undefined,
-          costExtraName: editingProduct.costExtraName || undefined,
-          costExtraAmount: editingProduct.costExtraAmount ? parseFloat(editingProduct.costExtraAmount) : undefined,
+          costExtras: editingProduct.costExtras || undefined,
         } : undefined}
       />
     </div>

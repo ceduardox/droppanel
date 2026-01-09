@@ -173,12 +173,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products", requireAuth, upload.single("image"), async (req, res) => {
     try {
-      const { name, price, baseCost, capitalIncrease, costProduct, costTransport, costLabel, costShrink, costBag, costLabelRemover, costExtraName, costExtraAmount } = req.body;
+      const { name, price, baseCost, capitalIncrease, costProduct, costTransport, costLabel, costShrink, costBag, costLabelRemover, costExtras } = req.body;
       
       // Calcular cost total
       const base = parseFloat(baseCost || '0');
       const capital = parseFloat(capitalIncrease || '0');
       const cost = base + capital;
+      
+      // Parse costExtras from JSON string if present
+      let parsedCostExtras = null;
+      if (costExtras) {
+        try {
+          parsedCostExtras = typeof costExtras === 'string' ? JSON.parse(costExtras) : costExtras;
+        } catch (e) {
+          parsedCostExtras = null;
+        }
+      }
       
       let imageUrl: string | undefined;
       
@@ -207,8 +217,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         costShrink: costShrink || null,
         costBag: costBag || null,
         costLabelRemover: costLabelRemover || null,
-        costExtraName: costExtraName || null,
-        costExtraAmount: costExtraAmount || null,
+        costExtras: parsedCostExtras,
         imageUrl,
         userId: getEffectiveUserId(req),
       });
@@ -223,7 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/products/:id", requireAuth, upload.single("image"), async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, price, baseCost, capitalIncrease, costProduct, costTransport, costLabel, costShrink, costBag, costLabelRemover, costExtraName, costExtraAmount } = req.body;
+      const { name, price, baseCost, capitalIncrease, costProduct, costTransport, costLabel, costShrink, costBag, costLabelRemover, costExtras } = req.body;
       
       const existingProduct = await storage.getProduct(id);
       if (!existingProduct || existingProduct.userId !== getEffectiveUserId(req)) {
@@ -234,6 +243,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const base = parseFloat(baseCost || '0');
       const capital = parseFloat(capitalIncrease || '0');
       const cost = base + capital;
+
+      // Parse costExtras from JSON string if present
+      let parsedCostExtras = null;
+      if (costExtras) {
+        try {
+          parsedCostExtras = typeof costExtras === 'string' ? JSON.parse(costExtras) : costExtras;
+        } catch (e) {
+          parsedCostExtras = null;
+        }
+      }
 
       let imageUrl = existingProduct.imageUrl;
       
@@ -262,8 +281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         costShrink: costShrink || null,
         costBag: costBag || null,
         costLabelRemover: costLabelRemover || null,
-        costExtraName: costExtraName || null,
-        costExtraAmount: costExtraAmount || null,
+        costExtras: parsedCostExtras,
         imageUrl,
       });
       

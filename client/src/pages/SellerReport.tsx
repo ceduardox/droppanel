@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Plus, UserPlus, ShoppingCart, X, Save, Pencil, Trash2, Check } from "lucide-react";
+import { Calendar, Plus, UserPlus, ShoppingCart, X, Save, Pencil, Trash2, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import WhatsAppReport from "@/components/WhatsAppReport";
 
 interface Seller {
@@ -205,7 +206,7 @@ export default function SellerReport() {
 
     const total = parseFloat(sale.unitPrice) * sale.quantity;
     if (!acc[seller.name]) {
-      acc[seller.name] = { sales: [], total: 0 };
+      acc[seller.name] = { sales: [], total: 0, totalProducts: 0 };
     }
     acc[seller.name].sales.push({ 
       id: sale.id, 
@@ -216,10 +217,12 @@ export default function SellerReport() {
       total 
     });
     acc[seller.name].total += total;
+    acc[seller.name].totalProducts += sale.quantity;
     return acc;
-  }, {} as Record<string, { sales: { id: string; productId: string; product: string; quantity: number; unitPrice: string; total: number }[]; total: number }>);
+  }, {} as Record<string, { sales: { id: string; productId: string; product: string; quantity: number; unitPrice: string; total: number }[]; total: number; totalProducts: number }>);
 
   const grandTotal = Object.values(salesByDay).reduce((sum, s) => sum + s.total, 0);
+  const grandTotalProducts = Object.values(salesByDay).reduce((sum, s) => sum + s.totalProducts, 0);
 
   const generateWhatsAppText = () => {
     let text = `📊 *REPORTE VENDEDORES*\n`;
@@ -440,63 +443,74 @@ export default function SellerReport() {
           ) : (
             <div className="space-y-4">
               {Object.entries(salesByDay).map(([sellerName, data]) => (
-                <div key={sellerName} className="border rounded-lg p-4" data-testid={`card-seller-sales-${sellerName}`}>
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="font-bold text-lg">{sellerName}</h3>
-                    <span className="text-lg font-bold text-primary">{data.total.toFixed(2)} Bs</span>
-                  </div>
-                  <div className="space-y-2">
-                    {data.sales.map((sale) => (
-                      <div key={sale.id} className="flex justify-between items-center text-sm" data-testid={`row-sale-${sale.id}`}>
-                        {editingSaleId === sale.id ? (
-                          <div className="flex items-center gap-2 flex-1">
-                            <Select value={editProductId} onValueChange={setEditProductId}>
-                              <SelectTrigger className="h-8 flex-1" data-testid="edit-select-product">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {(products as Product[]).map((p) => (
-                                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={editQuantity}
-                              onChange={(e) => setEditQuantity(e.target.value)}
-                              className="h-8 w-16"
-                              data-testid="edit-input-quantity"
-                            />
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSaveEdit(sale.id)} data-testid="button-save-edit">
-                              <Check className="h-4 w-4 text-green-600" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCancelEdit} data-testid="button-cancel-edit">
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <>
-                            <span className="text-muted-foreground">{sale.product} x{sale.quantity}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-muted-foreground">{sale.total.toFixed(2)} Bs</span>
-                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleStartEdit({ id: sale.id, productId: sale.productId, quantity: sale.quantity } as SellerSale)} data-testid={`button-edit-${sale.id}`}>
-                                <Pencil className="h-3 w-3" />
+                <Collapsible key={sellerName} className="border rounded-lg" data-testid={`card-seller-sales-${sellerName}`}>
+                  <CollapsibleTrigger className="w-full p-4 flex justify-between items-center hover-elevate rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-bold text-lg">{sellerName}</h3>
+                      <span className="text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded">{data.totalProducts} productos</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-primary">{data.total.toFixed(2)} Bs</span>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="px-4 pb-4">
+                    <div className="space-y-2 pt-2 border-t">
+                      {data.sales.map((sale) => (
+                        <div key={sale.id} className="flex justify-between items-center text-sm" data-testid={`row-sale-${sale.id}`}>
+                          {editingSaleId === sale.id ? (
+                            <div className="flex items-center gap-2 flex-1">
+                              <Select value={editProductId} onValueChange={setEditProductId}>
+                                <SelectTrigger className="h-8 flex-1" data-testid="edit-select-product">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {(products as Product[]).map((p) => (
+                                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={editQuantity}
+                                onChange={(e) => setEditQuantity(e.target.value)}
+                                className="h-8 w-16"
+                                data-testid="edit-input-quantity"
+                              />
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSaveEdit(sale.id)} data-testid="button-save-edit">
+                                <Check className="h-4 w-4 text-green-600" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDeleteSale(sale.id)} data-testid={`button-delete-${sale.id}`}>
-                                <Trash2 className="h-3 w-3 text-red-500" />
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCancelEdit} data-testid="button-cancel-edit">
+                                <X className="h-4 w-4" />
                               </Button>
                             </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                          ) : (
+                            <>
+                              <span className="text-muted-foreground">{sale.product} x{sale.quantity}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground">{sale.total.toFixed(2)} Bs</span>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleStartEdit({ id: sale.id, productId: sale.productId, quantity: sale.quantity } as SellerSale)} data-testid={`button-edit-${sale.id}`}>
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDeleteSale(sale.id)} data-testid={`button-delete-${sale.id}`}>
+                                  <Trash2 className="h-3 w-3 text-red-500" />
+                                </Button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               ))}
               
               <div className="border-t pt-4 flex justify-between items-center">
-                <span className="text-xl font-bold">{filterMode === "range" ? "Total del Período" : "Total del Día"}</span>
+                <div>
+                  <span className="text-xl font-bold">{filterMode === "range" ? "Total del Período" : "Total del Día"}</span>
+                  <span className="text-sm text-muted-foreground ml-2">({grandTotalProducts} productos)</span>
+                </div>
                 <span className="text-2xl font-bold text-primary" data-testid="text-grand-total">{grandTotal.toFixed(2)} Bs</span>
               </div>
             </div>

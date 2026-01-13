@@ -54,7 +54,10 @@ export default function SellerReport() {
   const { toast } = useToast();
 
   const today = new Date().toISOString().split('T')[0];
+  const [filterMode, setFilterMode] = useState<"day" | "range">("day");
   const [filterDate, setFilterDate] = useState(today);
+  const [filterDateFrom, setFilterDateFrom] = useState(today);
+  const [filterDateTo, setFilterDateTo] = useState(today);
   const [newSellerName, setNewSellerName] = useState("");
   
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
@@ -187,7 +190,13 @@ export default function SellerReport() {
     }
   };
 
-  const filteredSales = (sellerSales as SellerSale[]).filter(s => s.saleDate === filterDate);
+  const filteredSales = (sellerSales as SellerSale[]).filter(s => {
+    if (filterMode === "day") {
+      return s.saleDate === filterDate;
+    } else {
+      return s.saleDate >= filterDateFrom && s.saleDate <= filterDateTo;
+    }
+  });
 
   const salesByDay = filteredSales.reduce((acc, sale) => {
     const seller = (sellers as Seller[]).find(s => s.id === sale.sellerId);
@@ -214,7 +223,11 @@ export default function SellerReport() {
 
   const generateWhatsAppText = () => {
     let text = `📊 *REPORTE VENDEDORES*\n`;
-    text += `📅 Fecha: ${formatDateString(filterDate)}\n\n`;
+    if (filterMode === "day") {
+      text += `📅 Fecha: ${formatDateString(filterDate)}\n\n`;
+    } else {
+      text += `📅 Desde: ${formatDateString(filterDateFrom)} hasta ${formatDateString(filterDateTo)}\n\n`;
+    }
 
     Object.entries(salesByDay).forEach(([sellerName, data]) => {
       text += `👤 *${sellerName}*\n`;
@@ -225,7 +238,7 @@ export default function SellerReport() {
     });
 
     text += `═══════════════════\n`;
-    text += `💵 *TOTAL DEL DÍA: ${grandTotal.toFixed(2)} Bs*`;
+    text += `💵 *TOTAL${filterMode === "range" ? " DEL PERÍODO" : " DEL DÍA"}: ${grandTotal.toFixed(2)} Bs*`;
 
     return text;
   };
@@ -378,17 +391,47 @@ export default function SellerReport() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <CardTitle className="text-lg">Ventas del Día</CardTitle>
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <Input
-              type="date"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
-              className="w-auto"
-              data-testid="input-filter-date"
-            />
+        <CardHeader className="flex flex-col gap-4">
+          <div className="flex flex-row items-center justify-between gap-4 flex-wrap">
+            <CardTitle className="text-lg">Ventas {filterMode === "day" ? "del Día" : "por Rango"}</CardTitle>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select value={filterMode} onValueChange={(v: "day" | "range") => setFilterMode(v)}>
+                <SelectTrigger className="w-32" data-testid="select-filter-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">Por día</SelectItem>
+                  <SelectItem value="range">Por rango</SelectItem>
+                </SelectContent>
+              </Select>
+              {filterMode === "day" ? (
+                <Input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="w-auto"
+                  data-testid="input-filter-date"
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="date"
+                    value={filterDateFrom}
+                    onChange={(e) => setFilterDateFrom(e.target.value)}
+                    className="w-auto"
+                    data-testid="input-filter-date-from"
+                  />
+                  <span className="text-muted-foreground">a</span>
+                  <Input
+                    type="date"
+                    value={filterDateTo}
+                    onChange={(e) => setFilterDateTo(e.target.value)}
+                    className="w-auto"
+                    data-testid="input-filter-date-to"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -453,7 +496,7 @@ export default function SellerReport() {
               ))}
               
               <div className="border-t pt-4 flex justify-between items-center">
-                <span className="text-xl font-bold">Total del Día</span>
+                <span className="text-xl font-bold">{filterMode === "range" ? "Total del Período" : "Total del Día"}</span>
                 <span className="text-2xl font-bold text-primary" data-testid="text-grand-total">{grandTotal.toFixed(2)} Bs</span>
               </div>
             </div>

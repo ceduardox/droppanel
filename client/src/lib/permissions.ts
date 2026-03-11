@@ -77,7 +77,7 @@ export const getRolePresetPermissions = (role: string): AppPermissions | null =>
   if (roleKey !== "contador") return null;
 
   return {
-    dashboard: false,
+    dashboard: true,
     products: false,
     sales: false,
     reports: true,

@@ -119,7 +119,7 @@ const enforceRolePermissions = (role: string, permissions: AppPermissions): AppP
 
   return {
     ...permissions,
-    dashboard: false,
+    dashboard: true,
     products: false,
     sales: false,
     capitalIncrease: false,
@@ -1091,6 +1091,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const salesWithDetails = visibleSales.map(sale => {
         const product = productMap.get(sale.productId);
+        const safeProduct = access.isAccountant && product
+          ? sanitizeProductForRestrictedRole(product)
+          : product;
         // Normalize date to YYYY-MM-DD format
         const dateValue: any = sale.saleDate;
         const saleDate = dateValue instanceof Date 
@@ -1101,7 +1104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return {
           ...sale,
           saleDate,
-          product,
+          product: safeProduct,
         };
       });
       

@@ -16,6 +16,7 @@ function formatDateLabel(date: Date): string {
 export default function Dashboard() {
   const { data: salesWithProducts = [], isLoading } = useReports();
   const { user } = useAuth();
+  const isAccountant = user?.role?.trim().toLowerCase() === "contador";
 
   if (isLoading) {
     return <div className="flex h-64 items-center justify-center">Cargando...</div>;
@@ -55,52 +56,98 @@ export default function Dashboard() {
           <p className="mt-1 bg-gradient-to-r from-[#0e8d8d] to-[#2758b4] bg-clip-text text-2xl font-semibold text-transparent md:text-4xl">
             Bienvenido al panel de gestion
           </p>
+          {isAccountant && (
+            <Badge variant="outline" className="mt-4 border-[#bfd0ea] bg-[#e6efff] text-[#1d438b]">
+              Vista contador: sin datos sensibles de costos ni socios
+            </Badge>
+          )}
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
-        <Card className="border-[#b7c9e6] bg-white/90">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Calendar className="h-5 w-5 text-[#1e4e97]" />
-              Ventas recientes
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {recentSales.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aun no hay ventas registradas.</p>
-            ) : (
-              recentSales.map((sale) => (
-                <div key={sale.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-white/90 p-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{sale.productName}</p>
-                    <p className="text-xs text-muted-foreground">{sale.quantity} unidades</p>
-                  </div>
-                  <div className="text-right">
-                    <Badge variant="outline" className="border-[#bfd0ea] bg-[#e6efff] text-[#1d438b]">
-                      {sale.date}
-                    </Badge>
-                    <p className="mt-1 text-sm font-semibold">{sale.total.toFixed(2)} Bs</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-            <StatsCard title="Ventas Totales" value={`${totalSales.toFixed(2)} Bs`} subtitle="Total acumulado" icon={DollarSign} />
-            <StatsCard title="Utilidad Total" value={`${totalProfit.toFixed(2)} Bs`} subtitle="Ganancia neta" icon={TrendingUp} />
+      {isAccountant ? (
+        <>
+          <div className="grid gap-4 md:grid-cols-3">
+            <StatsCard title="Ventas Registradas" value={`${totalSales.toFixed(2)} Bs`} subtitle="Desde tu fecha de acceso" icon={DollarSign} />
+            <StatsCard title="Productos Vendidos" value={totalProducts.toString()} subtitle="Unidades" icon={Package} />
+            <StatsCard title="Registros Recientes" value={recentSales.length.toString()} subtitle="Ultimas operaciones" icon={Calendar} />
           </div>
-        </div>
-      </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <StatsCard title="Productos Vendidos" value={totalProducts.toString()} subtitle="Unidades" icon={Package} />
-        <StatsCard title="Costo Total" value={`${totalCost.toFixed(2)} Bs`} subtitle="Costo acumulado" icon={DollarSign} />
-        <StatsCard title="Margen" value={totalSales > 0 ? `${((totalProfit / totalSales) * 100).toFixed(1)}%` : "0%"} subtitle="Rentabilidad" icon={TrendingUp} />
-      </div>
+          <Card className="border-[#b7c9e6] bg-white/90">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Calendar className="h-5 w-5 text-[#1e4e97]" />
+                Actividad reciente
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {recentSales.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Aun no hay ventas registradas.</p>
+              ) : (
+                recentSales.map((sale) => (
+                  <div key={sale.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-white/90 p-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{sale.productName}</p>
+                      <p className="text-xs text-muted-foreground">{sale.quantity} unidades</p>
+                    </div>
+                    <div className="text-right">
+                      <Badge variant="outline" className="border-[#bfd0ea] bg-[#e6efff] text-[#1d438b]">
+                        {sale.date}
+                      </Badge>
+                      <p className="mt-1 text-sm font-semibold">{sale.total.toFixed(2)} Bs</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </>
+      ) : (
+        <>
+          <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
+            <Card className="border-[#b7c9e6] bg-white/90">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Calendar className="h-5 w-5 text-[#1e4e97]" />
+                  Ventas recientes
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {recentSales.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aun no hay ventas registradas.</p>
+                ) : (
+                  recentSales.map((sale) => (
+                    <div key={sale.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-white/90 p-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">{sale.productName}</p>
+                        <p className="text-xs text-muted-foreground">{sale.quantity} unidades</p>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="outline" className="border-[#bfd0ea] bg-[#e6efff] text-[#1d438b]">
+                          {sale.date}
+                        </Badge>
+                        <p className="mt-1 text-sm font-semibold">{sale.total.toFixed(2)} Bs</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+                <StatsCard title="Ventas Totales" value={`${totalSales.toFixed(2)} Bs`} subtitle="Total acumulado" icon={DollarSign} />
+                <StatsCard title="Utilidad Total" value={`${totalProfit.toFixed(2)} Bs`} subtitle="Ganancia neta" icon={TrendingUp} />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <StatsCard title="Productos Vendidos" value={totalProducts.toString()} subtitle="Unidades" icon={Package} />
+            <StatsCard title="Costo Total" value={`${totalCost.toFixed(2)} Bs`} subtitle="Costo acumulado" icon={DollarSign} />
+            <StatsCard title="Margen" value={totalSales > 0 ? `${((totalProfit / totalSales) * 100).toFixed(1)}%` : "0%"} subtitle="Rentabilidad" icon={TrendingUp} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { insertUserSchema, insertProductSchema, insertSaleSchema, insertDailyPay
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import path from "path";
 import fs from "fs/promises";
 import { Client } from "@replit/object-storage";
@@ -352,15 +353,29 @@ async function ensureSystemTables() {
 export async function registerRoutes(app: Express): Promise<Server> {
   await ensureSystemTables();
 
+  const PgSessionStore = connectPgSimple(session);
+  const sessionStore = new PgSessionStore({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: true,
+    tableName: "user_sessions",
+    pruneSessionInterval: 60 * 15,
+  });
+
+  if (process.env.NODE_ENV === "production") {
+    app.set("trust proxy", 1);
+  }
+
   // Session middleware
   app.use(
     session({
+      store: sessionStore,
       secret: process.env.SESSION_SECRET || "dev-secret-change-in-production",
-      resave: true,
-      saveUninitialized: true,
+      resave: false,
+      saveUninitialized: false,
+      proxy: process.env.NODE_ENV === "production",
       cookie: {
         httpOnly: true,
-        secure: false,
+        secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       },

@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useExpenses, useExpenseCategories, useUpdateExpense } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil, Check, X } from "lucide-react";
+import { Pencil, Check, X, Calendar as CalendarIcon } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface Expense {
   id: string;
@@ -20,6 +24,68 @@ interface Expense {
 interface Category {
   id: string;
   name: string;
+}
+
+function toISODate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function fromISODate(value: string): Date | undefined {
+  if (!value) return undefined;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
+type DateFieldProps = {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  testId: string;
+};
+
+function DateField({ id, label, value, onChange, testId }: DateFieldProps) {
+  const [open, setOpen] = useState(false);
+  const selectedDate = fromISODate(value);
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            type="button"
+            variant="outline"
+            className={cn(
+              "h-9 w-full justify-between rounded-md border-input bg-background px-3 text-left text-sm font-medium",
+              !selectedDate && "text-muted-foreground"
+            )}
+            data-testid={testId}
+          >
+            <span>{selectedDate ? format(selectedDate, "dd/MM/yyyy") : "Seleccionar fecha"}</span>
+            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={(date) => {
+              if (!date) return;
+              onChange(toISODate(date));
+              setOpen(false);
+            }}
+            initialFocus
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
 }
 
 function formatDateString(dateStr: string): string {
@@ -91,27 +157,21 @@ export default function ExpensesReport() {
           <CardTitle>Filtrar por Rango de Fechas</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="startDate">Fecha Inicial</Label>
-              <Input
-                id="startDate"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                data-testid="input-expense-start-date"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="endDate">Fecha Final</Label>
-              <Input
-                id="endDate"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                data-testid="input-expense-end-date"
-              />
-            </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+            <DateField
+              id="startDate"
+              label="Fecha Inicial"
+              value={startDate}
+              onChange={setStartDate}
+              testId="input-expense-start-date"
+            />
+            <DateField
+              id="endDate"
+              label="Fecha Final"
+              value={endDate}
+              onChange={setEndDate}
+              testId="input-expense-end-date"
+            />
           </div>
         </CardContent>
       </Card>

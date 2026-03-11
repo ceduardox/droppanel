@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import ProductCard from "@/components/ProductCard";
 import ProductForm from "@/components/ProductForm";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,20 @@ export default function Products() {
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
   const { toast } = useToast();
+  const availableImages = useMemo(() => {
+    const usageMap = new Map<string, number>();
+    (products as any[]).forEach((product: any) => {
+      const key = String(product.imageUrl || "").trim();
+      if (!key) return;
+      usageMap.set(key, (usageMap.get(key) || 0) + 1);
+    });
 
-  const handleSubmit = async (data: { name: string; price: number; baseCost: number; capitalIncrease: number; costBreakdown: any; image?: File }) => {
+    return Array.from(usageMap.entries())
+      .map(([imageUrl, usageCount]) => ({ imageUrl, usageCount }))
+      .sort((a, b) => b.usageCount - a.usageCount || a.imageUrl.localeCompare(b.imageUrl));
+  }, [products]);
+
+  const handleSubmit = async (data: { name: string; price: number; baseCost: number; capitalIncrease: number; costBreakdown: any; image?: File; imageUrl?: string }) => {
     const formData = new FormData();
     formData.append("name", data.name);
     formData.append("price", data.price.toString());
@@ -32,6 +44,9 @@ export default function Products() {
     }
     if (data.image) {
       formData.append("image", data.image);
+    }
+    if (data.imageUrl) {
+      formData.append("imageUrl", data.imageUrl);
     }
 
     try {
@@ -73,20 +88,24 @@ export default function Products() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Productos</h1>
-          <p className="text-muted-foreground mt-1">Gestiona tu catálogo de productos</p>
+    <div className="mx-auto w-full max-w-none space-y-5 px-1 sm:px-4 lg:px-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-4xl font-bold tracking-tight text-[#102544]">Productos</h1>
+          <p className="mt-1 max-w-[34ch] text-lg text-muted-foreground">Gestiona tu catalogo de productos</p>
         </div>
-        <Button onClick={() => setShowForm(true)} data-testid="button-add-product">
+        <Button
+          onClick={() => setShowForm(true)}
+          className="w-full sm:w-auto sm:self-start"
+          data-testid="button-add-product"
+        >
           <Plus className="h-4 w-4 mr-2" />
           Agregar Producto
         </Button>
       </div>
 
       {(products as any[]).length === 0 ? (
-        <div className="text-center py-12">
+        <div className="rounded-2xl border border-[#b7c9e6] bg-white/90 py-12 text-center shadow-sm">
           <p className="text-muted-foreground">No hay productos registrados</p>
           <Button onClick={() => setShowForm(true)} className="mt-4">
             <Plus className="h-4 w-4 mr-2" />
@@ -94,7 +113,7 @@ export default function Products() {
           </Button>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {(products as any[]).map((product: any) => (
             <ProductCard
               key={product.id}
@@ -119,6 +138,7 @@ export default function Products() {
           if (!open) setEditingProduct(null);
         }}
         onSubmit={handleSubmit}
+        availableImages={availableImages}
         initialData={editingProduct ? {
           name: editingProduct.name,
           price: parseFloat(editingProduct.price),
@@ -132,6 +152,7 @@ export default function Products() {
           costBag: editingProduct.costBag ? parseFloat(editingProduct.costBag) : undefined,
           costLabelRemover: editingProduct.costLabelRemover ? parseFloat(editingProduct.costLabelRemover) : undefined,
           costExtras: editingProduct.costExtras || undefined,
+          imageUrl: editingProduct.imageUrl || undefined,
         } : undefined}
       />
     </div>

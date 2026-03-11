@@ -257,9 +257,9 @@ export default function SellerReport() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 md:space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Reporte Vendedores</h1>
+        <h1 className="text-2xl font-bold sm:text-3xl">Reporte Vendedores</h1>
         <p className="text-muted-foreground mt-1">Registro y seguimiento de ventas por vendedor</p>
       </div>
 
@@ -274,20 +274,31 @@ export default function SellerReport() {
           <CardContent className="space-y-4">
             <div className="flex gap-2">
               <Input
+                className="min-w-0 flex-1"
                 placeholder="Nombre del vendedor"
                 value={newSellerName}
                 onChange={(e) => setNewSellerName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddSeller()}
                 data-testid="input-seller-name"
               />
-              <Button onClick={handleAddSeller} disabled={createSeller.isPending} data-testid="button-add-seller">
+              <Button
+                onClick={handleAddSeller}
+                disabled={createSeller.isPending}
+                size="icon"
+                className="shrink-0"
+                data-testid="button-add-seller"
+              >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
             {(sellers as Seller[]).length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {(sellers as Seller[]).map((s) => (
-                  <span key={s.id} className="px-2 py-1 bg-muted rounded text-sm" data-testid={`badge-seller-${s.id}`}>
+                  <span
+                    key={s.id}
+                    className="max-w-full break-words rounded bg-muted px-2 py-1 text-sm leading-tight"
+                    data-testid={`badge-seller-${s.id}`}
+                  >
                     {s.name}
                   </span>
                 ))}
@@ -337,8 +348,8 @@ export default function SellerReport() {
 
             <div className="border-t pt-4">
               <Label className="text-sm text-muted-foreground mb-2 block">Agregar productos:</Label>
-              <div className="flex gap-2 items-end">
-                <div className="flex-1">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_5rem_6rem_auto] sm:items-end">
+                <div className="min-w-0">
                   <Select value={selectedProduct} onValueChange={setSelectedProduct}>
                     <SelectTrigger data-testid="select-product">
                       <SelectValue placeholder="Producto" />
@@ -350,7 +361,7 @@ export default function SellerReport() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="w-20">
+                <div className="sm:w-20">
                   <Input
                     type="number"
                     min="1"
@@ -360,10 +371,10 @@ export default function SellerReport() {
                     data-testid="input-quantity"
                   />
                 </div>
-                <div className="w-24 text-right text-sm font-medium">
+                <div className="text-sm font-medium sm:w-24 sm:text-right">
                   {currentItemTotal.toFixed(2)} Bs
                 </div>
-                <Button onClick={handleAddToCart} size="icon" data-testid="button-add-to-cart">
+                <Button onClick={handleAddToCart} size="icon" className="w-full sm:w-10" data-testid="button-add-to-cart">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
@@ -372,8 +383,8 @@ export default function SellerReport() {
             {cart.length > 0 && (
               <div className="border rounded-lg p-3 bg-muted/50 space-y-2">
                 {cart.map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-sm" data-testid={`cart-item-${idx}`}>
-                    <span>{item.productName} x{item.quantity}</span>
+                  <div key={idx} className="flex flex-wrap items-center justify-between gap-2 text-sm" data-testid={`cart-item-${idx}`}>
+                    <span className="min-w-0 break-words">{item.productName} x{item.quantity}</span>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{item.total.toFixed(2)} Bs</span>
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeFromCart(idx)} data-testid={`button-remove-${idx}`}>
@@ -395,11 +406,11 @@ export default function SellerReport() {
 
       <Card>
         <CardHeader className="flex flex-col gap-4">
-          <div className="flex flex-row items-center justify-between gap-4 flex-wrap">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <CardTitle className="text-lg">Ventas {filterMode === "day" ? "del Día" : "por Rango"}</CardTitle>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:flex-wrap">
               <Select value={filterMode} onValueChange={(v: "day" | "range") => setFilterMode(v)}>
-                <SelectTrigger className="w-32" data-testid="select-filter-mode">
+                <SelectTrigger className="w-full sm:w-32" data-testid="select-filter-mode">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -412,24 +423,24 @@ export default function SellerReport() {
                   type="date"
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
-                  className="w-auto"
+                  className="w-full sm:w-auto"
                   data-testid="input-filter-date"
                 />
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center">
                   <Input
                     type="date"
                     value={filterDateFrom}
                     onChange={(e) => setFilterDateFrom(e.target.value)}
-                    className="w-auto"
+                    className="w-full sm:w-auto"
                     data-testid="input-filter-date-from"
                   />
-                  <span className="text-muted-foreground">a</span>
+                  <span className="text-muted-foreground hidden sm:inline">a</span>
                   <Input
                     type="date"
                     value={filterDateTo}
                     onChange={(e) => setFilterDateTo(e.target.value)}
-                    className="w-auto"
+                    className="w-full sm:w-auto"
                     data-testid="input-filter-date-to"
                   />
                 </div>
@@ -444,22 +455,22 @@ export default function SellerReport() {
             <div className="space-y-4">
               {Object.entries(salesByDay).map(([sellerName, data]) => (
                 <Collapsible key={sellerName} className="border rounded-lg" data-testid={`card-seller-sales-${sellerName}`}>
-                  <CollapsibleTrigger className="w-full p-4 flex justify-between items-center hover-elevate rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-bold text-lg">{sellerName}</h3>
-                      <span className="text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded">{data.totalProducts} productos</span>
+                  <CollapsibleTrigger className="w-full p-3 sm:p-4 flex flex-wrap justify-between items-center gap-2 hover-elevate rounded-lg">
+                    <div className="min-w-0 flex items-center gap-2 sm:gap-3">
+                      <h3 className="truncate text-base font-bold sm:text-lg">{sellerName}</h3>
+                      <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground sm:text-sm">{data.totalProducts} productos</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-lg font-bold text-primary">{data.total.toFixed(2)} Bs</span>
+                      <span className="text-base font-bold text-primary sm:text-lg">{data.total.toFixed(2)} Bs</span>
                       <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
                     </div>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="px-4 pb-4">
                     <div className="space-y-2 pt-2 border-t">
                       {data.sales.map((sale) => (
-                        <div key={sale.id} className="flex justify-between items-center text-sm" data-testid={`row-sale-${sale.id}`}>
+                        <div key={sale.id} className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between" data-testid={`row-sale-${sale.id}`}>
                           {editingSaleId === sale.id ? (
-                            <div className="flex items-center gap-2 flex-1">
+                            <div className="grid flex-1 grid-cols-1 gap-2 sm:flex sm:items-center sm:gap-2">
                               <Select value={editProductId} onValueChange={setEditProductId}>
                                 <SelectTrigger className="h-8 flex-1" data-testid="edit-select-product">
                                   <SelectValue />
@@ -475,7 +486,7 @@ export default function SellerReport() {
                                 min="1"
                                 value={editQuantity}
                                 onChange={(e) => setEditQuantity(e.target.value)}
-                                className="h-8 w-16"
+                                className="h-8 sm:w-16"
                                 data-testid="edit-input-quantity"
                               />
                               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSaveEdit(sale.id)} data-testid="button-save-edit">
@@ -487,7 +498,7 @@ export default function SellerReport() {
                             </div>
                           ) : (
                             <>
-                              <span className="text-muted-foreground">{sale.product} x{sale.quantity}</span>
+                              <span className="min-w-0 break-words text-muted-foreground">{sale.product} x{sale.quantity}</span>
                               <div className="flex items-center gap-2">
                                 <span className="text-muted-foreground">{sale.total.toFixed(2)} Bs</span>
                                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleStartEdit({ id: sale.id, productId: sale.productId, quantity: sale.quantity } as SellerSale)} data-testid={`button-edit-${sale.id}`}>
@@ -506,12 +517,12 @@ export default function SellerReport() {
                 </Collapsible>
               ))}
               
-              <div className="border-t pt-4 flex justify-between items-center">
+              <div className="border-t pt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <span className="text-xl font-bold">{filterMode === "range" ? "Total del Período" : "Total del Día"}</span>
                   <span className="text-sm text-muted-foreground ml-2">({grandTotalProducts} productos)</span>
                 </div>
-                <span className="text-2xl font-bold text-primary" data-testid="text-grand-total">{grandTotal.toFixed(2)} Bs</span>
+                <span className="text-xl font-bold text-primary sm:text-2xl" data-testid="text-grand-total">{grandTotal.toFixed(2)} Bs</span>
               </div>
             </div>
           )}

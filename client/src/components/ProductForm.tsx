@@ -4,7 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Upload, ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+import { Upload, ChevronDown, ChevronUp, Plus, Trash2, ImageIcon } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useDeleteProductImage } from "@/lib/api";
 
 interface CostExtra {
   id: string;
@@ -31,7 +33,8 @@ interface ProductFormProps {
     baseCost: number; 
     capitalIncrease: number; 
     costBreakdown: CostBreakdown;
-    image?: File 
+    image?: File;
+    imageUrl?: string;
   }) => void;
   initialData?: {
     name: string;
@@ -46,7 +49,25 @@ interface ProductFormProps {
     costBag?: number;
     costLabelRemover?: number;
     costExtras?: { name: string; amount: number }[];
+    imageUrl?: string;
   };
+  availableImages?: ProductImageItem[];
+}
+
+interface ProductImageItem {
+  imageUrl: string;
+  usageCount: number;
+}
+
+function resolveProductImageUrl(imageUrl?: string): string | undefined {
+  if (!imageUrl) return undefined;
+
+  if (imageUrl.startsWith("/uploads/")) return imageUrl;
+  if (imageUrl.startsWith("/api/storage/")) return imageUrl;
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) return imageUrl;
+  if (!imageUrl.startsWith("/")) return `/api/storage/${imageUrl}`;
+
+  return imageUrl;
 }
 
 interface CostInputProps {
@@ -74,12 +95,16 @@ const CostInput = memo(function CostInput({ label, value, onChange, placeholder,
   );
 });
 
-export default function ProductForm({ open, onOpenChange, onSubmit, initialData }: ProductFormProps) {
+export default function ProductForm({ open, onOpenChange, onSubmit, initialData, availableImages }: ProductFormProps) {
+  const { toast } = useToast();
+  const deleteProductImage = useDeleteProductImage();
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [capitalIncrease, setCapitalIncrease] = useState("");
   const [imageFile, setImageFile] = useState<File | undefined>();
+  const [selectedImageUrl, setSelectedImageUrl] = useState("");
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const productImages = (availableImages || []) as ProductImageItem[];
 
   const [costProduct, setCostProduct] = useState("");
   const [costTransport, setCostTransport] = useState("");
@@ -132,6 +157,7 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
           initialData.costLabel || initialData.costShrink || initialData.costBag || 
           initialData.costLabelRemover || (initialData.costExtras && initialData.costExtras.length > 0);
         setShowBreakdown(!!hasBreakdown);
+        setSelectedImageUrl(initialData.imageUrl || "");
       } else {
         setName("");
         setPrice("");
@@ -144,6 +170,7 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
         setCostLabelRemover("");
         setCostExtras([]);
         setShowBreakdown(false);
+        setSelectedImageUrl("");
       }
       setImageFile(undefined);
     }
@@ -171,6 +198,7 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
         costExtras: validExtras.length > 0 ? validExtras : undefined,
       },
       image: imageFile,
+      imageUrl: selectedImageUrl || undefined,
     });
     setName("");
     setPrice("");
@@ -183,6 +211,29 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
     setCostLabelRemover("");
     setCostExtras([]);
     setImageFile(undefined);
+    setSelectedImageUrl("");
+  };
+
+  const handleDeleteImageFromLibrary = async (imageUrl: string, usageCount: number) => {
+    const confirmed = confirm(`Esta imagen se quitara de ${usageCount} producto(s). Continuar?`);
+    if (!confirmed) return;
+
+    try {
+      const result = await deleteProductImage.mutateAsync(imageUrl);
+      if (selectedImageUrl === imageUrl) {
+        setSelectedImageUrl("");
+      }
+      toast({
+        title: "Imagen eliminada",
+        description: `Se removio de ${result.affectedProducts} producto(s).`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.message || "No se pudo eliminar la imagen.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleCostProductChange = useCallback((v: string) => setCostProduct(v), []);
@@ -352,10 +403,81 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData 
                   data-testid="input-product-image"
                   type="file"
                   accept="image/*"
-                  onChange={(e) => setImageFile(e.target.files?.[0])}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    setImageFile(file);
+                    if (file) setSelectedImageUrl("");
+                  }}
                   className="flex-1"
                 />
                 <Upload className="h-5 w-5 text-muted-foreground" />
+              </div>
+
+              <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
+                <p className="text-xs font-medium text-muted-foreground">Usar imagen ya subida</p>
+                {productImages.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Aun no hay imagenes guardadas para reutilizar.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+                    {productImages.map((item) => {
+                      const previewUrl = resolveProductImageUrl(item.imageUrl);
+                      const isSelected = selectedImageUrl === item.imageUrl;
+                      return (
+                        <div key={item.imageUrl} className="relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedImageUrl(item.imageUrl);
+                              setImageFile(undefined);
+                            }}
+                            className={`group relative w-full overflow-hidden rounded-md border transition-all ${
+                              isSelected
+                                ? "border-primary ring-2 ring-primary/35"
+                                : "border-border hover:border-primary/50"
+                            }`}
+                            title={`Usada en ${item.usageCount} producto(s)`}
+                            data-testid={`button-select-image-${item.imageUrl.replace(/[^a-zA-Z0-9_-]/g, "_")}`}
+                          >
+                            {previewUrl ? (
+                              <img
+                                src={previewUrl}
+                                alt="Imagen de producto"
+                                className="h-14 w-full object-cover sm:h-16"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="flex h-14 w-full items-center justify-center bg-muted sm:h-16">
+                                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            )}
+                            <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
+                              x{item.usageCount}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeleteImageFromLibrary(item.imageUrl, item.usageCount);
+                            }}
+                            className="absolute right-1 top-1 rounded bg-black/65 p-1 text-white transition-colors hover:bg-red-600"
+                            title="Eliminar imagen de la biblioteca"
+                            data-testid={`button-delete-image-${item.imageUrl.replace(/[^a-zA-Z0-9_-]/g, "_")}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {selectedImageUrl && !imageFile && (
+                  <p className="text-xs text-muted-foreground">Imagen existente seleccionada.</p>
+                )}
               </div>
             </div>
           </div>

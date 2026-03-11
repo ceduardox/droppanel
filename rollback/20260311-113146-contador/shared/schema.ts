@@ -37,9 +37,6 @@ export const userAccessControls = pgTable("user_access_controls", {
   userId: varchar("user_id").primaryKey().references(() => users.id),
   role: text("role").notNull().default("viewer"),
   permissions: jsonb("permissions").$type<AppPermissions>(),
-  visibleFrom: date("visible_from"),
-  commissionRate: numeric("commission_rate", { precision: 5, scale: 4 }).notNull().default("0.1000"),
-  commissionSeller: text("commission_seller").notNull().default("Jose Eduardo"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

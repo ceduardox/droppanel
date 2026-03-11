@@ -52,9 +52,6 @@ export interface AdminUserRecord {
   isSystemAdmin: boolean;
   role: string;
   permissions: AppPermissions;
-  visibleFrom?: string | null;
-  commissionRate?: number;
-  commissionSeller?: string;
 }
 
 export interface AdminCreateUserPayload {

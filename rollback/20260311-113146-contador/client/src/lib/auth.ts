@@ -9,9 +9,6 @@ export interface User {
   isAdmin?: boolean;
   role?: string;
   permissions?: AppPermissions;
-  visibleFrom?: string | null;
-  commissionRate?: number;
-  commissionSeller?: string;
 }
 
 interface LoginData {

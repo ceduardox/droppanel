@@ -1,13 +1,21 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import path from "path";
+
+// Derive NODE_ENV when not explicitly set so scripts work cross-platform.
+if (!process.env.NODE_ENV) {
+  const entry = process.argv[1] ?? "";
+  process.env.NODE_ENV = entry.includes(`${path.sep}dist${path.sep}`)
+    ? "production"
+    : "development";
+}
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // Serve static uploads
-import path from "path";
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 app.use((req, res, next) => {
@@ -43,6 +51,11 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
+  // Avoid returning index.html for unknown API routes.
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "API route not found" });
+  });
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -68,7 +81,6 @@ app.use((req, res, next) => {
   server.listen({
     port,
     host: "0.0.0.0",
-    reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
   });

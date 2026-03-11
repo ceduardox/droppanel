@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useDailyPayment, useSaveDailyPayment } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, CheckCircle, Image as ImageIcon, Eye, Download } from "lucide-react";
+import { Upload, CheckCircle, Image as ImageIcon, Eye } from "lucide-react";
 
 interface DailyPaymentUploadProps {
   selectedDate: string;
@@ -25,7 +25,7 @@ export default function DailyPaymentUpload({ selectedDate }: DailyPaymentUploadP
   const { data: payment, refetch } = useDailyPayment(selectedDate);
   const saveMutation = useSaveDailyPayment();
   const { toast } = useToast();
-  
+
   const [imageComision, setImageComision] = useState<File | null>(null);
   const [imageCosto, setImageCosto] = useState<File | null>(null);
   const [isPaid, setIsPaid] = useState(false);
@@ -40,7 +40,7 @@ export default function DailyPaymentUpload({ selectedDate }: DailyPaymentUploadP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedDate) {
       toast({
         title: "Error",
@@ -53,7 +53,7 @@ export default function DailyPaymentUpload({ selectedDate }: DailyPaymentUploadP
     const formData = new FormData();
     formData.append("paymentDate", selectedDate);
     formData.append("isPaid", isPaid ? "1" : "0");
-    
+
     if (imageComision) {
       formData.append("imageComision", imageComision);
     }
@@ -93,36 +93,37 @@ export default function DailyPaymentUpload({ selectedDate }: DailyPaymentUploadP
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex flex-wrap items-center gap-2">
           Comprobantes de Pago
           {(payment as DailyPayment)?.isPaid && <CheckCircle className="h-5 w-5 text-green-600" />}
         </CardTitle>
-        <CardDescription>
-          Sube comprobantes de pago del día seleccionado
-        </CardDescription>
+        <CardDescription>Sube comprobantes del dia seleccionado</CardDescription>
       </CardHeader>
+
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="imageComision">
-                  Comprobante Comisión José Eduardo
-                  {(payment as DailyPayment)?.imageComisionUrl && " ✓"}
+            <div className="space-y-2 min-w-0">
+              <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
+                <Label htmlFor="imageComision" className="break-words">
+                  Comprobante Comision Jose Eduardo
+                  {(payment as DailyPayment)?.imageComisionUrl && " - OK"}
                 </Label>
+
                 {(payment as DailyPayment)?.imageComisionUrl && (
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => window.open(`/api/storage/${(payment as DailyPayment).imageComisionUrl}`, '_blank')}
+                    onClick={() => window.open(`/api/storage/${(payment as DailyPayment).imageComisionUrl}`, "_blank")}
                     data-testid="button-view-comision"
                   >
-                    <Eye className="h-4 w-4 mr-1" />
+                    <Eye className="mr-1 h-4 w-4" />
                     Ver
                   </Button>
                 )}
               </div>
+
               <Input
                 id="imageComision"
                 type="file"
@@ -130,33 +131,36 @@ export default function DailyPaymentUpload({ selectedDate }: DailyPaymentUploadP
                 onChange={(e) => setImageComision(e.target.files?.[0] || null)}
                 data-testid="input-comision"
               />
+
               {(payment as DailyPayment)?.imageComisionUrl && !imageComision && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <ImageIcon className="h-3 w-3" />
                   Ya existe comprobante guardado
                 </p>
               )}
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="imageCosto">
+            <div className="space-y-2 min-w-0">
+              <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
+                <Label htmlFor="imageCosto" className="break-words">
                   Comprobante Pago Producto
-                  {(payment as DailyPayment)?.imageCostoUrl && " ✓"}
+                  {(payment as DailyPayment)?.imageCostoUrl && " - OK"}
                 </Label>
+
                 {(payment as DailyPayment)?.imageCostoUrl && (
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => window.open(`/api/storage/${(payment as DailyPayment).imageCostoUrl}`, '_blank')}
+                    onClick={() => window.open(`/api/storage/${(payment as DailyPayment).imageCostoUrl}`, "_blank")}
                     data-testid="button-view-costo"
                   >
-                    <Eye className="h-4 w-4 mr-1" />
+                    <Eye className="mr-1 h-4 w-4" />
                     Ver
                   </Button>
                 )}
               </div>
+
               <Input
                 id="imageCosto"
                 type="file"
@@ -164,8 +168,9 @@ export default function DailyPaymentUpload({ selectedDate }: DailyPaymentUploadP
                 onChange={(e) => setImageCosto(e.target.files?.[0] || null)}
                 data-testid="input-costo"
               />
+
               {(payment as DailyPayment)?.imageCostoUrl && !imageCosto && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <ImageIcon className="h-3 w-3" />
                   Ya existe comprobante guardado
                 </p>
@@ -185,12 +190,8 @@ export default function DailyPaymentUpload({ selectedDate }: DailyPaymentUploadP
             </Label>
           </div>
 
-          <Button
-            type="submit"
-            disabled={saveMutation.isPending}
-            data-testid="button-save-payment"
-          >
-            <Upload className="h-4 w-4 mr-2" />
+          <Button type="submit" disabled={saveMutation.isPending} data-testid="button-save-payment">
+            <Upload className="mr-2 h-4 w-4" />
             {saveMutation.isPending ? "Guardando..." : "Guardar Comprobantes"}
           </Button>
         </form>

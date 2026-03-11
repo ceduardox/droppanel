@@ -188,19 +188,8 @@ export class DbStorage implements IStorage {
 
   async upsertUserAccessControl(access: InsertUserAccessControl): Promise<UserAccessControl> {
     const existing = await this.getUserAccessControl(access.userId);
-    const role = (access.role || existing?.role || "viewer").trim();
-    const roleKey = role.toLowerCase();
+    const role = access.role || "viewer";
     const permissions = access.permissions || null;
-    const visibleFrom =
-      access.visibleFrom ??
-      (roleKey === "contador"
-        ? existing?.visibleFrom || new Date().toISOString().slice(0, 10)
-        : existing?.visibleFrom || null);
-    const commissionRate =
-      access.commissionRate ||
-      existing?.commissionRate ||
-      (roleKey === "contador" ? "0.1000" : "0.0000");
-    const commissionSeller = access.commissionSeller || existing?.commissionSeller || "Jose Eduardo";
 
     if (existing) {
       const result = await db
@@ -208,9 +197,6 @@ export class DbStorage implements IStorage {
         .set({
           role,
           permissions,
-          visibleFrom,
-          commissionRate,
-          commissionSeller,
           updatedAt: new Date(),
         })
         .where(eq(userAccessControls.userId, access.userId))
@@ -224,9 +210,6 @@ export class DbStorage implements IStorage {
         userId: access.userId,
         role,
         permissions,
-        visibleFrom,
-        commissionRate,
-        commissionSeller,
       })
       .returning();
     return result[0];

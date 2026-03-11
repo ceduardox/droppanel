@@ -25,16 +25,34 @@ interface ReportCardProps {
 }
 
 function formatDateString(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-');
-  const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const [year, month, day] = dateStr.split("-");
+  const months = [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+  ];
   const monthName = months[parseInt(month) - 1];
   return `${parseInt(day)} de ${monthName} de ${year}`;
+}
+
+function formatDateCompact(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 export default function ReportCard({ sale, onEditDate, onDelete }: ReportCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [newDate, setNewDate] = useState(sale.date);
-  
+
   const total = sale.price * sale.quantity;
   const totalCost = sale.cost * sale.quantity;
   const profit = total - totalCost;
@@ -49,15 +67,16 @@ export default function ReportCard({ sale, onEditDate, onDelete }: ReportCardPro
   };
 
   return (
-    <Card data-testid={`card-sale-${sale.id}`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-lg">{sale.productName}</CardTitle>
-          <div className="flex items-center gap-2">
+    <Card className="overflow-hidden" data-testid={`card-sale-${sale.id}`}>
+      <CardHeader className="space-y-3 pb-3">
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <CardTitle className="min-w-0 break-words text-lg leading-tight">{sale.productName}</CardTitle>
+
+          <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
             {onEditDate && (
               <Dialog open={isOpen} onOpenChange={setIsOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" data-testid={`button-edit-date-${sale.id}`}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`button-edit-date-${sale.id}`}>
                     <Pencil className="h-3 w-3" />
                   </Button>
                 </DialogTrigger>
@@ -86,71 +105,101 @@ export default function ReportCard({ sale, onEditDate, onDelete }: ReportCardPro
                 </DialogContent>
               </Dialog>
             )}
+
             {onDelete && (
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-6 w-6" 
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
                 onClick={() => onDelete(sale.id)}
                 data-testid={`button-delete-sale-${sale.id}`}
               >
                 <Trash2 className="h-3 w-3 text-red-500" />
               </Button>
             )}
-            <Badge variant="outline" className="text-xs">
-              <Calendar className="h-3 w-3 mr-1" />
-              {formatDateString(sale.date)}
+
+            <Badge variant="outline" className="w-full justify-center text-xs sm:w-auto">
+              <Calendar className="mr-1 h-3 w-3" />
+              <span className="sm:hidden">{formatDateCompact(sale.date)}</span>
+              <span className="hidden sm:inline">{formatDateString(sale.date)}</span>
             </Badge>
           </div>
         </div>
       </CardHeader>
+
       <CardContent className="space-y-3">
         <div className="grid grid-cols-2 gap-4">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground">Cantidad</p>
-            <p className="text-lg font-semibold" data-testid={`text-quantity-${sale.id}`}>{sale.quantity}</p>
+            <p className="text-base font-semibold sm:text-lg" data-testid={`text-quantity-${sale.id}`}>
+              {sale.quantity}
+            </p>
           </div>
-          <div>
+
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground">Precio Unit.</p>
-            <p className="text-lg font-semibold" data-testid={`text-unit-price-${sale.id}`}>{sale.price.toFixed(2)} Bs</p>
+            <p className="break-words text-base font-semibold leading-tight sm:text-lg" data-testid={`text-unit-price-${sale.id}`}>
+              {sale.price.toFixed(2)} Bs
+            </p>
           </div>
         </div>
-        <div className="border-t pt-3 space-y-2">
-          <div className="flex justify-between">
+
+        <div className="space-y-2 border-t pt-3">
+          <div className="flex justify-between gap-3">
             <span className="text-sm text-muted-foreground">Total Venta:</span>
-            <span className="font-medium" data-testid={`text-sale-total-${sale.id}`}>{total.toFixed(2)} Bs</span>
+            <span className="text-right font-medium" data-testid={`text-sale-total-${sale.id}`}>
+              {total.toFixed(2)} Bs
+            </span>
           </div>
-          <div className="flex justify-between">
+
+          <div className="flex justify-between gap-3">
             <span className="text-sm text-muted-foreground">Costo Total:</span>
-            <span className="font-medium" data-testid={`text-sale-cost-${sale.id}`}>{totalCost.toFixed(2)} Bs</span>
+            <span className="text-right font-medium" data-testid={`text-sale-cost-${sale.id}`}>
+              {totalCost.toFixed(2)} Bs
+            </span>
           </div>
+
           {hasBreakdown && (
             <>
-              <div className="flex justify-between pl-4">
-                <span className="text-xs text-muted-foreground">↳ Bruto:</span>
-                <span className="text-xs" data-testid={`text-base-cost-total-${sale.id}`}>{(sale.baseCost! * sale.quantity).toFixed(2)} Bs</span>
+              <div className="flex justify-between gap-3 pl-4">
+                <span className="text-xs text-muted-foreground">Bruto:</span>
+                <span className="text-right text-xs" data-testid={`text-base-cost-total-${sale.id}`}>
+                  {(sale.baseCost! * sale.quantity).toFixed(2)} Bs
+                </span>
               </div>
-              <div className="flex justify-between pl-4">
-                <span className="text-xs text-muted-foreground">↳ Capital:</span>
-                <span className="text-xs" data-testid={`text-capital-increase-total-${sale.id}`}>{((sale.capitalIncrease || 0) * sale.quantity).toFixed(2)} Bs</span>
+
+              <div className="flex justify-between gap-3 pl-4">
+                <span className="text-xs text-muted-foreground">Capital:</span>
+                <span className="text-right text-xs" data-testid={`text-capital-increase-total-${sale.id}`}>
+                  {((sale.capitalIncrease || 0) * sale.quantity).toFixed(2)} Bs
+                </span>
               </div>
             </>
           )}
-          <div className="flex justify-between pt-2 border-t">
+
+          <div className="flex justify-between gap-3 border-t pt-2">
             <span className="font-medium">Utilidad:</span>
-            <span className="font-bold text-chart-2" data-testid={`text-sale-profit-${sale.id}`}>{profit.toFixed(2)} Bs</span>
+            <span className="text-right font-bold text-chart-2" data-testid={`text-sale-profit-${sale.id}`}>
+              {profit.toFixed(2)} Bs
+            </span>
           </div>
         </div>
+
         <div className="border-t pt-3">
-          <p className="text-xs text-muted-foreground mb-2">Distribución 50/50:</p>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-muted/50 rounded-md p-2">
-              <p className="text-xs text-muted-foreground">José Eduardo</p>
-              <p className="font-semibold" data-testid={`text-jose-profit-${sale.id}`}>{profitPerPartner.toFixed(2)} Bs</p>
+          <p className="mb-2 text-xs text-muted-foreground">Distribucion 50/50:</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded-md bg-muted/50 p-2">
+              <p className="text-xs text-muted-foreground">Jose Eduardo</p>
+              <p className="font-semibold" data-testid={`text-jose-profit-${sale.id}`}>
+                {profitPerPartner.toFixed(2)} Bs
+              </p>
             </div>
-            <div className="bg-muted/50 rounded-md p-2">
+
+            <div className="rounded-md bg-muted/50 p-2">
               <p className="text-xs text-muted-foreground">Jhonatan</p>
-              <p className="font-semibold" data-testid={`text-jhonatan-profit-${sale.id}`}>{profitPerPartner.toFixed(2)} Bs</p>
+              <p className="font-semibold" data-testid={`text-jhonatan-profit-${sale.id}`}>
+                {profitPerPartner.toFixed(2)} Bs
+              </p>
             </div>
           </div>
         </div>

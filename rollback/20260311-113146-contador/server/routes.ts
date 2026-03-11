@@ -110,95 +110,6 @@ const mergePermissions = (
   ...(stored || {}),
 });
 
-const normalizeRoleKey = (value: string | null | undefined) => (value || "").trim().toLowerCase();
-const isAccountantRole = (value: string | null | undefined) => normalizeRoleKey(value) === "contador";
-
-const enforceRolePermissions = (role: string, permissions: AppPermissions): AppPermissions => {
-  if (!isAccountantRole(role)) return permissions;
-
-  return {
-    ...permissions,
-    dashboard: false,
-    products: false,
-    sales: false,
-    capitalIncrease: false,
-    grossCapital: false,
-    settings: false,
-    userAdmin: false,
-  };
-};
-
-const toIsoDate = (value: unknown): string | null => {
-  if (!value) return null;
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
-  }
-  if (typeof value === "string") {
-    if (value.includes("T")) return value.split("T")[0];
-    return value.slice(0, 10);
-  }
-  return null;
-};
-
-const isOnOrAfterDate = (value: unknown, minDate?: string | null) => {
-  if (!minDate) return true;
-  const dateValue = toIsoDate(value);
-  if (!dateValue) return false;
-  return dateValue >= minDate;
-};
-
-const clampStartDate = (startDate: string, minDate?: string | null): string => {
-  if (!minDate) return startDate;
-  return startDate < minDate ? minDate : startDate;
-};
-
-type AccessContext = {
-  role: string;
-  isAccountant: boolean;
-  visibleFrom: string | null;
-  commissionRate: number;
-  commissionSeller: string;
-};
-
-const getAccessContext = async (req: any): Promise<AccessContext> => {
-  if (req._accessContext) {
-    return req._accessContext as AccessContext;
-  }
-
-  if (req.session?.isAdmin) {
-    const context: AccessContext = {
-      role: "owner",
-      isAccountant: false,
-      visibleFrom: null,
-      commissionRate: 0,
-      commissionSeller: "",
-    };
-    req._accessContext = context;
-    return context;
-  }
-
-  const access = await storage.getUserAccessControl(req.session.userId);
-  const role = access?.role || "viewer";
-  const context: AccessContext = {
-    role,
-    isAccountant: isAccountantRole(role),
-    visibleFrom: access?.visibleFrom || null,
-    commissionRate: parseFloat(access?.commissionRate || "0"),
-    commissionSeller: access?.commissionSeller || "Jose Eduardo",
-  };
-  req._accessContext = context;
-  return context;
-};
-
-const sanitizeProductForRestrictedRole = (product: any) => ({
-  id: product.id,
-  name: product.name,
-  price: product.price,
-  imageUrl: product.imageUrl,
-  userId: product.userId,
-  createdAt: product.createdAt,
-});
-
 const buildAuthPayload = async (userId: string, isAdmin: boolean) => {
   const user = await storage.getUser(userId);
   if (!user) return null;
@@ -211,26 +122,17 @@ const buildAuthPayload = async (userId: string, isAdmin: boolean) => {
       isAdmin: true,
       role: "owner",
       permissions: getPermissionsTemplate(true),
-      visibleFrom: null,
-      commissionRate: 0,
-      commissionSeller: "",
     };
   }
 
   const access = await storage.getUserAccessControl(user.id);
-  const role = access?.role || "viewer";
-  const rawPermissions = mergePermissions(access?.permissions as Partial<AppPermissions> | undefined, !access);
-  const permissions = enforceRolePermissions(role, rawPermissions);
   return {
     id: user.id,
     name: user.name,
     username: user.username,
     isAdmin: false,
-    role,
-    permissions,
-    visibleFrom: access?.visibleFrom || null,
-    commissionRate: parseFloat(access?.commissionRate || "0"),
-    commissionSeller: access?.commissionSeller || "Jose Eduardo",
+    role: access?.role || "viewer",
+    permissions: mergePermissions(access?.permissions as Partial<AppPermissions> | undefined, !access),
   };
 };
 
@@ -322,30 +224,8 @@ async function ensureSystemTables() {
       user_id varchar PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       role text NOT NULL DEFAULT 'viewer',
       permissions jsonb,
-      visible_from date,
-      commission_rate numeric(5,4) NOT NULL DEFAULT 0.1000,
-      commission_seller text NOT NULL DEFAULT 'Jose Eduardo',
       updated_at timestamp NOT NULL DEFAULT now()
     );
-  `);
-
-  await db.execute(sql`
-    ALTER TABLE user_access_controls
-    ADD COLUMN IF NOT EXISTS visible_from date;
-  `);
-  await db.execute(sql`
-    ALTER TABLE user_access_controls
-    ADD COLUMN IF NOT EXISTS commission_rate numeric(5,4) NOT NULL DEFAULT 0.1000;
-  `);
-  await db.execute(sql`
-    ALTER TABLE user_access_controls
-    ADD COLUMN IF NOT EXISTS commission_seller text NOT NULL DEFAULT 'Jose Eduardo';
-  `);
-  await db.execute(sql`
-    UPDATE user_access_controls
-    SET visible_from = CURRENT_DATE
-    WHERE lower(trim(role)) = 'contador'
-      AND visible_from IS NULL;
   `);
 }
 
@@ -463,44 +343,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-	  // Admin users and permissions
-	  app.get("/api/admin/users", requireAdmin, async (_req, res) => {
-	    try {
-	      const users = await storage.getAllUsers();
+  // Admin users and permissions
+  app.get("/api/admin/users", requireAdmin, async (_req, res) => {
+    try {
+      const users = await storage.getAllUsers();
       const list = await Promise.all(
         users.map(async (user) => {
           const isSystemAdmin = user.username.trim().toLowerCase() === "arely";
-	          if (isSystemAdmin) {
-	            return {
-	              id: user.id,
-	              name: user.name,
-	              username: user.username,
-	              isSystemAdmin: true,
-	              role: "owner",
-	              permissions: getPermissionsTemplate(true),
-	              visibleFrom: null,
-	              commissionRate: 0,
-	              commissionSeller: "",
-	            };
-	          }
+          if (isSystemAdmin) {
+            return {
+              id: user.id,
+              name: user.name,
+              username: user.username,
+              isSystemAdmin: true,
+              role: "owner",
+              permissions: getPermissionsTemplate(true),
+            };
+          }
 
-	          const access = await storage.getUserAccessControl(user.id);
-	          const role = access?.role || "viewer";
-	          const rawPermissions = mergePermissions(access?.permissions as Partial<AppPermissions> | undefined, !access);
-	          const permissions = enforceRolePermissions(role, rawPermissions);
-	          return {
-	            id: user.id,
-	            name: user.name,
-	            username: user.username,
-	            isSystemAdmin: false,
-	            role,
-	            permissions,
-	            visibleFrom: access?.visibleFrom || null,
-	            commissionRate: parseFloat(access?.commissionRate || "0"),
-	            commissionSeller: access?.commissionSeller || "Jose Eduardo",
-	          };
-	        })
-	      );
+          const access = await storage.getUserAccessControl(user.id);
+          return {
+            id: user.id,
+            name: user.name,
+            username: user.username,
+            isSystemAdmin: false,
+            role: access?.role || "viewer",
+            permissions: mergePermissions(access?.permissions as Partial<AppPermissions> | undefined, !access),
+          };
+        })
+      );
 
       res.json(list);
     } catch (error) {
@@ -508,17 +379,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-	  app.post("/api/admin/users", requireAdmin, async (req, res) => {
-	    try {
-	      const data = adminUserCreateSchema.parse(req.body);
-	      const normalizedUsername = data.username.trim();
-	      const role = data.role.trim();
-	      const isAccountant = isAccountantRole(role);
+  app.post("/api/admin/users", requireAdmin, async (req, res) => {
+    try {
+      const data = adminUserCreateSchema.parse(req.body);
+      const normalizedUsername = data.username.trim();
 
-	      const existing = await storage.getUserByUsername(normalizedUsername);
-	      if (existing) {
-	        return res.status(400).json({ error: "El nombre de usuario ya existe" });
-	      }
+      const existing = await storage.getUserByUsername(normalizedUsername);
+      if (existing) {
+        return res.status(400).json({ error: "El nombre de usuario ya existe" });
+      }
 
       const user = await storage.createUser({
         name: data.name.trim(),
@@ -526,28 +395,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: data.password,
       });
 
-		      const safePermissions = enforceRolePermissions(role, data.permissions);
-		      await storage.upsertUserAccessControl({
-		        userId: user.id,
-		        role,
-		        permissions: safePermissions,
-		        visibleFrom: isAccountant ? new Date().toISOString().slice(0, 10) : null,
-		        commissionRate: isAccountant ? "0.1000" : "0.0000",
-		        commissionSeller: isAccountant ? "Jose Eduardo" : "Jose Eduardo",
-		      });
+      await storage.upsertUserAccessControl({
+        userId: user.id,
+        role: data.role,
+        permissions: data.permissions,
+      });
 
-	      res.status(201).json({
-	        id: user.id,
-	        name: user.name,
-	        username: user.username,
-	        isSystemAdmin: false,
-	        role,
-		        permissions: safePermissions,
-		        visibleFrom: isAccountant ? new Date().toISOString().slice(0, 10) : null,
-		        commissionRate: isAccountant ? 0.1 : 0,
-		        commissionSeller: "Jose Eduardo",
-	      });
-	    } catch (error) {
+      res.status(201).json({
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        isSystemAdmin: false,
+        role: data.role,
+        permissions: data.permissions,
+      });
+    } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
@@ -555,47 +417,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-	  app.patch("/api/admin/users/:id/access", requireAdmin, async (req, res) => {
-	    try {
-	      const { id } = req.params;
-	      const data = adminUserAccessUpdateSchema.parse(req.body);
-	      const role = data.role.trim();
-	      const user = await storage.getUser(id);
+  app.patch("/api/admin/users/:id/access", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const data = adminUserAccessUpdateSchema.parse(req.body);
+      const user = await storage.getUser(id);
 
-	      if (!user) {
-	        return res.status(404).json({ error: "Usuario no encontrado" });
-	      }
+      if (!user) {
+        return res.status(404).json({ error: "Usuario no encontrado" });
+      }
 
       if (user.username.trim().toLowerCase() === "arely") {
         return res.status(400).json({ error: "No se puede modificar el acceso del usuario admin principal" });
       }
 
-	      const safePermissions = enforceRolePermissions(role, data.permissions);
-	      const previousAccess = await storage.getUserAccessControl(id);
-	      const saved = await storage.upsertUserAccessControl({
-	        userId: id,
-	        role,
-	        permissions: safePermissions,
-	        visibleFrom:
-	          isAccountantRole(role) && !previousAccess?.visibleFrom
-	            ? new Date().toISOString().slice(0, 10)
-	            : previousAccess?.visibleFrom || null,
-	        commissionRate: isAccountantRole(role) ? (previousAccess?.commissionRate || "0.1000") : "0.0000",
-	        commissionSeller: previousAccess?.commissionSeller || "Jose Eduardo",
-	      });
+      const saved = await storage.upsertUserAccessControl({
+        userId: id,
+        role: data.role,
+        permissions: data.permissions,
+      });
 
-	      res.json({
-	        id,
-	        role: saved.role,
-	        permissions: enforceRolePermissions(
-	          saved.role,
-	          mergePermissions(saved.permissions as Partial<AppPermissions> | undefined, false)
-	        ),
-	        visibleFrom: saved.visibleFrom || null,
-	        commissionRate: parseFloat(saved.commissionRate || "0"),
-	        commissionSeller: saved.commissionSeller || "Jose Eduardo",
-	      });
-	    } catch (error) {
+      res.json({
+        id,
+        role: saved.role,
+        permissions: mergePermissions(saved.permissions as Partial<AppPermissions> | undefined, false),
+      });
+    } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
@@ -700,11 +547,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Product routes
   app.get("/api/products", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
       const products = await storage.getProducts(getEffectiveUserId(req));
-      if (access.isAccountant) {
-        return res.json(products.map((product) => sanitizeProductForRestrictedRole(product)));
-      }
       res.json(products);
     } catch (error) {
       res.status(500).json({ error: "Error al obtener productos" });
@@ -763,11 +606,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/products", requireAuth, upload.single("image"), async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede crear productos" });
-      }
-
       const { name, price, baseCost, capitalIncrease, costProduct, costTransport, costLabel, costShrink, costBag, costLabelRemover, costExtras, imageUrl: selectedImageUrl } = req.body;
       
       // Calcular cost total
@@ -823,11 +661,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/products/:id", requireAuth, upload.single("image"), async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede editar productos" });
-      }
-
       const { id } = req.params;
       const { name, price, baseCost, capitalIncrease, costProduct, costTransport, costLabel, costShrink, costBag, costLabelRemover, costExtras, imageUrl: selectedImageUrl } = req.body;
       
@@ -887,11 +720,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/products/:id", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede eliminar productos" });
-      }
-
       const { id } = req.params;
       
       const product = await storage.getProduct(id);
@@ -915,10 +743,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sales routes
   app.get("/api/sales", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede acceder al modulo de ventas" });
-      }
       const sales = await storage.getSales(getEffectiveUserId(req));
       res.json(sales);
     } catch (error) {
@@ -928,10 +752,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/sales", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede registrar ventas directas" });
-      }
       const { productId, quantity, date } = req.body;
       
       const product = await storage.getProduct(productId);
@@ -986,10 +806,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/daily-payment/:date", requireAuth, async (req, res) => {
     try {
       const { date } = req.params;
-      const access = await getAccessContext(req);
-      if (access.isAccountant && access.visibleFrom && date < access.visibleFrom) {
-        return res.json(null);
-      }
       const payment = await storage.getDailyPayment(getEffectiveUserId(req), date);
       res.json(payment || null);
     } catch (error) {
@@ -1003,10 +819,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   ]), async (req, res) => {
     try {
       const { paymentDate, isPaid } = req.body;
-      const access = await getAccessContext(req);
-      if (access.isAccountant && access.visibleFrom && paymentDate < access.visibleFrom) {
-        return res.status(400).json({ error: `Solo puedes registrar pagos desde ${access.visibleFrom}` });
-      }
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
       
       let imageComisionUrl: string | undefined;
@@ -1054,10 +866,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update sale date
   app.patch("/api/sales/:id", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede editar ventas directas" });
-      }
       const { id } = req.params;
       const { saleDate } = req.body;
       
@@ -1077,10 +885,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/sales/:id", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede eliminar ventas directas" });
-      }
       const { id } = req.params;
       const deleted = await storage.deleteSale(id);
       if (!deleted) {
@@ -1094,16 +898,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/reports", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
       const sales = await storage.getSales(getEffectiveUserId(req));
       const products = await storage.getProducts(getEffectiveUserId(req));
-      const visibleSales = access.isAccountant && access.visibleFrom
-        ? sales.filter((sale) => isOnOrAfterDate(sale.saleDate, access.visibleFrom))
-        : sales;
       
       const productMap = new Map(products.map(p => [p.id, p]));
       
-      const salesWithDetails = visibleSales.map(sale => {
+      const salesWithDetails = sales.map(sale => {
         const product = productMap.get(sale.productId);
         // Normalize date to YYYY-MM-DD format
         const dateValue: any = sale.saleDate;
@@ -1154,15 +954,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Expenses routes
   app.get("/api/expenses", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
       const expenses = await storage.getExpenses(getEffectiveUserId(req));
       const categories = await storage.getExpenseCategories(getEffectiveUserId(req));
       const categoryMap = new Map(categories.map(c => [c.id, c.name]));
-      const visibleExpenses = access.isAccountant && access.visibleFrom
-        ? expenses.filter((expense) => isOnOrAfterDate(expense.expenseDate, access.visibleFrom))
-        : expenses;
       
-      const expensesWithCategory = visibleExpenses.map(expense => ({
+      const expensesWithCategory = expenses.map(expense => ({
         ...expense,
         category: categoryMap.get(expense.categoryId) || "Sin categoría",
       }));
@@ -1175,10 +971,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/expenses", requireAuth, upload.single("image"), async (req, res) => {
     try {
       console.log("Creating expense, body:", req.body, "file:", req.file?.originalname);
-      const access = await getAccessContext(req);
-      if (access.isAccountant && access.visibleFrom && req.body.expenseDate < access.visibleFrom) {
-        return res.status(400).json({ error: `Solo puedes registrar gastos desde ${access.visibleFrom}` });
-      }
       
       let imageUrl = null;
       
@@ -1226,26 +1018,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/expenses/summary", requireAuth, async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
-      const access = await getAccessContext(req);
       
       if (!startDate || !endDate) {
         return res.status(400).json({ error: "Se requieren fechas de inicio y fin" });
       }
 
-      if (access.isAccountant && access.visibleFrom && String(endDate) < access.visibleFrom) {
-        return res.json({
-          expenses: [],
-          total: "0.00",
-        });
-      }
-
-      const effectiveStartDate = access.isAccountant
-        ? clampStartDate(String(startDate), access.visibleFrom)
-        : String(startDate);
-
       const expenses = await storage.getExpensesByDateRange(
         getEffectiveUserId(req),
-        effectiveStartDate,
+        startDate as string,
         endDate as string
       );
 
@@ -1299,12 +1079,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delivery Stock Entries routes
   app.get("/api/delivery-stock", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
       const entries = await storage.getDeliveryStockEntries(getEffectiveUserId(req));
-      const visibleEntries = access.isAccountant && access.visibleFrom
-        ? entries.filter((entry) => isOnOrAfterDate(entry.entryDate || entry.recordedAt, access.visibleFrom))
-        : entries;
-      res.json(visibleEntries);
+      res.json(entries);
     } catch (error) {
       res.status(500).json({ error: "Error al obtener entradas de stock" });
     }
@@ -1312,11 +1088,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/delivery-stock", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant && access.visibleFrom && req.body.entryDate && req.body.entryDate < access.visibleFrom) {
-        return res.status(400).json({ error: `Solo puedes registrar stock desde ${access.visibleFrom}` });
-      }
-
       const data = insertDeliveryStockEntrySchema.parse({
         ...req.body,
         userId: getEffectiveUserId(req),
@@ -1333,12 +1104,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/delivery-stock/:id", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
       const { id } = req.params;
       const { productId, quantity, entryDate } = req.body;
-      if (access.isAccountant && access.visibleFrom && entryDate && entryDate < access.visibleFrom) {
-        return res.status(400).json({ error: `Solo puedes registrar stock desde ${access.visibleFrom}` });
-      }
       const entry = await storage.updateDeliveryStockEntry(id, { productId, quantity, entryDate });
       res.json(entry);
     } catch (error) {
@@ -1359,12 +1126,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delivery Assignments routes
   app.get("/api/delivery-assignments", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
       const assignments = await storage.getDeliveryAssignments(getEffectiveUserId(req));
-      const visibleAssignments = access.isAccountant && access.visibleFrom
-        ? assignments.filter((assignment) => isOnOrAfterDate(assignment.assignedAt, access.visibleFrom))
-        : assignments;
-      res.json(visibleAssignments);
+      res.json(assignments);
     } catch (error) {
       res.status(500).json({ error: "Error al obtener asignaciones" });
     }
@@ -1404,27 +1167,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/delivery-assignments/report", requireAuth, async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
-      const access = await getAccessContext(req);
       
       if (!startDate || !endDate) {
         return res.status(400).json({ error: "Se requieren fechas de inicio y fin" });
       }
 
-      if (access.isAccountant && access.visibleFrom && String(endDate) < access.visibleFrom) {
-        return res.json({
-          assignments: [],
-          byDelivery: [],
-          grandTotal: "0.00",
-        });
-      }
-
-      const effectiveStartDate = access.isAccountant
-        ? clampStartDate(String(startDate), access.visibleFrom)
-        : String(startDate);
-
       const assignments = await storage.getDeliveryAssignmentsByDateRange(
         getEffectiveUserId(req),
-        effectiveStartDate,
+        startDate as string,
         endDate as string
       );
 
@@ -1472,10 +1222,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Capital Movements routes
   app.get("/api/capital-movements", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede acceder a capital" });
-      }
       const movements = await storage.getCapitalMovements(getEffectiveUserId(req));
       res.json(movements);
     } catch (error) {
@@ -1485,10 +1231,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/capital-movements", requireAuth, upload.single("image"), async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede registrar movimientos de capital" });
-      }
       let imageUrl = null;
       
       if (req.file) {
@@ -1519,10 +1261,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Gross Capital Movements routes (retiros de capital bruto)
   app.get("/api/gross-capital-movements", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede acceder a capital bruto" });
-      }
       const movements = await storage.getGrossCapitalMovements(getEffectiveUserId(req));
       res.json(movements);
     } catch (error) {
@@ -1532,10 +1270,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/gross-capital-movements", requireAuth, upload.single("image"), async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede registrar retiros de capital bruto" });
-      }
       let imageUrl = null;
       
       if (req.file) {
@@ -1565,10 +1299,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/gross-capital-movements/:id", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede editar retiros de capital bruto" });
-      }
       const { id } = req.params;
       const { description, amount, movementDate } = req.body;
       const movement = await storage.updateGrossCapitalMovement(id, { description, amount, movementDate });
@@ -1584,10 +1314,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/gross-capital-movements/:id", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede eliminar retiros de capital bruto" });
-      }
       const { id } = req.params;
       const deleted = await storage.deleteGrossCapitalMovement(id);
       if (!deleted) {
@@ -1629,12 +1355,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Seller Sales routes
   app.get("/api/seller-sales", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
       const sales = await storage.getSellerSales(getEffectiveUserId(req));
-      const visibleSales = access.isAccountant && access.visibleFrom
-        ? sales.filter((sale) => isOnOrAfterDate(sale.saleDate, access.visibleFrom))
-        : sales;
-      res.json(visibleSales);
+      res.json(sales);
     } catch (error) {
       res.status(500).json({ error: "Error al obtener ventas de vendedores" });
     }
@@ -1642,11 +1364,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/seller-sales", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant && access.visibleFrom && req.body.saleDate < access.visibleFrom) {
-        return res.status(400).json({ error: `Solo puedes registrar ventas desde ${access.visibleFrom}` });
-      }
-
       const data = insertSellerSaleSchema.parse({
         sellerId: req.body.sellerId,
         productId: req.body.productId,

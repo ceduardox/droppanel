@@ -1,11 +1,15 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Check, X, Image, Eye } from "lucide-react";
+import { Plus, Pencil, Check, X, Image, Eye, Calendar as CalendarIcon, Upload } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import {
   useExpenseCategories,
   useCreateExpenseCategory,
@@ -13,6 +17,68 @@ import {
   useExpensesSummary,
   useUpdateExpense,
 } from "@/lib/api";
+
+function toISODate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function fromISODate(value: string): Date | undefined {
+  if (!value) return undefined;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
+type DateFieldProps = {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  testId: string;
+};
+
+function DateField({ id, label, value, onChange, testId }: DateFieldProps) {
+  const [open, setOpen] = useState(false);
+  const selectedDate = fromISODate(value);
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            type="button"
+            variant="outline"
+            className={cn(
+              "h-9 w-full justify-between rounded-md border-input bg-background px-3 text-left text-sm font-medium",
+              !selectedDate && "text-muted-foreground"
+            )}
+            data-testid={testId}
+          >
+            <span>{selectedDate ? format(selectedDate, "dd/MM/yyyy") : "Seleccionar fecha"}</span>
+            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={(date) => {
+              if (!date) return;
+              onChange(toISODate(date));
+              setOpen(false);
+            }}
+            initialFocus
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
 
 export default function Expenses() {
   const { toast } = useToast();
@@ -29,6 +95,7 @@ export default function Expenses() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDate, setEditDate] = useState("");
   const [editCategory, setEditCategory] = useState("");
+  const expenseImageInputRef = useRef<HTMLInputElement>(null);
 
   const { data: categories = [], isLoading: categoriesLoading } = useExpenseCategories() as { data: any[], isLoading: boolean };
   const createCategory = useCreateExpenseCategory();
@@ -74,8 +141,7 @@ export default function Expenses() {
       setAmount("");
       setExpenseDate(new Date().toISOString().split('T')[0]);
       setExpenseImage(null);
-      const fileInput = document.getElementById("expenseImage") as HTMLInputElement;
-      if (fileInput) fileInput.value = "";
+      if (expenseImageInputRef.current) expenseImageInputRef.current.value = "";
       toast({
         title: "Gasto registrado",
         description: "El gasto se ha registrado correctamente",
@@ -116,7 +182,7 @@ export default function Expenses() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="mx-auto w-full max-w-none space-y-5 px-1 sm:px-4 lg:px-6">
       <h1 className="text-3xl font-bold">Gestión de Gastos</h1>
 
       <Card>
@@ -175,32 +241,68 @@ export default function Expenses() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="expenseDate">Fecha</Label>
-              <Input
-                id="expenseDate"
-                type="date"
-                value={expenseDate}
-                onChange={(e) => setExpenseDate(e.target.value)}
-                data-testid="input-expense-date"
-              />
-            </div>
+            <DateField
+              id="expenseDate"
+              label="Fecha"
+              value={expenseDate}
+              onChange={setExpenseDate}
+              testId="input-expense-date"
+            />
 
             <div className="space-y-2">
               <Label htmlFor="expenseImage">Comprobante (opcional)</Label>
-              <Input
+              <input
                 id="expenseImage"
+                ref={expenseImageInputRef}
                 type="file"
                 accept="image/*"
+                className="sr-only"
                 onChange={(e) => setExpenseImage(e.target.files?.[0] || null)}
                 data-testid="input-expense-image"
               />
-              {expenseImage && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Image className="h-3 w-3" />
-                  {expenseImage.name}
-                </p>
-              )}
+              <div className="rounded-lg border border-dashed border-input bg-muted/30 p-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                      <Upload className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">
+                        {expenseImage ? "Comprobante seleccionado" : "Subir comprobante"}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {expenseImage ? expenseImage.name : "JPG, PNG o WEBP"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => expenseImageInputRef.current?.click()}
+                      data-testid="button-pick-expense-image"
+                    >
+                      <Image className="h-4 w-4" />
+                      {expenseImage ? "Cambiar" : "Seleccionar"}
+                    </Button>
+                    {expenseImage && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setExpenseImage(null);
+                          if (expenseImageInputRef.current) expenseImageInputRef.current.value = "";
+                        }}
+                        data-testid="button-clear-expense-image"
+                      >
+                        Quitar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <Button
@@ -220,27 +322,21 @@ export default function Expenses() {
           <CardTitle>Reporte de Gastos</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="startDate">Fecha Inicial</Label>
-              <Input
-                id="startDate"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                data-testid="input-start-date"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="endDate">Fecha Final</Label>
-              <Input
-                id="endDate"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                data-testid="input-end-date"
-              />
-            </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+            <DateField
+              id="startDate"
+              label="Fecha Inicial"
+              value={startDate}
+              onChange={setStartDate}
+              testId="input-start-date"
+            />
+            <DateField
+              id="endDate"
+              label="Fecha Final"
+              value={endDate}
+              onChange={setEndDate}
+              testId="input-end-date"
+            />
           </div>
 
           {summaryLoading ? (

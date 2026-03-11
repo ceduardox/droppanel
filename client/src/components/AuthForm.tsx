@@ -9,9 +9,10 @@ interface AuthFormProps {
   mode: "login" | "register";
   onToggleMode: () => void;
   onSubmit: (data: { name?: string; username: string; password: string }) => void;
+  showModeToggle?: boolean;
 }
 
-export default function AuthForm({ mode, onToggleMode, onSubmit }: AuthFormProps) {
+export default function AuthForm({ mode, onToggleMode, onSubmit, showModeToggle = true }: AuthFormProps) {
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -94,17 +95,19 @@ export default function AuthForm({ mode, onToggleMode, onSubmit }: AuthFormProps
           <Button type="submit" className="h-11 w-full rounded-xl text-sm font-semibold" data-testid="button-submit">
             {mode === "login" ? "Entrar al Panel" : "Crear Cuenta"}
           </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            {mode === "login" ? "No tienes cuenta? " : "Ya tienes cuenta? "}
-            <button
-              type="button"
-              onClick={onToggleMode}
-              className="font-semibold text-primary hover:underline"
-              data-testid="button-toggle-mode"
-            >
-              {mode === "login" ? "Registrate aqui" : "Inicia sesion aqui"}
-            </button>
-          </p>
+          {showModeToggle && (
+            <p className="text-center text-sm text-muted-foreground">
+              {mode === "login" ? "No tienes cuenta? " : "Ya tienes cuenta? "}
+              <button
+                type="button"
+                onClick={onToggleMode}
+                className="font-semibold text-primary hover:underline"
+                data-testid="button-toggle-mode"
+              >
+                {mode === "login" ? "Registrate aqui" : "Inicia sesion aqui"}
+              </button>
+            </p>
+          )}
         </CardFooter>
       </form>
     </Card>

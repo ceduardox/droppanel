@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import multer from "multer";
-import { insertUserSchema, insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema, insertGrossCapitalMovementSchema, insertSellerSchema, insertSellerSaleSchema } from "@shared/schema";
+import { insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema, insertGrossCapitalMovementSchema, insertSellerSchema, insertSellerSaleSchema } from "@shared/schema";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import session from "express-session";
@@ -383,39 +383,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // Auth routes
-  app.post("/api/auth/register", async (req, res) => {
-    try {
-      const data = insertUserSchema.parse({
-        ...req.body,
-        username: req.body.username?.trim(),
-        name: req.body.name?.trim(),
-      });
-      
-      // Check if user exists
-      const existingUser = await storage.getUserByUsername(data.username);
-      if (existingUser) {
-        return res.status(400).json({ error: "El nombre de usuario ya existe" });
-      }
-
-      const user = await storage.createUser(data);
-      req.session.userId = user.id;
-      
-      // Guardar sesión antes de enviar respuesta
-      await new Promise<void>((resolve, reject) => {
-        req.session.save((err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-
-      const payload = await buildAuthPayload(user.id, false);
-      res.json(payload);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: error.errors });
-      }
-      res.status(500).json({ error: "Error al crear usuario" });
-    }
+  app.post("/api/auth/register", async (_req, res) => {
+    return res.status(403).json({
+      error: "Registro deshabilitado. Solicita una cuenta al administrador.",
+    });
   });
 
   app.post("/api/auth/login", async (req, res) => {
@@ -1717,3 +1688,4 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   return httpServer;
 }
+

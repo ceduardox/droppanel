@@ -1025,10 +1025,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/sales", requireAuth, async (req, res) => {
     try {
-      const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede registrar ventas directas" });
-      }
       const { productId, quantity, date } = req.body;
       
       const product = await storage.getProduct(productId);

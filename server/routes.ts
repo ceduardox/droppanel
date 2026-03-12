@@ -200,6 +200,31 @@ const sanitizeProductForRestrictedRole = (product: any) => ({
   createdAt: product.createdAt,
 });
 
+const resolvePrimaryDataOwner = async () => {
+  const configuredOwner = process.env.DATA_OWNER_USERNAME?.trim();
+  const allUsers = await storage.getAllUsers();
+
+  const findByUsername = (username: string) =>
+    allUsers.find((candidate) => candidate.username.trim().toLowerCase() === username.trim().toLowerCase());
+
+  if (configuredOwner) {
+    const exact = await storage.getUserByUsername(configuredOwner);
+    if (exact) return exact;
+    const normalized = findByUsername(configuredOwner);
+    if (normalized) return await storage.getUser(normalized.id);
+  }
+
+  // Common owner usernames used in this project history.
+  for (const fallback of ["jhonattan", "jhoanttan"]) {
+    const normalized = findByUsername(fallback);
+    if (normalized) {
+      return await storage.getUser(normalized.id);
+    }
+  }
+
+  return null;
+};
+
 const buildAuthPayload = async (userId: string, isAdmin: boolean) => {
   const user = await storage.getUser(userId);
   if (!user) return null;
@@ -405,8 +430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session.isAdmin = false;
 
       const normalizedUsername = username?.trim().toLowerCase();
-      const primaryDataOwnerUsername = process.env.DATA_OWNER_USERNAME?.trim() || "Jhonattan";
-      const primaryDataOwner = await storage.getUserByUsername(primaryDataOwnerUsername);
+      const primaryDataOwner = await resolvePrimaryDataOwner();
 
       // Admin impersonation: "arely" sees all data from primary owner.
       if (normalizedUsername === "arely") {

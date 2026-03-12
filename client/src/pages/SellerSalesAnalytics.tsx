@@ -59,8 +59,8 @@ const sellerChartConfig = {
 } satisfies ChartConfig;
 
 const dailyChartConfig = {
-  total: {
-    label: "Total diario",
+  sales: {
+    label: "Ventas del dia",
     color: "#0f7f9f",
   },
 } satisfies ChartConfig;
@@ -89,7 +89,7 @@ export default function SellerSalesAnalytics() {
   const productMap = new Map((products as Product[]).map((product) => [product.id, product.name]));
 
   const sellerTotalsRecord: Record<string, { seller: string; total: number; units: number; tickets: number }> = {};
-  const dailyTotalsRecord: Record<string, { date: string; total: number; units: number }> = {};
+  const dailyTotalsRecord: Record<string, { date: string; total: number; units: number; sales: number }> = {};
   const productTotalsRecord: Record<string, { product: string; total: number; units: number }> = {};
 
   filteredSales.forEach((sale) => {
@@ -105,10 +105,11 @@ export default function SellerSalesAnalytics() {
     sellerTotalsRecord[sellerName].tickets += 1;
 
     if (!dailyTotalsRecord[sale.saleDate]) {
-      dailyTotalsRecord[sale.saleDate] = { date: sale.saleDate, total: 0, units: 0 };
+      dailyTotalsRecord[sale.saleDate] = { date: sale.saleDate, total: 0, units: 0, sales: 0 };
     }
     dailyTotalsRecord[sale.saleDate].total += total;
     dailyTotalsRecord[sale.saleDate].units += sale.quantity || 0;
+    dailyTotalsRecord[sale.saleDate].sales += 1;
 
     if (!productTotalsRecord[productName]) {
       productTotalsRecord[productName] = { product: productName, total: 0, units: 0 };
@@ -373,7 +374,7 @@ export default function SellerSalesAnalytics() {
         <Card className="rounded-[1.75rem] border-[#b7c9e6] bg-white/92 shadow-sm">
           <CardHeader>
             <CardTitle className="text-xl text-[#102544]">Evolucion diaria</CardTitle>
-            <CardDescription>Seguimiento del total vendido por fecha</CardDescription>
+            <CardDescription>Seguimiento de la cantidad de ventas por fecha</CardDescription>
           </CardHeader>
           <CardContent>
             {dailyChartData.length === 0 ? (
@@ -387,14 +388,19 @@ export default function SellerSalesAnalytics() {
                   <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={24} />
                   <YAxis tickLine={false} axisLine={false} width={72} />
                   <ChartTooltip
-                    content={<ChartTooltipContent labelKey="label" formatter={(value) => formatCurrency(Number(value || 0))} />}
+                    content={
+                      <ChartTooltipContent
+                        labelKey="label"
+                        formatter={(value) => `${Number(value || 0)} ventas`}
+                      />
+                    }
                   />
                   <Line
                     type="monotone"
-                    dataKey="total"
-                    stroke="var(--color-total)"
+                    dataKey="sales"
+                    stroke="var(--color-sales)"
                     strokeWidth={3}
-                    dot={{ r: 3, fill: "var(--color-total)" }}
+                    dot={{ r: 3, fill: "var(--color-sales)" }}
                     activeDot={{ r: 5 }}
                   />
                 </LineChart>

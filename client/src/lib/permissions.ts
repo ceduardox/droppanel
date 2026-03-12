@@ -79,7 +79,7 @@ export const getRolePresetPermissions = (role: string): AppPermissions | null =>
   return {
     dashboard: true,
     products: false,
-    sales: false,
+    sales: true,
     reports: true,
     salesReport: true,
     capitalIncrease: false,

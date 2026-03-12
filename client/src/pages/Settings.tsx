@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
   useAdminCreateUser,
+  useAdminUpdateUserName,
   useAdminUpdateUserAccess,
   useAdminUsers,
   useBusinessSettings,
@@ -51,6 +52,7 @@ const dateFormatOptions: BusinessSettingsPayload["dateFormat"][] = [
 ];
 
 type AccessEditorState = {
+  name: string;
   role: string;
   permissions: AppPermissions;
 };
@@ -75,6 +77,7 @@ export default function Settings() {
   };
   const { data: adminUsers = [], isLoading: loadingAdminUsers } = useAdminUsers(isAdmin);
   const createAdminUser = useAdminCreateUser();
+  const updateAdminUserName = useAdminUpdateUserName();
   const updateAdminAccess = useAdminUpdateUserAccess();
   const resetUserPassword = useAdminResetUserPassword();
   const saveBusinessSettings = useSaveBusinessSettings();
@@ -110,6 +113,7 @@ export default function Settings() {
     const nextState: Record<string, AccessEditorState> = {};
     adminUsers.forEach((adminUser) => {
       nextState[adminUser.id] = {
+        name: adminUser.name,
         role: adminUser.role || "viewer",
         permissions: normalizePermissions(adminUser.permissions, true),
       };
@@ -179,6 +183,7 @@ export default function Settings() {
     setAccessEditors((prev) => ({
       ...prev,
       [userId]: {
+        name: prev[userId]?.name || "",
         role: prev[userId]?.role || "viewer",
         permissions: {
           ...(prev[userId]?.permissions || getPermissionsTemplate(false)),
@@ -200,6 +205,7 @@ export default function Settings() {
     setAccessEditors((prev) => ({
       ...prev,
       [userId]: {
+        name: prev[userId]?.name || "",
         role: role.trim(),
         permissions: preset,
       },
@@ -241,12 +247,11 @@ export default function Settings() {
     if (!draft) return;
     try {
       const roleValue = draft.role.trim();
-      const preset = getRolePresetPermissions(roleValue);
       await updateAdminAccess.mutateAsync({
         id: userId,
         data: {
           role: roleValue,
-          permissions: preset || draft.permissions,
+          permissions: draft.permissions,
         },
       });
       toast({
@@ -257,6 +262,36 @@ export default function Settings() {
       toast({
         title: "Error",
         description: error?.message || "No se pudo actualizar el acceso.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSaveUserName = async (userId: string) => {
+    const draft = accessEditors[userId];
+    const nextName = draft?.name?.trim();
+    if (!nextName || nextName.length < 2) {
+      toast({
+        title: "Nombre invalido",
+        description: "Ingresa al menos 2 caracteres.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await updateAdminUserName.mutateAsync({
+        id: userId,
+        data: { name: nextName },
+      });
+      toast({
+        title: "Nombre actualizado",
+        description: "El nombre del usuario fue guardado.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.message || "No se pudo actualizar el nombre.",
         variant: "destructive",
       });
     }
@@ -592,31 +627,32 @@ export default function Settings() {
                     const editor = accessEditors[adminUser.id];
                     const editorPermissions = editor?.permissions || normalizePermissions(adminUser.permissions, true);
                     const isLocked = adminUser.isSystemAdmin;
-                    return (
-                      <div key={adminUser.id} className="rounded-xl border border-[#ccd8ec] bg-white p-4">
-                        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-[#1a2a43]">
-                              {adminUser.name} ({adminUser.username})
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {isLocked ? "Admin principal (acceso fijo)" : "Usuario configurable"}
-                            </p>
-                          </div>
+	                    return (
+	                      <div key={adminUser.id} className="rounded-xl border border-[#ccd8ec] bg-white p-4">
+	                        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+	                          <div>
+	                            <p className="text-sm font-semibold text-[#1a2a43]">
+	                              {adminUser.username}
+	                            </p>
+	                            <p className="text-xs text-muted-foreground">
+	                              {isLocked ? "Admin principal (acceso fijo)" : "Usuario configurable"}
+	                            </p>
+	                          </div>
                           <div className="w-full space-y-1 sm:w-72">
                             <div className="flex gap-2">
                               <Input
                                 value={editor?.role || adminUser.role}
                                 disabled={isLocked}
-                                onChange={(e) =>
-                                  setAccessEditors((prev) => ({
-                                    ...prev,
-                                    [adminUser.id]: {
-                                      role: e.target.value,
-                                      permissions: editorPermissions,
-                                    },
-                                  }))
-                                }
+	                                onChange={(e) =>
+	                                  setAccessEditors((prev) => ({
+	                                    ...prev,
+	                                    [adminUser.id]: {
+	                                      name: prev[adminUser.id]?.name || adminUser.name,
+	                                      role: e.target.value,
+	                                      permissions: editorPermissions,
+	                                    },
+	                                  }))
+	                                }
                                 onBlur={() => applyPresetToExistingRole(adminUser.id, editor?.role || adminUser.role)}
                                 data-testid={`input-role-${adminUser.id}`}
                               />
@@ -636,10 +672,37 @@ export default function Settings() {
                                 Inicio visible: <span className="font-semibold">{adminUser.visibleFrom}</span>
                               </p>
                             )}
-                          </div>
-                        </div>
+	                          </div>
+	                        </div>
 
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+	                        <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-[1fr_auto]">
+	                          <Input
+	                            value={editor?.name || adminUser.name}
+	                            onChange={(e) =>
+	                              setAccessEditors((prev) => ({
+	                                ...prev,
+	                                [adminUser.id]: {
+	                                  name: e.target.value,
+	                                  role: editor?.role || adminUser.role,
+	                                  permissions: editorPermissions,
+	                                },
+	                              }))
+	                            }
+	                            placeholder="Nombre del usuario"
+	                            data-testid={`input-name-${adminUser.id}`}
+	                          />
+	                          <Button
+	                            type="button"
+	                            variant="outline"
+	                            onClick={() => handleSaveUserName(adminUser.id)}
+	                            disabled={updateAdminUserName.isPending}
+	                            data-testid={`button-save-name-${adminUser.id}`}
+	                          >
+	                            {updateAdminUserName.isPending ? "Guardando..." : "Guardar nombre"}
+	                          </Button>
+	                        </div>
+
+	                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                           {appPermissionKeys.map((key) => (
                             <label key={`${adminUser.id}-${key}`} className="flex items-center gap-2 rounded-md border border-[#d4e0f1] bg-[#f9fbff] px-3 py-2 text-sm">
                               <Checkbox

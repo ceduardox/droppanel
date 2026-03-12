@@ -57,6 +57,7 @@ export interface IStorage {
   getAllUsers(): Promise<Array<{ id: string; name: string; username: string }>>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserName(userId: string, name: string): Promise<User | undefined>;
   verifyPassword(username: string, password: string): Promise<User | null>;
   setUserPassword(userId: string, password: string): Promise<void>;
   getUserAccessControl(userId: string): Promise<UserAccessControl | undefined>;
@@ -161,6 +162,15 @@ export class DbStorage implements IStorage {
         ...insertUser,
         password: hashedPassword,
       })
+      .returning();
+    return result[0];
+  }
+
+  async updateUserName(userId: string, name: string): Promise<User | undefined> {
+    const result = await db
+      .update(users)
+      .set({ name })
+      .where(eq(users.id, userId))
       .returning();
     return result[0];
   }

@@ -70,6 +70,10 @@ export interface AdminUpdateAccessPayload {
   permissions: AppPermissions;
 }
 
+export interface AdminUpdateUserNamePayload {
+  name: string;
+}
+
 export function useAdminUsers(enabled: boolean) {
   return useQuery({
     queryKey: ["/api/admin/users"],
@@ -102,6 +106,21 @@ export function useAdminUpdateUserAccess() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+    },
+  });
+}
+
+export function useAdminUpdateUserName() {
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: AdminUpdateUserNamePayload }) => {
+      return apiRequest(`/api/admin/users/${id}/name`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api", "auth", "me"] });
     },
   });
 }

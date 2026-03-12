@@ -93,6 +93,10 @@ const adminUserAccessUpdateSchema = z.object({
   permissions: permissionSchema,
 });
 
+const adminUserNameUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+});
+
 const requireAdmin = (req: any, res: any, next: any) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "No autenticado" });
@@ -121,7 +125,6 @@ const enforceRolePermissions = (role: string, permissions: AppPermissions): AppP
     ...permissions,
     dashboard: true,
     products: false,
-    sales: false,
     capitalIncrease: false,
     grossCapital: false,
     settings: false,
@@ -622,7 +625,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-	  app.patch("/api/admin/users/:id/access", requireAdmin, async (req, res) => {
+  app.patch("/api/admin/users/:id/access", requireAdmin, async (req, res) => {
 	    try {
 	      const { id } = req.params;
 	      const data = adminUserAccessUpdateSchema.parse(req.body);
@@ -667,6 +670,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Error al actualizar permisos de usuario" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id/name", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const body = adminUserNameUpdateSchema.parse(req.body);
+      const user = await storage.getUser(id);
+      if (!user) {
+        return res.status(404).json({ error: "Usuario no encontrado" });
+      }
+
+      const updated = await storage.updateUserName(id, body.name.trim());
+      if (!updated) {
+        return res.status(404).json({ error: "Usuario no encontrado" });
+      }
+
+      res.json({
+        id: updated.id,
+        name: updated.name,
+        username: updated.username,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al actualizar nombre de usuario" });
     }
   });
 

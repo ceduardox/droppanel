@@ -365,6 +365,10 @@ export function useExpensesSummary(startDate: string, endDate: string) {
 export function useDeliveries() {
   return useQuery({
     queryKey: ["/api/deliveries"],
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: 30000,
   });
 }
 

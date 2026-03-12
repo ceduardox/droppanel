@@ -399,17 +399,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       req.session.userId = user.id;
-      
+
       // Clear admin flags first
       req.session.impersonateUserId = undefined;
       req.session.isAdmin = false;
-      
-      // Admin impersonation: "arely" sees all data from "Jhonattan"
-      if (username?.trim().toLowerCase() === "arely") {
-        const jhonattanUser = await storage.getUserByUsername("Jhonattan");
-        if (jhonattanUser) {
-          req.session.impersonateUserId = jhonattanUser.id;
+
+      const normalizedUsername = username?.trim().toLowerCase();
+      const primaryDataOwnerUsername = process.env.DATA_OWNER_USERNAME?.trim() || "Jhonattan";
+      const primaryDataOwner = await storage.getUserByUsername(primaryDataOwnerUsername);
+
+      // Admin impersonation: "arely" sees all data from primary owner.
+      if (normalizedUsername === "arely") {
+        if (primaryDataOwner) {
+          req.session.impersonateUserId = primaryDataOwner.id;
           req.session.isAdmin = true;
+        }
+      } else {
+        // All operational users work over shared business data, while
+        // permissions continue being enforced by their own access profile.
+        if (primaryDataOwner && user.id !== primaryDataOwner.id) {
+          req.session.impersonateUserId = primaryDataOwner.id;
         }
       }
       

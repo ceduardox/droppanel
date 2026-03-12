@@ -1,8 +1,8 @@
 import StatsCard from "@/components/StatsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, DollarSign, Package, TrendingUp } from "lucide-react";
-import { useReports } from "@/lib/api";
+import { Calendar, DollarSign, Package, Receipt, TrendingUp } from "lucide-react";
+import { useExpenses, useReports } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 function formatDateLabel(date: Date): string {
@@ -13,8 +13,28 @@ function formatDateLabel(date: Date): string {
   }).format(date);
 }
 
+function toIsoDate(value: unknown): string | null {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === "string") {
+    return value.includes("T") ? value.split("T")[0] : value.slice(0, 10);
+  }
+  return null;
+}
+
+function getTodayIsoLocal(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function Dashboard() {
   const { data: salesWithProducts = [], isLoading } = useReports();
+  const { data: expenses = [] } = useExpenses();
   const { user } = useAuth();
   const isAccountant = user?.role?.trim().toLowerCase() === "contador";
 
@@ -47,6 +67,20 @@ export default function Dashboard() {
       date: item.saleDate,
     }));
 
+  const todayIso = getTodayIsoLocal();
+  const todaySales = (salesWithProducts as any[]).reduce((sum: number, item: any) => {
+    if (toIsoDate(item.saleDate) !== todayIso) return sum;
+    const price = parseFloat(item.product?.price || 0);
+    return sum + price * item.quantity;
+  }, 0);
+
+  const todayExpenses = (expenses as any[]).reduce((sum: number, expense: any) => {
+    if (toIsoDate(expense.expenseDate) !== todayIso) return sum;
+    return sum + parseFloat(expense.amount || 0);
+  }, 0);
+
+  const dailyUtility = todaySales - todayExpenses;
+
   return (
     <div className="space-y-5">
       <Card className="overflow-hidden border-[#b7c9e6] bg-[linear-gradient(112deg,#e6edf8_0%,#eef3fb_56%,#e1eefc_100%)]">
@@ -66,10 +100,11 @@ export default function Dashboard() {
 
       {isAccountant ? (
         <>
-          <div className="grid gap-4 md:grid-cols-3">
-            <StatsCard title="Ventas Registradas" value={`${totalSales.toFixed(2)} Bs`} subtitle="Desde tu fecha de acceso" icon={DollarSign} />
-            <StatsCard title="Productos Vendidos" value={totalProducts.toString()} subtitle="Unidades" icon={Package} />
-            <StatsCard title="Registros Recientes" value={recentSales.length.toString()} subtitle="Ultimas operaciones" icon={Calendar} />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatsCard title="Utilidad de Hoy" value={`${dailyUtility.toFixed(2)} Bs`} subtitle="Ventas hoy - gastos hoy" icon={TrendingUp} />
+            <StatsCard title="Ventas de Hoy" value={`${todaySales.toFixed(2)} Bs`} subtitle="Ingresos del dia" icon={DollarSign} />
+            <StatsCard title="Gastos de Hoy" value={`${todayExpenses.toFixed(2)} Bs`} subtitle="Egresos del dia" icon={Receipt} />
+            <StatsCard title="Ventas Registradas" value={`${totalSales.toFixed(2)} Bs`} subtitle="Desde tu fecha de acceso" icon={Package} />
           </div>
 
           <Card className="border-[#b7c9e6] bg-white/90">

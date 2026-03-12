@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useCapitalMovements, useCreateCapitalMovement, useReports } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,12 +15,48 @@ interface CapitalMovement {
   amount: string;
   movementDate: string;
   imageUrl: string | null;
+  createdAt?: string;
+}
+
+interface LedgerEntry {
+  id: string;
+  date: string;
+  amount: number;
+  signedAmount: number;
+  kind: "credito" | "debito";
+  source: "manual" | "venta";
+  description: string;
+  detail: string;
+  imageUrl: string | null;
+  sortStamp: number;
 }
 
 function formatDateString(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-');
-  const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const [year, month, day] = dateStr.split("-");
+  const months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
   return `${parseInt(day)} ${months[parseInt(month) - 1]} ${year}`;
+}
+
+function formatGroupDate(dateStr: string): string {
+  const date = new Date(`${dateStr}T00:00:00`);
+  const label = new Intl.DateTimeFormat("es-BO", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(date);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function parseAmount(value: unknown): number {
+  const parsed = parseFloat(String(value ?? 0));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function buildSortStamp(date: string, createdAt?: string, fallbackOrder = 0): number {
+  const created = createdAt ? new Date(createdAt).getTime() : NaN;
+  if (Number.isFinite(created)) return created;
+  const base = new Date(`${date}T00:00:00`).getTime();
+  return base + fallbackOrder;
 }
 
 export default function CapitalIncrease() {
@@ -28,11 +64,11 @@ export default function CapitalIncrease() {
   const { data: salesWithProducts = [] } = useReports();
   const createMovement = useCreateCapitalMovement();
   const { toast } = useToast();
-  
-  const today = new Date().toISOString().split('T')[0];
+
+  const today = new Date().toISOString().split("T")[0];
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
-  
+
   const [type, setType] = useState("credito");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -42,14 +78,14 @@ export default function CapitalIncrease() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!amount || parseFloat(amount) <= 0) {
-      toast({ title: "Error", description: "Ingresa un monto válido", variant: "destructive" });
+      toast({ title: "Error", description: "Ingresa un monto valido", variant: "destructive" });
       return;
     }
 
     if (type === "retiro" && !selectedFile) {
-      toast({ title: "Error", description: "Debes subir un comprobante para retiros", variant: "destructive" });
+      toast({ title: "Error", description: "Debes subir un comprobante para debitos", variant: "destructive" });
       return;
     }
 
@@ -64,46 +100,112 @@ export default function CapitalIncrease() {
 
     try {
       await createMovement.mutateAsync(formData);
-      toast({ title: "Éxito", description: "Movimiento registrado correctamente" });
+      toast({ title: "Exito", description: "Movimiento registrado correctamente" });
       setAmount("");
       setDescription("");
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch (error) {
+    } catch {
       toast({ title: "Error", description: "No se pudo registrar el movimiento", variant: "destructive" });
     }
   };
 
-  const filteredMovements = (movements as CapitalMovement[]).filter((m) => {
-    if (!startDate || !endDate) return true;
-    return m.movementDate >= startDate && m.movementDate <= endDate;
-  });
+  const manualEntries = useMemo<LedgerEntry[]>(() => {
+    return (movements as CapitalMovement[]).map((movement, index) => {
+      const movementAmount = parseAmount(movement.amount);
+      const movementKind = movement.type === "credito" ? "credito" : "debito";
+      return {
+        id: `manual-${movement.id}`,
+        date: movement.movementDate,
+        amount: movementAmount,
+        signedAmount: movementKind === "credito" ? movementAmount : -movementAmount,
+        kind: movementKind,
+        source: "manual",
+        description: movement.description?.trim() || (movementKind === "credito" ? "Credito manual" : "Debito manual"),
+        detail: movementKind === "credito" ? "Ingreso manual" : "Egreso manual",
+        imageUrl: movement.imageUrl || null,
+        sortStamp: buildSortStamp(movement.movementDate, movement.createdAt, index),
+      };
+    });
+  }, [movements]);
 
-  const filteredSales = (salesWithProducts as any[]).filter((item: any) => {
-    if (!item.product) return false;
-    const hasCapitalIncrease = item.product.capitalIncrease !== null && 
-                               item.product.capitalIncrease !== undefined && 
-                               parseFloat(item.product.capitalIncrease) > 0;
-    if (!hasCapitalIncrease) return false;
-    if (startDate && item.saleDate < startDate) return false;
-    if (endDate && item.saleDate > endDate) return false;
-    return true;
-  });
+  const salesEntries = useMemo<LedgerEntry[]>(() => {
+    return (salesWithProducts as any[])
+      .filter((item: any) => item?.product && parseAmount(item.product.capitalIncrease) > 0)
+      .map((item: any, index: number) => {
+        const capitalIncrease = parseAmount(item.product.capitalIncrease);
+        const quantity = parseAmount(item.quantity);
+        const movementAmount = capitalIncrease * quantity;
 
-  const totalFromSales = filteredSales.reduce((sum: number, item: any) => {
-    const capitalIncrease = parseFloat(item.product.capitalIncrease || 0);
-    return sum + (capitalIncrease * item.quantity);
-  }, 0);
+        return {
+          id: `sale-${item.id}`,
+          date: item.saleDate,
+          amount: movementAmount,
+          signedAmount: movementAmount,
+          kind: "credito",
+          source: "venta",
+          description: `Venta ${item.product.name}`,
+          detail: `${quantity} unid x ${capitalIncrease.toFixed(2)} Bs`,
+          imageUrl: null,
+          sortStamp: buildSortStamp(item.saleDate, item.createdAt, index),
+        };
+      });
+  }, [salesWithProducts]);
 
-  const totalCredits = filteredMovements
-    .filter(m => m.type === "credito")
-    .reduce((sum, m) => sum + parseFloat(m.amount), 0);
+  const allEntries = useMemo<LedgerEntry[]>(() => {
+    return [...manualEntries, ...salesEntries].sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      if (a.sortStamp !== b.sortStamp) return a.sortStamp - b.sortStamp;
+      return a.id.localeCompare(b.id);
+    });
+  }, [manualEntries, salesEntries]);
 
-  const totalWithdrawals = filteredMovements
-    .filter(m => m.type === "retiro")
-    .reduce((sum, m) => sum + parseFloat(m.amount), 0);
+  const openingBalance = useMemo(() => {
+    return allEntries
+      .filter((entry) => entry.date < startDate)
+      .reduce((sum, entry) => sum + entry.signedAmount, 0);
+  }, [allEntries, startDate]);
 
-  const grandTotal = totalFromSales + totalCredits - totalWithdrawals;
+  const entriesInRange = useMemo(() => {
+    return allEntries.filter((entry) => entry.date >= startDate && entry.date <= endDate);
+  }, [allEntries, startDate, endDate]);
+
+  const ledgerWithBalance = useMemo(() => {
+    let runningBalance = openingBalance;
+    return entriesInRange.map((entry) => {
+      runningBalance += entry.signedAmount;
+      return {
+        ...entry,
+        balanceAfter: runningBalance,
+      };
+    });
+  }, [entriesInRange, openingBalance]);
+
+  const groupedLedger = useMemo(() => {
+    const grouped: Record<string, Array<LedgerEntry & { balanceAfter: number }>> = {};
+    ledgerWithBalance.forEach((entry) => {
+      if (!grouped[entry.date]) grouped[entry.date] = [];
+      grouped[entry.date].push(entry);
+    });
+
+    return Object.keys(grouped)
+      .sort((a, b) => (a < b ? 1 : -1))
+      .map((date) => ({ date, entries: grouped[date] }));
+  }, [ledgerWithBalance]);
+
+  const totalFromSales = entriesInRange
+    .filter((entry) => entry.source === "venta")
+    .reduce((sum, entry) => sum + entry.amount, 0);
+
+  const totalCredits = entriesInRange
+    .filter((entry) => entry.source === "manual" && entry.kind === "credito")
+    .reduce((sum, entry) => sum + entry.amount, 0);
+
+  const totalDebits = entriesInRange
+    .filter((entry) => entry.kind === "debito")
+    .reduce((sum, entry) => sum + entry.amount, 0);
+
+  const closingBalance = openingBalance + totalFromSales + totalCredits - totalDebits;
 
   const handleViewImage = (imageUrl: string) => {
     window.open(`/api/storage/${imageUrl}`, "_blank");
@@ -134,18 +236,18 @@ export default function CapitalIncrease() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="credito">Crédito (Suma)</SelectItem>
-                    <SelectItem value="retiro">Retiro / Pago (Resta)</SelectItem>
+                    <SelectItem value="credito">Credito (Suma)</SelectItem>
+                    <SelectItem value="retiro">Debito (Resta)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {type === "retiro" && (
                 <div className="space-y-2">
-                  <Label htmlFor="description">Descripción del Retiro</Label>
+                  <Label htmlFor="description">Descripcion del Debito</Label>
                   <Input
                     id="description"
-                    placeholder="Ej: Pago a banco, Nómina, etc."
+                    placeholder="Ej: Pago a banco, nomina, etc."
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     data-testid="input-description"
@@ -188,9 +290,7 @@ export default function CapitalIncrease() {
                     onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                     data-testid="input-image"
                   />
-                  {selectedFile && (
-                    <p className="text-sm text-muted-foreground">{selectedFile.name}</p>
-                  )}
+                  {selectedFile && <p className="text-sm text-muted-foreground">{selectedFile.name}</p>}
                 </div>
               )}
 
@@ -229,24 +329,29 @@ export default function CapitalIncrease() {
                 />
               </div>
             </div>
-            
+
             <div className="border-t pt-4 space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Capital por Ventas:</span>
+                <span className="text-muted-foreground">Saldo Inicial del Periodo:</span>
+                <span className="font-medium text-slate-700">{openingBalance.toFixed(2)} Bs</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Entradas por Ventas:</span>
                 <span className="font-medium text-green-600">+{totalFromSales.toFixed(2)} Bs</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Créditos Manuales:</span>
+                <span className="text-muted-foreground">Creditos Manuales:</span>
                 <span className="font-medium text-green-600">+{totalCredits.toFixed(2)} Bs</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Retiros/Pagos:</span>
-                <span className="font-medium text-red-600">-{totalWithdrawals.toFixed(2)} Bs</span>
+                <span className="text-muted-foreground">Debitos/Pagos:</span>
+                <span className="font-medium text-red-600">-{totalDebits.toFixed(2)} Bs</span>
               </div>
               <div className="flex justify-between pt-2 border-t">
-                <span className="font-bold">Total Capital:</span>
-                <span className={`text-2xl font-bold ${grandTotal >= 0 ? 'text-green-600' : 'text-red-600'}`} data-testid="text-total-capital">
-                  {grandTotal >= 0 ? '' : '-'}{Math.abs(grandTotal).toFixed(2)} Bs
+                <span className="font-bold">Saldo Final del Periodo:</span>
+                <span className={`text-2xl font-bold ${closingBalance >= 0 ? "text-green-600" : "text-red-600"}`} data-testid="text-total-capital">
+                  {closingBalance >= 0 ? "" : "-"}
+                  {Math.abs(closingBalance).toFixed(2)} Bs
                 </span>
               </div>
             </div>
@@ -256,97 +361,67 @@ export default function CapitalIncrease() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Historial de Movimientos Manuales</CardTitle>
+          <CardTitle className="text-lg">Estado de Cuenta de Capital</CardTitle>
         </CardHeader>
-        <CardContent>
-          {filteredMovements.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No hay movimientos en este período</p>
+        <CardContent className="space-y-5">
+          {groupedLedger.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">No hay movimientos en este periodo</p>
           ) : (
-            <div className="rounded-lg border">
-              <table className="w-full">
-                <thead className="border-b bg-muted/50">
-                  <tr>
-                    <th className="p-3 text-left font-medium">Fecha</th>
-                    <th className="p-3 text-left font-medium">Tipo</th>
-                    <th className="p-3 text-left font-medium">Descripción</th>
-                    <th className="p-3 text-right font-medium">Monto</th>
-                    <th className="p-3 text-center font-medium">Comprobante</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredMovements.map((movement) => (
-                    <tr key={movement.id} className="border-b" data-testid={`row-movement-${movement.id}`}>
-                      <td className="p-3 text-sm">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          {formatDateString(movement.movementDate)}
+            <div className="space-y-5">
+              {groupedLedger.map((dayGroup) => (
+                <div key={dayGroup.date} className="space-y-3">
+                  <p className="text-lg font-semibold">{formatGroupDate(dayGroup.date)}</p>
+
+                  {dayGroup.entries.map((entry) => (
+                    <div key={entry.id} className="rounded-xl border bg-muted/20 p-4" data-testid={`row-ledger-${entry.id}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <p className="font-medium">{entry.description}</p>
+                          <p className="text-sm text-muted-foreground">{entry.detail}</p>
+                          <div className="flex items-center gap-2 text-sm">
+                            {entry.kind === "credito" ? (
+                              <span className="inline-flex items-center gap-1 font-medium text-green-600">
+                                <Plus className="h-3.5 w-3.5" />
+                                Credito
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 font-medium text-red-600">
+                                <Minus className="h-3.5 w-3.5" />
+                                Debito
+                              </span>
+                            )}
+                            <span className="text-muted-foreground">� {formatDateString(entry.date)}</span>
+                          </div>
                         </div>
-                      </td>
-                      <td className="p-3">
-                        {movement.type === "credito" ? (
-                          <span className="inline-flex items-center gap-1 text-green-600 font-medium">
-                            <Plus className="h-3 w-3" /> Crédito
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-red-600 font-medium">
-                            <Minus className="h-3 w-3" /> Retiro
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 text-muted-foreground">{movement.description || "-"}</td>
-                      <td className={`p-3 text-right font-mono font-medium ${movement.type === "retiro" ? 'text-red-600' : 'text-green-600'}`}>
-                        {movement.type === "retiro" ? '-' : '+'}{parseFloat(movement.amount).toFixed(2)} Bs
-                      </td>
-                      <td className="p-3 text-center">
-                        {movement.imageUrl ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewImage(movement.imageUrl!)}
-                            data-testid={`button-view-image-${movement.id}`}
-                          >
-                            <Eye className="h-4 w-4 mr-1" /> Ver
-                          </Button>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
-                        )}
-                      </td>
-                    </tr>
+
+                        <div className="text-right">
+                          <p className={`text-xl font-bold ${entry.kind === "credito" ? "text-green-600" : "text-red-600"}`}>
+                            {entry.kind === "credito" ? "+" : "-"} {entry.amount.toFixed(2)} Bs
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Saldo: <span className="font-semibold text-foreground">{entry.balanceAfter.toFixed(2)} Bs</span>
+                          </p>
+                          {entry.imageUrl && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="mt-2"
+                              onClick={() => handleViewImage(entry.imageUrl!)}
+                              data-testid={`button-view-image-${entry.id}`}
+                            >
+                              <Eye className="h-4 w-4 mr-1" /> Ver
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
       </Card>
-
-      {filteredSales.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Capital por Ventas de Productos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {filteredSales.map((item: any) => {
-                const capitalIncrease = parseFloat(item.product.capitalIncrease);
-                const totalIncrease = capitalIncrease * item.quantity;
-
-                return (
-                  <div key={item.id} className="flex items-center justify-between p-3 rounded-lg border" data-testid={`card-capital-${item.id}`}>
-                    <div>
-                      <p className="font-medium">{item.product.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatDateString(item.saleDate)} • {item.quantity} unidades × {capitalIncrease.toFixed(2)} Bs
-                      </p>
-                    </div>
-                    <span className="text-lg font-bold text-green-600">+{totalIncrease.toFixed(2)} Bs</span>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

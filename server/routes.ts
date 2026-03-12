@@ -222,6 +222,30 @@ const resolvePrimaryDataOwner = async () => {
     }
   }
 
+  // Heuristic fallback: find first non-admin/non-accountant user with business data.
+  const operationalCandidates = allUsers.filter(
+    (candidate) => candidate.username.trim().toLowerCase() !== "arely"
+  );
+  for (const candidate of operationalCandidates) {
+    const access = await storage.getUserAccessControl(candidate.id);
+    if (isAccountantRole(access?.role)) continue;
+
+    const [candidateProducts, candidateDeliveries, candidateSales] = await Promise.all([
+      storage.getProducts(candidate.id),
+      storage.getDeliveries(candidate.id),
+      storage.getSales(candidate.id),
+    ]);
+    if (candidateProducts.length || candidateDeliveries.length || candidateSales.length) {
+      return await storage.getUser(candidate.id);
+    }
+  }
+
+  // Last resort: first non-admin user.
+  const fallbackUser = operationalCandidates[0];
+  if (fallbackUser) {
+    return await storage.getUser(fallbackUser.id);
+  }
+
   return null;
 };
 
@@ -406,6 +430,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       },
     })
   );
+
+  // Ensure operational sessions always use shared business data scope.
+  app.use(async (req: any, _res, next) => {
+    try {
+      if (!req.session?.userId || req.session.isAdmin || req.session.impersonateUserId) {
+        return next();
+      }
+
+      const primaryDataOwner = await resolvePrimaryDataOwner();
+      if (primaryDataOwner && primaryDataOwner.id !== req.session.userId) {
+        req.session.impersonateUserId = primaryDataOwner.id;
+        await new Promise<void>((resolve, reject) => {
+          req.session.save((err: any) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+      }
+
+      next();
+    } catch (error) {
+      next(error);
+    }
+  });
 
   // Auth routes
   app.post("/api/auth/register", async (_req, res) => {

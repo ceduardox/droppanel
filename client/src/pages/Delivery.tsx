@@ -17,6 +17,7 @@ import {
   useUpdateDeliveryStockEntry,
   useDeleteDeliveryStockEntry,
   useCreateDeliveryAssignment,
+  useDeliveryAssignments,
   useDeliveryAssignmentsReport,
   useUpdateDeliveryAssignmentPaid,
 } from "@/lib/api";
@@ -55,6 +56,7 @@ export default function Delivery() {
   const { data: deliveries = [], isLoading: deliveriesLoading } = useDeliveries() as { data: any[], isLoading: boolean };
   const { data: products = [], isLoading: productsLoading } = useProducts() as { data: any[], isLoading: boolean };
   const { data: stockEntries = [] } = useDeliveryStockEntries() as { data: any[] };
+  const { data: deliveryAssignments = [] } = useDeliveryAssignments() as { data: any[] };
   const { data: report, isLoading: reportLoading } = useDeliveryAssignmentsReport(reportStartDate, reportEndDate);
 
   // Mutations
@@ -218,6 +220,13 @@ export default function Delivery() {
     stockBalance.set(assignment.productId, current - assignment.quantity);
   });
 
+  const deliveryAvailableBalance = new Map<string, number>();
+  deliveryAssignments.forEach((assignment: any) => {
+    if (assignment.isPaid === 1) return;
+    const current = deliveryAvailableBalance.get(assignment.deliveryId) || 0;
+    deliveryAvailableBalance.set(assignment.deliveryId, current + assignment.quantity);
+  });
+
   const bentoCardClass =
     "rounded-[2rem] border border-slate-100 bg-white shadow-[0_4px_20px_-5px_rgba(0,0,0,0.05)]";
   const bentoInputClass =
@@ -314,7 +323,18 @@ export default function Delivery() {
                       <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <TruckIcon className="h-4 w-4" />
                       </span>
-                      <p className="font-medium">{delivery.name}</p>
+                      <p className="min-w-0 flex-1 font-medium">{delivery.name}</p>
+                      <div className="ml-auto flex shrink-0 items-center gap-2 rounded-xl border border-[#c9d8ee] bg-[#eef5ff] px-3 py-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#6b82a5]">
+                          Disponible
+                        </span>
+                        <span
+                          className="text-base font-bold text-[#163f88]"
+                          data-testid={`delivery-available-${delivery.id}`}
+                        >
+                          {deliveryAvailableBalance.get(delivery.id) || 0}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>

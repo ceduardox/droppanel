@@ -41,7 +41,7 @@ const allMenuItems = [
   { title: "Analitica Vendedores", icon: BarChart3, path: "/analitica-vendedores" },
   { title: "Gastos", icon: Receipt, path: "/gastos" },
   { title: "Reporte Gastos", icon: FileText, path: "/reporte-gastos" },
-  { title: "Delivery", icon: TruckIcon, path: "/delivery" },
+  { title: "Inventario", icon: TruckIcon, path: "/delivery" },
   { title: "Configuracion", icon: Settings, path: "/configuracion" },
 ];
 

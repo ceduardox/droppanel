@@ -1,11 +1,11 @@
-import { useState, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useGrossCapitalMovements, useCreateGrossCapitalMovement, useUpdateGrossCapitalMovement, useDeleteGrossCapitalMovement, useReports } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Calendar, Eye, Upload, Minus, Pencil, Trash2, Check, X } from "lucide-react";
+import { Eye, Upload, Minus, Pencil, Trash2, Check, X, Plus } from "lucide-react";
 
 interface GrossCapitalMovement {
   id: string;
@@ -13,12 +13,49 @@ interface GrossCapitalMovement {
   amount: string;
   movementDate: string;
   imageUrl: string | null;
+  createdAt?: string;
+}
+
+interface LedgerEntry {
+  id: string;
+  date: string;
+  amount: number;
+  signedAmount: number;
+  kind: "credito" | "debito";
+  source: "venta" | "retiro";
+  description: string;
+  detail: string;
+  imageUrl: string | null;
+  sortStamp: number;
+  movementId?: string;
 }
 
 function formatDateString(dateStr: string): string {
   const [year, month, day] = dateStr.split('-');
   const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   return `${parseInt(day)} ${months[parseInt(month) - 1]} ${year}`;
+}
+
+function formatGroupDate(dateStr: string): string {
+  const date = new Date(`${dateStr}T00:00:00`);
+  const label = new Intl.DateTimeFormat("es-BO", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(date);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function parseAmount(value: unknown): number {
+  const parsed = parseFloat(String(value ?? 0));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function buildSortStamp(date: string, createdAt?: string, fallbackOrder = 0): number {
+  const created = createdAt ? new Date(createdAt).getTime() : NaN;
+  if (Number.isFinite(created)) return created;
+  const base = new Date(`${date}T00:00:00`).getTime();
+  return base + fallbackOrder;
 }
 
 export default function GrossCapitalReport() {
@@ -75,30 +112,123 @@ export default function GrossCapitalReport() {
     }
   };
 
-  const filteredMovements = (movements as GrossCapitalMovement[]).filter((m) => {
-    if (!startDate || !endDate) return true;
-    return m.movementDate >= startDate && m.movementDate <= endDate;
-  });
+  const salesWithBaseCost = useMemo(() => {
+    return (salesWithProducts as any[]).filter((item: any) => {
+      if (!item?.product) return false;
+      return parseAmount(item.product.baseCost) > 0;
+    });
+  }, [salesWithProducts]);
 
-  const filteredSales = (salesWithProducts as any[]).filter((item: any) => {
-    if (!item.product) return false;
-    const hasBaseCost = item.product.baseCost !== null && 
-                        item.product.baseCost !== undefined && 
-                        parseFloat(item.product.baseCost) > 0;
-    if (!hasBaseCost) return false;
-    if (startDate && item.saleDate < startDate) return false;
-    if (endDate && item.saleDate > endDate) return false;
-    return true;
-  });
+  const filteredSales = useMemo(() => {
+    return salesWithBaseCost.filter((item: any) => {
+      if (startDate && item.saleDate < startDate) return false;
+      if (endDate && item.saleDate > endDate) return false;
+      return true;
+    });
+  }, [salesWithBaseCost, startDate, endDate]);
 
-  const totalBrutoFromSales = filteredSales.reduce((sum: number, item: any) => {
-    const baseCost = parseFloat(item.product.baseCost || 0);
-    return sum + (baseCost * item.quantity);
-  }, 0);
+  const movementEntries = useMemo<LedgerEntry[]>(() => {
+    return (movements as GrossCapitalMovement[]).map((movement, index) => {
+      const movementAmount = parseAmount(movement.amount);
+      return {
+        id: `withdraw-${movement.id}`,
+        date: movement.movementDate,
+        amount: movementAmount,
+        signedAmount: -movementAmount,
+        kind: "debito",
+        source: "retiro",
+        description: movement.description?.trim() || "Retiro de capital bruto",
+        detail: "Egreso de capital bruto",
+        imageUrl: movement.imageUrl || null,
+        sortStamp: buildSortStamp(movement.movementDate, movement.createdAt, index),
+        movementId: movement.id,
+      };
+    });
+  }, [movements]);
 
-  const totalWithdrawals = filteredMovements.reduce((sum, m) => sum + parseFloat(m.amount), 0);
+  const salesEntries = useMemo<LedgerEntry[]>(() => {
+    return salesWithBaseCost.map((item: any, index: number) => {
+      const baseCost = parseAmount(item.product.baseCost);
+      const quantity = parseAmount(item.quantity);
+      const movementAmount = baseCost * quantity;
 
-  const grandTotal = totalBrutoFromSales - totalWithdrawals;
+      return {
+        id: `sale-${item.id}`,
+        date: item.saleDate,
+        amount: movementAmount,
+        signedAmount: movementAmount,
+        kind: "credito",
+        source: "venta",
+        description: `Venta ${item.product.name}`,
+        detail: `${quantity} unid x ${baseCost.toFixed(2)} Bs`,
+        imageUrl: null,
+        sortStamp: buildSortStamp(item.saleDate, item.createdAt, index),
+      };
+    });
+  }, [salesWithBaseCost]);
+
+  const allEntries = useMemo(() => {
+    return [...movementEntries, ...salesEntries].sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      if (a.sortStamp !== b.sortStamp) return a.sortStamp - b.sortStamp;
+      return a.id.localeCompare(b.id);
+    });
+  }, [movementEntries, salesEntries]);
+
+  const movementById = useMemo(() => {
+    const map = new Map<string, GrossCapitalMovement>();
+    (movements as GrossCapitalMovement[]).forEach((movement) => {
+      map.set(movement.id, movement);
+    });
+    return map;
+  }, [movements]);
+
+  const openingBalance = useMemo(() => {
+    return allEntries
+      .filter((entry) => entry.date < startDate)
+      .reduce((sum, entry) => sum + entry.signedAmount, 0);
+  }, [allEntries, startDate]);
+
+  const entriesInRange = useMemo(() => {
+    return allEntries.filter((entry) => entry.date >= startDate && entry.date <= endDate);
+  }, [allEntries, startDate, endDate]);
+
+  const ledgerWithBalance = useMemo(() => {
+    let runningPeriodBalance = 0;
+    let runningAccumulatedBalance = openingBalance;
+    return entriesInRange.map((entry) => {
+      runningPeriodBalance += entry.signedAmount;
+      runningAccumulatedBalance += entry.signedAmount;
+      return {
+        ...entry,
+        balanceAfterPeriod: runningPeriodBalance,
+        balanceAfterAccumulated: runningAccumulatedBalance,
+      };
+    });
+  }, [entriesInRange, openingBalance]);
+
+  const groupedLedger = useMemo(() => {
+    const grouped: Record<string, Array<LedgerEntry & { balanceAfterPeriod: number; balanceAfterAccumulated: number }>> = {};
+    ledgerWithBalance.forEach((entry) => {
+      if (!grouped[entry.date]) grouped[entry.date] = [];
+      grouped[entry.date].push(entry);
+    });
+
+    return Object.keys(grouped)
+      .sort((a, b) => (a < b ? 1 : -1))
+      .map((date) => ({ date, entries: grouped[date] }));
+  }, [ledgerWithBalance]);
+
+  const totalBrutoFromSales = entriesInRange
+    .filter((entry) => entry.source === "venta")
+    .reduce((sum, entry) => sum + entry.amount, 0);
+
+  const totalWithdrawals = entriesInRange
+    .filter((entry) => entry.source === "retiro")
+    .reduce((sum, entry) => sum + entry.amount, 0);
+
+  const periodCapitalBalance = totalBrutoFromSales - totalWithdrawals;
+  const accumulatedCapitalBalance = openingBalance + periodCapitalBalance;
 
   const handleViewImage = (imageUrl: string) => {
     window.open(`/api/storage/${imageUrl}`, "_blank");
@@ -222,7 +352,7 @@ export default function GrossCapitalReport() {
             <CardTitle className="text-lg">Filtrar por Fecha</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="start-date">Fecha Inicio</Label>
                 <Input
@@ -246,6 +376,10 @@ export default function GrossCapitalReport() {
             </div>
             
             <div className="border-t pt-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Saldo Inicial del Periodo:</span>
+                <span className="font-medium text-slate-700">{openingBalance.toFixed(2)} Bs</span>
+              </div>
               <p className="text-sm font-medium text-muted-foreground mb-2">Costo Bruto por Producto:</p>
               {Object.entries(
                 filteredSales.reduce((acc: Record<string, { name: string; total: number; qty: number }>, item: any) => {
@@ -263,8 +397,8 @@ export default function GrossCapitalReport() {
                 </div>
               ))}
               <div className="flex justify-between text-sm pt-1 border-t border-dashed">
-                <span className="text-muted-foreground font-medium">Subtotal Costo Bruto:</span>
-                <span className="font-medium text-blue-600">+{totalBrutoFromSales.toFixed(2)} Bs</span>
+                <span className="text-muted-foreground font-medium">Entradas por Costo Bruto:</span>
+                <span className="font-medium text-green-600">+{totalBrutoFromSales.toFixed(2)} Bs</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Retiros:</span>
@@ -272,8 +406,19 @@ export default function GrossCapitalReport() {
               </div>
               <div className="flex justify-between pt-2 border-t">
                 <span className="font-bold">Saldo Capital Bruto:</span>
-                <span className={`text-2xl font-bold ${grandTotal >= 0 ? 'text-blue-600' : 'text-red-600'}`} data-testid="text-total-bruto">
-                  {grandTotal >= 0 ? '' : '-'}{Math.abs(grandTotal).toFixed(2)} Bs
+                <span
+                  className={`inline-flex items-baseline gap-1 whitespace-nowrap text-xl font-bold sm:text-2xl ${periodCapitalBalance >= 0 ? "text-blue-600" : "text-red-600"}`}
+                  data-testid="text-total-bruto"
+                >
+                  {periodCapitalBalance >= 0 ? "" : "-"}
+                  {Math.abs(periodCapitalBalance).toFixed(2)} Bs
+                </span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Saldo Acumulado (informativo):</span>
+                <span className={`font-medium ${accumulatedCapitalBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {accumulatedCapitalBalance >= 0 ? "" : "-"}
+                  {Math.abs(accumulatedCapitalBalance).toFixed(2)} Bs
                 </span>
               </div>
             </div>
@@ -283,119 +428,144 @@ export default function GrossCapitalReport() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Historial de Retiros</CardTitle>
+          <CardTitle className="text-lg">Estado de Cuenta de Capital Bruto</CardTitle>
         </CardHeader>
-        <CardContent>
-          {filteredMovements.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No hay retiros en este período</p>
+        <CardContent className="space-y-5">
+          {groupedLedger.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">No hay movimientos en este período</p>
           ) : (
-            <div className="rounded-lg border">
-              <table className="w-full">
-                <thead className="border-b bg-muted/50">
-                  <tr>
-                    <th className="p-3 text-left font-medium">Fecha</th>
-                    <th className="p-3 text-left font-medium">Descripción</th>
-                    <th className="p-3 text-right font-medium">Monto</th>
-                    <th className="p-3 text-center font-medium">Comprobante</th>
-                    <th className="p-3 text-center font-medium">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredMovements.map((movement) => (
-                    <tr key={movement.id} className="border-b" data-testid={`row-movement-${movement.id}`}>
-                      {editingId === movement.id ? (
-                        <>
-                          <td className="p-3">
+            <div className="space-y-5">
+              {groupedLedger.map((dayGroup) => (
+                <div key={dayGroup.date} className="space-y-3">
+                  <p className="text-lg font-semibold">{formatGroupDate(dayGroup.date)}</p>
+
+                  {dayGroup.entries.map((entry) => {
+                    const isWithdrawal = entry.source === "retiro";
+                    const movementId = entry.movementId;
+                    const movement = movementId ? movementById.get(movementId) : undefined;
+                    const isEditing = isWithdrawal && movementId && editingId === movementId;
+
+                    if (isEditing) {
+                      return (
+                        <div key={entry.id} className="rounded-xl border bg-muted/20 p-4" data-testid={`row-ledger-${entry.id}`}>
+                          <div className="space-y-2">
                             <Input
                               type="date"
                               value={editDate}
                               onChange={(e) => setEditDate(e.target.value)}
-                              className="h-8"
+                              className="h-9"
                               data-testid="edit-input-date"
                             />
-                          </td>
-                          <td className="p-3">
                             <Input
                               value={editDescription}
                               onChange={(e) => setEditDescription(e.target.value)}
                               placeholder="Descripción"
-                              className="h-8"
+                              className="h-9"
                               data-testid="edit-input-description"
                             />
-                          </td>
-                          <td className="p-3">
                             <Input
                               type="number"
                               step="0.01"
                               value={editAmount}
                               onChange={(e) => setEditAmount(e.target.value)}
-                              className="h-8 text-right"
+                              className="h-9"
                               data-testid="edit-input-amount"
                             />
-                          </td>
-                          <td className="p-3 text-center">
-                            {movement.imageUrl ? (
-                              <Button variant="outline" size="sm" onClick={() => handleViewImage(movement.imageUrl!)}>
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            ) : "-"}
-                          </td>
-                          <td className="p-3 text-center">
-                            <div className="flex justify-center gap-1">
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveEdit} data-testid="button-save-edit">
-                                <Check className="h-4 w-4 text-green-600" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCancelEdit} data-testid="button-cancel-edit">
-                                <X className="h-4 w-4" />
-                              </Button>
+                            <div className="flex items-center justify-between gap-2">
+                              {entry.imageUrl ? (
+                                <Button variant="outline" size="sm" onClick={() => handleViewImage(entry.imageUrl!)}>
+                                  <Eye className="h-4 w-4 mr-1" /> Ver
+                                </Button>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">Sin comprobante</span>
+                              )}
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleSaveEdit} data-testid="button-save-edit">
+                                  <Check className="h-4 w-4 text-green-600" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCancelEdit} data-testid="button-cancel-edit">
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="p-3 text-sm">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3 text-muted-foreground" />
-                              {formatDateString(movement.movementDate)}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={entry.id} className="rounded-xl border bg-muted/20 p-4" data-testid={`row-ledger-${entry.id}`}>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="space-y-1 min-w-0 sm:flex-1">
+                            <p className="font-medium break-words">{entry.description}</p>
+                            <p className="text-xs text-muted-foreground sm:text-sm">{entry.detail}</p>
+                            <div className="flex flex-wrap items-center gap-2 text-sm">
+                              {entry.kind === "credito" ? (
+                                <span className="inline-flex items-center gap-1 font-medium text-green-600">
+                                  <Plus className="h-3.5 w-3.5" />
+                                  Crédito
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 font-medium text-red-600">
+                                  <Minus className="h-3.5 w-3.5" />
+                                  Débito
+                                </span>
+                              )}
+                              <span className="text-muted-foreground">| {formatDateString(entry.date)}</span>
                             </div>
-                          </td>
-                          <td className="p-3 text-muted-foreground">{movement.description || "-"}</td>
-                          <td className="p-3 text-right font-mono font-medium text-red-600">
-                            <span className="inline-flex items-center gap-1">
-                              <Minus className="h-3 w-3" />
-                              {parseFloat(movement.amount).toFixed(2)} Bs
-                            </span>
-                          </td>
-                          <td className="p-3 text-center">
-                            {movement.imageUrl ? (
+                          </div>
+
+                          <div className="flex flex-col gap-0.5 sm:items-end">
+                            <p className={`text-lg font-bold sm:text-xl sm:whitespace-nowrap ${entry.kind === "credito" ? "text-green-600" : "text-red-600"}`}>
+                              {entry.kind === "credito" ? "+" : "-"} {entry.amount.toFixed(2)} Bs
+                            </p>
+                            <p className="text-xs text-muted-foreground sm:text-sm sm:whitespace-nowrap">
+                              Saldo Capital Bruto: <span className="font-semibold text-foreground">{entry.balanceAfterPeriod.toFixed(2)} Bs</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        {isWithdrawal && (
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                            {entry.imageUrl ? (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleViewImage(movement.imageUrl!)}
-                                data-testid={`button-view-image-${movement.id}`}
+                                onClick={() => handleViewImage(entry.imageUrl!)}
+                                data-testid={`button-view-image-${entry.id}`}
                               >
-                                <Eye className="h-4 w-4 mr-1" /> Ver
+                                <Eye className="h-4 w-4 mr-1" /> Ver comprobante
                               </Button>
                             ) : (
-                              <span className="text-muted-foreground text-sm">-</span>
+                              <span className="text-sm text-muted-foreground">Sin comprobante</span>
                             )}
-                          </td>
-                          <td className="p-3 text-center">
-                            <div className="flex justify-center gap-1">
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEdit(movement)} data-testid={`button-edit-${movement.id}`}>
-                                <Pencil className="h-3 w-3" />
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => movement && handleStartEdit(movement)}
+                                data-testid={`button-edit-${entry.id}`}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(movement.id)} data-testid={`button-delete-${movement.id}`}>
-                                <Trash2 className="h-3 w-3 text-red-500" />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => movementId && handleDelete(movementId)}
+                                data-testid={`button-delete-${entry.id}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-red-500" />
                               </Button>
                             </div>
-                          </td>
-                        </>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           )}
         </CardContent>

@@ -21,6 +21,7 @@ import SellerReport from "@/pages/SellerReport";
 import SellerSalesAnalytics from "@/pages/SellerSalesAnalytics";
 import Expenses from "@/pages/Expenses";
 import Delivery from "@/pages/Delivery";
+import DeliveryHistory from "@/pages/DeliveryHistory";
 import DeliveryProductHistory from "@/pages/DeliveryProductHistory";
 import SalesReport from "@/pages/SalesReport";
 import ExpensesReport from "@/pages/ExpensesReport";
@@ -40,12 +41,16 @@ const pageTitles: Record<string, string> = {
   "/analitica-vendedores": "Analitica Vendedores",
   "/gastos": "Gastos",
   "/delivery": "Inventario",
+  "/delivery/historial": "Historial de Delivery",
   "/delivery/producto": "Historial de Producto",
   "/reporte-gastos": "Reporte de Gastos",
   "/configuracion": "Configuracion",
 };
 
 function getPageTitle(location: string) {
+  if (location.startsWith("/delivery/historial/")) {
+    return pageTitles["/delivery/historial"];
+  }
   if (location.startsWith("/delivery/producto/")) {
     return pageTitles["/delivery/producto"];
   }
@@ -53,6 +58,9 @@ function getPageTitle(location: string) {
 }
 
 function resolvePermissionKey(location: string) {
+  if (location.startsWith("/delivery/historial/")) {
+    return routePermissionMap["/delivery/historial"];
+  }
   if (location.startsWith("/delivery/producto/")) {
     return routePermissionMap["/delivery/producto"];
   }
@@ -154,6 +162,7 @@ function AuthenticatedLayout() {
                   <Route path="/analitica-vendedores" component={() => <ProtectedRoute component={SellerSalesAnalytics} />} />
                   <Route path="/gastos" component={() => <ProtectedRoute component={Expenses} />} />
                   <Route path="/delivery" component={() => <ProtectedRoute component={Delivery} />} />
+                  <Route path="/delivery/historial/:deliveryId" component={() => <ProtectedRoute component={DeliveryHistory} />} />
                   <Route path="/delivery/producto/:productId" component={() => <ProtectedRoute component={DeliveryProductHistory} />} />
                   <Route path="/reporte-gastos" component={() => <ProtectedRoute component={ExpensesReport} />} />
                   <Route path="/configuracion" component={() => <ProtectedRoute component={Settings} />} />
@@ -195,6 +204,7 @@ function Router() {
       <Route path="/analitica-vendedores" component={AuthenticatedLayout} />
       <Route path="/gastos" component={AuthenticatedLayout} />
       <Route path="/delivery" component={AuthenticatedLayout} />
+      <Route path="/delivery/historial/:deliveryId" component={AuthenticatedLayout} />
       <Route path="/delivery/producto/:productId" component={AuthenticatedLayout} />
       <Route path="/reporte-gastos" component={AuthenticatedLayout} />
       <Route path="/configuracion" component={AuthenticatedLayout} />

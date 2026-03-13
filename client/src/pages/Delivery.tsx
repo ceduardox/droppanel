@@ -315,28 +315,34 @@ export default function Delivery() {
               ) : deliveries.length > 0 ? (
                 <div className="space-y-2.5">
                   {deliveries.map((delivery: any) => (
-                    <div
-                      key={delivery.id}
-                      className="relative flex items-center gap-2 overflow-hidden rounded-2xl border border-slate-200 bg-[linear-gradient(90deg,#ffffff_0%,#f8fafc_100%)] px-4 py-3 shadow-[0_8px_20px_-14px_rgba(37,99,235,0.45)]"
-                      data-testid={`delivery-${delivery.id}`}
-                    >
-                      <span className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-indigo-500 to-cyan-500" />
-                      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                        <TruckIcon className="h-4 w-4" />
-                      </span>
-                      <p className="min-w-0 flex-1 font-medium">{delivery.name}</p>
-                      <div className="ml-auto flex shrink-0 items-center gap-2 rounded-xl border border-[#c9d8ee] bg-[#eef5ff] px-3 py-1.5">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#6b82a5]">
-                          Disponible
+                    <Link key={delivery.id} href={`/delivery/historial/${delivery.id}`}>
+                      <div
+                        className="group relative flex cursor-pointer items-center gap-2 overflow-hidden rounded-2xl border border-slate-200 bg-[linear-gradient(90deg,#ffffff_0%,#f8fafc_100%)] px-4 py-3 shadow-[0_8px_20px_-14px_rgba(37,99,235,0.45)] transition-all hover:-translate-y-0.5 hover:border-[#9ec2ef] hover:shadow-[0_16px_34px_-16px_rgba(37,99,235,0.35)]"
+                        data-testid={`delivery-${delivery.id}`}
+                      >
+                        <span className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-indigo-500 to-cyan-500" />
+                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                          <TruckIcon className="h-4 w-4" />
                         </span>
-                        <span
-                          className="text-base font-bold text-[#163f88]"
-                          data-testid={`delivery-available-${delivery.id}`}
-                        >
-                          {deliveryAvailableBalance.get(delivery.id) || 0}
-                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium">{delivery.name}</p>
+                          <p className="text-xs font-medium text-[#6c87ab] transition-colors group-hover:text-[#1d4f97]">
+                            Toca para ver historial y movimientos de este delivery
+                          </p>
+                        </div>
+                        <div className="ml-auto flex shrink-0 items-center gap-2 rounded-xl border border-[#c9d8ee] bg-[#eef5ff] px-3 py-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#6b82a5]">
+                            Disponible
+                          </span>
+                          <span
+                            className="text-base font-bold text-[#163f88]"
+                            data-testid={`delivery-available-${delivery.id}`}
+                          >
+                            {deliveryAvailableBalance.get(delivery.id) || 0}
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (

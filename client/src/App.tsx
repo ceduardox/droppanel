@@ -21,6 +21,7 @@ import SellerReport from "@/pages/SellerReport";
 import SellerSalesAnalytics from "@/pages/SellerSalesAnalytics";
 import Expenses from "@/pages/Expenses";
 import Delivery from "@/pages/Delivery";
+import DeliveryProductHistory from "@/pages/DeliveryProductHistory";
 import SalesReport from "@/pages/SalesReport";
 import ExpensesReport from "@/pages/ExpensesReport";
 import Settings from "@/pages/Settings";
@@ -39,9 +40,24 @@ const pageTitles: Record<string, string> = {
   "/analitica-vendedores": "Analitica Vendedores",
   "/gastos": "Gastos",
   "/delivery": "Inventario",
+  "/delivery/producto": "Historial de Producto",
   "/reporte-gastos": "Reporte de Gastos",
   "/configuracion": "Configuracion",
 };
+
+function getPageTitle(location: string) {
+  if (location.startsWith("/delivery/producto/")) {
+    return pageTitles["/delivery/producto"];
+  }
+  return pageTitles[location] ?? "Panel";
+}
+
+function resolvePermissionKey(location: string) {
+  if (location.startsWith("/delivery/producto/")) {
+    return routePermissionMap["/delivery/producto"];
+  }
+  return routePermissionMap[location];
+}
 
 function ProtectedRoute({ component: Component }: { component: () => JSX.Element }) {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -65,7 +81,7 @@ function ProtectedRoute({ component: Component }: { component: () => JSX.Element
     return <Redirect to="/dashboard" />;
   }
 
-  const permissionKey = routePermissionMap[location];
+  const permissionKey = resolvePermissionKey(location);
   if (isAuthenticated && permissionKey && !hasPermission(user?.permissions, permissionKey, user?.isAdmin)) {
     const allowedPath =
       Object.keys(routePermissionMap).find((path) =>
@@ -101,10 +117,10 @@ function AuthenticatedLayout() {
                   />
 
                   <div className="min-w-0 md:hidden">
-                    <p className="truncate text-sm font-semibold">{pageTitles[location] ?? "Panel"}</p>
+                    <p className="truncate text-sm font-semibold">{getPageTitle(location)}</p>
                   </div>
                   <div className="hidden md:block">
-                    <p className="text-sm font-semibold">{pageTitles[location] ?? "Panel"}</p>
+                    <p className="text-sm font-semibold">{getPageTitle(location)}</p>
                   </div>
                 </div>
 
@@ -138,6 +154,7 @@ function AuthenticatedLayout() {
                   <Route path="/analitica-vendedores" component={() => <ProtectedRoute component={SellerSalesAnalytics} />} />
                   <Route path="/gastos" component={() => <ProtectedRoute component={Expenses} />} />
                   <Route path="/delivery" component={() => <ProtectedRoute component={Delivery} />} />
+                  <Route path="/delivery/producto/:productId" component={() => <ProtectedRoute component={DeliveryProductHistory} />} />
                   <Route path="/reporte-gastos" component={() => <ProtectedRoute component={ExpensesReport} />} />
                   <Route path="/configuracion" component={() => <ProtectedRoute component={Settings} />} />
                   <Route component={NotFound} />
@@ -178,6 +195,7 @@ function Router() {
       <Route path="/analitica-vendedores" component={AuthenticatedLayout} />
       <Route path="/gastos" component={AuthenticatedLayout} />
       <Route path="/delivery" component={AuthenticatedLayout} />
+      <Route path="/delivery/producto/:productId" component={AuthenticatedLayout} />
       <Route path="/reporte-gastos" component={AuthenticatedLayout} />
       <Route path="/configuracion" component={AuthenticatedLayout} />
       <Route component={NotFound} />

@@ -46,6 +46,7 @@ export const routePermissionMap: Record<string, AppPermissionKey> = {
   "/gastos": "expenses",
   "/reporte-gastos": "expensesReport",
   "/delivery": "delivery",
+  "/delivery/producto": "delivery",
   "/configuracion": "settings",
 };
 

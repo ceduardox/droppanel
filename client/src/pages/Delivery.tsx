@@ -1,5 +1,6 @@
 ﻿import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -438,22 +439,30 @@ export default function Delivery() {
                   {products.map((product: any) => {
                     const balance = stockBalance.get(product.id) || 0;
                     return (
-                      <div
-                        key={product.id}
-                        className="relative flex items-start justify-between gap-4 overflow-hidden rounded-2xl border border-slate-200/90 bg-white px-5 py-4 shadow-[0_14px_28px_-18px_rgba(37,99,235,0.45)]"
-                        data-testid={`stock-balance-${product.id}`}
-                      >
-                        <span className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-indigo-500 to-cyan-500" />
-                        <span className="max-w-[68%] break-words text-[1.05rem] font-semibold leading-snug text-slate-800">{product.name}</span>
-                        <div className="min-w-[98px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right">
-                          <p className={`font-mono text-2xl font-bold leading-none ${balance < 0 ? "text-destructive" : "text-slate-800"}`}>
-                            {balance}
-                          </p>
-                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                            Unidades
-                          </p>
+                      <Link key={product.id} href={`/delivery/producto/${product.id}`}>
+                        <div
+                          className="group relative flex cursor-pointer items-start justify-between gap-4 overflow-hidden rounded-2xl border border-slate-200/90 bg-white px-5 py-4 shadow-[0_14px_28px_-18px_rgba(37,99,235,0.45)] transition-all hover:-translate-y-0.5 hover:border-[#9ec2ef] hover:shadow-[0_16px_34px_-16px_rgba(37,99,235,0.35)]"
+                          data-testid={`stock-balance-${product.id}`}
+                        >
+                          <span className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-indigo-500 to-cyan-500" />
+                          <div className="max-w-[68%] space-y-1">
+                            <span className="block break-words text-[1.05rem] font-semibold leading-snug text-slate-800">
+                              {product.name}
+                            </span>
+                            <p className="text-xs font-medium text-[#6c87ab] transition-colors group-hover:text-[#1d4f97]">
+                              Toca para ver historial de vendedores y cantidades
+                            </p>
+                          </div>
+                          <div className="min-w-[98px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right">
+                            <p className={`font-mono text-2xl font-bold leading-none ${balance < 0 ? "text-destructive" : "text-slate-800"}`}>
+                              {balance}
+                            </p>
+                            <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                              Unidades
+                            </p>
+                          </div>
                         </div>
-                      </div>
+                      </Link>
                     );
                   })}
                 </div>

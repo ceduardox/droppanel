@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Plus, UserPlus, ShoppingCart, X, Save, Pencil, Trash2, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Calendar, Plus, ShoppingCart, X, Save, Pencil, Trash2, Check, ChevronDown } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import WhatsAppReport from "@/components/WhatsAppReport";
 
@@ -263,51 +263,8 @@ export default function SellerReport() {
         <p className="text-muted-foreground mt-1">Registro y seguimiento de ventas por vendedor</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <UserPlus className="h-5 w-5" />
-              Agregar Vendedor
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                className="min-w-0 flex-1"
-                placeholder="Nombre del vendedor"
-                value={newSellerName}
-                onChange={(e) => setNewSellerName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAddSeller()}
-                data-testid="input-seller-name"
-              />
-              <Button
-                onClick={handleAddSeller}
-                disabled={createSeller.isPending}
-                size="icon"
-                className="shrink-0"
-                data-testid="button-add-seller"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-            {(sellers as Seller[]).length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {(sellers as Seller[]).map((s) => (
-                  <span
-                    key={s.id}
-                    className="max-w-full break-words rounded bg-muted px-2 py-1 text-sm leading-tight"
-                    data-testid={`badge-seller-${s.id}`}
-                  >
-                    {s.name}
-                  </span>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <ShoppingCart className="h-5 w-5" />
@@ -328,6 +285,30 @@ export default function SellerReport() {
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+                  <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                    Crear vendedor rapido
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      className="min-w-0 flex-1 bg-white"
+                      placeholder="Nombre del vendedor"
+                      value={newSellerName}
+                      onChange={(e) => setNewSellerName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAddSeller()}
+                      data-testid="input-seller-name"
+                    />
+                    <Button
+                      onClick={handleAddSeller}
+                      disabled={createSeller.isPending}
+                      className="w-full sm:w-auto"
+                      data-testid="button-add-seller"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Agregar
+                    </Button>
+                  </div>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Fecha</Label>

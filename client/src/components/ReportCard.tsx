@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useAuth } from "@/lib/auth";
 import { Calendar, Pencil, Trash2 } from "lucide-react";
 
 interface Sale {
@@ -50,6 +51,7 @@ function formatDateCompact(dateStr: string): string {
 }
 
 export default function ReportCard({ sale, onEditDate, onDelete }: ReportCardProps) {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [newDate, setNewDate] = useState(sale.date);
 
@@ -58,6 +60,7 @@ export default function ReportCard({ sale, onEditDate, onDelete }: ReportCardPro
   const profit = total - totalCost;
   const profitPerPartner = profit / 2;
   const hasBreakdown = sale.baseCost !== undefined && sale.baseCost !== null;
+  const isAccountant = user?.role?.trim().toLowerCase() === "contador";
 
   const handleSaveDate = () => {
     if (onEditDate && newDate) {
@@ -152,57 +155,63 @@ export default function ReportCard({ sale, onEditDate, onDelete }: ReportCardPro
             </span>
           </div>
 
-          <div className="flex justify-between gap-3">
-            <span className="text-sm text-muted-foreground">Costo Total:</span>
-            <span className="text-right font-medium" data-testid={`text-sale-cost-${sale.id}`}>
-              {totalCost.toFixed(2)} Bs
-            </span>
-          </div>
-
-          {hasBreakdown && (
+          {!isAccountant && (
             <>
-              <div className="flex justify-between gap-3 pl-4">
-                <span className="text-xs text-muted-foreground">Bruto:</span>
-                <span className="text-right text-xs" data-testid={`text-base-cost-total-${sale.id}`}>
-                  {(sale.baseCost! * sale.quantity).toFixed(2)} Bs
+              <div className="flex justify-between gap-3">
+                <span className="text-sm text-muted-foreground">Costo Total:</span>
+                <span className="text-right font-medium" data-testid={`text-sale-cost-${sale.id}`}>
+                  {Number.isFinite(totalCost) ? totalCost.toFixed(2) : "0.00"} Bs
                 </span>
               </div>
 
-              <div className="flex justify-between gap-3 pl-4">
-                <span className="text-xs text-muted-foreground">Capital:</span>
-                <span className="text-right text-xs" data-testid={`text-capital-increase-total-${sale.id}`}>
-                  {((sale.capitalIncrease || 0) * sale.quantity).toFixed(2)} Bs
+              {hasBreakdown && (
+                <>
+                  <div className="flex justify-between gap-3 pl-4">
+                    <span className="text-xs text-muted-foreground">Bruto:</span>
+                    <span className="text-right text-xs" data-testid={`text-base-cost-total-${sale.id}`}>
+                      {(sale.baseCost! * sale.quantity).toFixed(2)} Bs
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between gap-3 pl-4">
+                    <span className="text-xs text-muted-foreground">Capital:</span>
+                    <span className="text-right text-xs" data-testid={`text-capital-increase-total-${sale.id}`}>
+                      {((sale.capitalIncrease || 0) * sale.quantity).toFixed(2)} Bs
+                    </span>
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-between gap-3 border-t pt-2">
+                <span className="font-medium">Utilidad:</span>
+                <span className="text-right font-bold text-chart-2" data-testid={`text-sale-profit-${sale.id}`}>
+                  {Number.isFinite(profit) ? profit.toFixed(2) : "0.00"} Bs
                 </span>
               </div>
             </>
           )}
-
-          <div className="flex justify-between gap-3 border-t pt-2">
-            <span className="font-medium">Utilidad:</span>
-            <span className="text-right font-bold text-chart-2" data-testid={`text-sale-profit-${sale.id}`}>
-              {profit.toFixed(2)} Bs
-            </span>
-          </div>
         </div>
 
-        <div className="border-t pt-3">
-          <p className="mb-2 text-xs text-muted-foreground">Distribucion 50/50:</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="rounded-md bg-muted/50 p-2">
-              <p className="text-xs text-muted-foreground">Jose Eduardo</p>
-              <p className="font-semibold" data-testid={`text-jose-profit-${sale.id}`}>
-                {profitPerPartner.toFixed(2)} Bs
-              </p>
-            </div>
+        {!isAccountant && (
+          <div className="border-t pt-3">
+            <p className="mb-2 text-xs text-muted-foreground">Distribucion 50/50:</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-md bg-muted/50 p-2">
+                <p className="text-xs text-muted-foreground">Jose Eduardo</p>
+                <p className="font-semibold" data-testid={`text-jose-profit-${sale.id}`}>
+                  {Number.isFinite(profitPerPartner) ? profitPerPartner.toFixed(2) : "0.00"} Bs
+                </p>
+              </div>
 
-            <div className="rounded-md bg-muted/50 p-2">
-              <p className="text-xs text-muted-foreground">Jhonatan</p>
-              <p className="font-semibold" data-testid={`text-jhonatan-profit-${sale.id}`}>
-                {profitPerPartner.toFixed(2)} Bs
-              </p>
+              <div className="rounded-md bg-muted/50 p-2">
+                <p className="text-xs text-muted-foreground">Jhonatan</p>
+                <p className="font-semibold" data-testid={`text-jhonatan-profit-${sale.id}`}>
+                  {Number.isFinite(profitPerPartner) ? profitPerPartner.toFixed(2) : "0.00"} Bs
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );

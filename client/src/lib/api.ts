@@ -475,6 +475,49 @@ export function useCreateDeliveryAssignment() {
   });
 }
 
+export function useUpdateDeliveryAssignment() {
+  return useMutation({
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: {
+        deliveryId: string;
+        productId: string;
+        quantity: number;
+        unitPriceSnapshot: string;
+        note?: string | null;
+      };
+    }) => {
+      return apiRequest(`/api/delivery-assignments/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-assignments", "report"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-assignments", "audit"] });
+    },
+  });
+}
+
+export function useDeleteDeliveryAssignment() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/delivery-assignments/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-assignments", "report"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-assignments", "audit"] });
+    },
+  });
+}
+
 export function useUpdateDeliveryAssignmentPaid() {
   return useMutation({
     mutationFn: async ({ id, isPaid }: { id: string; isPaid: number }) => {
@@ -486,7 +529,18 @@ export function useUpdateDeliveryAssignmentPaid() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/delivery-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/delivery-assignments", "report"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-assignments", "audit"] });
     },
+  });
+}
+
+export function useDeliveryAssignmentAudit(startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ["/api/delivery-assignments", "audit", startDate, endDate],
+    queryFn: async () => {
+      return apiRequest(`/api/delivery-assignments/audit?startDate=${startDate}&endDate=${endDate}`);
+    },
+    enabled: !!startDate && !!endDate,
   });
 }
 

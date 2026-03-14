@@ -3,6 +3,7 @@ import ReportCard from "@/components/ReportCard";
 import WhatsAppReport from "@/components/WhatsAppReport";
 import DailyPaymentUpload from "@/components/DailyPaymentUpload";
 import { useReports, useUpdateSaleDate, useDeleteSale } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -29,11 +30,13 @@ function formatDateString(dateStr: string): string {
 }
 
 export default function Reports() {
+  const { user } = useAuth();
   const { data: salesWithProducts = [], isLoading } = useReports();
   const [selectedDate, setSelectedDate] = useState("");
   const updateSaleDate = useUpdateSaleDate();
   const deleteSale = useDeleteSale();
   const { toast } = useToast();
+  const isAccountant = user?.role?.trim().toLowerCase() === "contador";
 
   const handleEditDate = async (saleId: string, newDate: string) => {
     try {
@@ -131,19 +134,27 @@ export default function Reports() {
         report += `Costo: ${saleCost.toFixed(2)} Bs\n`;
       }
 
-      report += `Utilidad: ${saleProfit.toFixed(2)} Bs\n`;
-      report += `  - Jose Eduardo: ${profitPerPartnerSale.toFixed(2)} Bs\n`;
-      report += `  - Jhonatan: ${profitPerPartnerSale.toFixed(2)} Bs\n\n`;
+      if (!isAccountant) {
+        report += `Utilidad: ${saleProfit.toFixed(2)} Bs\n`;
+        report += `  - Jose Eduardo: ${profitPerPartnerSale.toFixed(2)} Bs\n`;
+        report += `  - Jhonatan: ${profitPerPartnerSale.toFixed(2)} Bs\n\n`;
+      } else {
+        report += `\n`;
+      }
     });
 
     report += `RESUMEN TOTAL:\n`;
     report += `Total Ventas: ${totalSales.toFixed(2)} Bs\n`;
-    report += `Costo Total: ${totalCost.toFixed(2)} Bs\n`;
-    report += `Total Bruto: ${totalBaseCost.toFixed(2)} Bs\n`;
-    report += `Utilidad Total: ${totalProfit.toFixed(2)} Bs\n\n`;
-    report += `DISTRIBUCION (50/50):\n`;
-    report += `Jose Eduardo: ${profitPerPartner.toFixed(2)} Bs\n`;
-    report += `Jhonatan: ${profitPerPartner.toFixed(2)} Bs\n\n`;
+    if (!isAccountant) {
+      report += `Costo Total: ${totalCost.toFixed(2)} Bs\n`;
+      report += `Total Bruto: ${totalBaseCost.toFixed(2)} Bs\n`;
+      report += `Utilidad Total: ${totalProfit.toFixed(2)} Bs\n\n`;
+      report += `DISTRIBUCION (50/50):\n`;
+      report += `Jose Eduardo: ${profitPerPartner.toFixed(2)} Bs\n`;
+      report += `Jhonatan: ${profitPerPartner.toFixed(2)} Bs\n\n`;
+    } else {
+      report += `\n`;
+    }
     report += `Reporte generado automaticamente`;
 
     return report;

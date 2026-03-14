@@ -7,6 +7,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, TruckIcon, Pencil, Trash2, Check, X, Calendar as CalendarIcon, ArrowRight } from "lucide-react";
 import {
@@ -19,6 +29,9 @@ import {
   useDeleteDeliveryStockEntry,
   useCreateDeliveryAssignment,
   useDeliveryAssignments,
+  useDeliveryAssignmentAudit,
+  useUpdateDeliveryAssignment,
+  useDeleteDeliveryAssignment,
   useDeliveryAssignmentsReport,
   useUpdateDeliveryAssignmentPaid,
 } from "@/lib/api";
@@ -47,6 +60,12 @@ export default function Delivery() {
   const [assignProductId, setAssignProductId] = useState("");
   const [assignQuantity, setAssignQuantity] = useState("");
   const [assignNote, setAssignNote] = useState("");
+  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
+  const [editAssignDeliveryId, setEditAssignDeliveryId] = useState("");
+  const [editAssignProductId, setEditAssignProductId] = useState("");
+  const [editAssignQuantity, setEditAssignQuantity] = useState("");
+  const [editAssignNote, setEditAssignNote] = useState("");
+  const [assignmentToDelete, setAssignmentToDelete] = useState<any | null>(null);
   
   // Report state
   const today = new Date().toISOString().split('T')[0];
@@ -59,6 +78,7 @@ export default function Delivery() {
   const { data: stockEntries = [] } = useDeliveryStockEntries() as { data: any[] };
   const { data: deliveryAssignments = [] } = useDeliveryAssignments() as { data: any[] };
   const { data: report, isLoading: reportLoading } = useDeliveryAssignmentsReport(reportStartDate, reportEndDate);
+  const { data: assignmentAudit = [] } = useDeliveryAssignmentAudit(reportStartDate, reportEndDate) as { data: any[] };
 
   // Mutations
   const createDelivery = useCreateDelivery();
@@ -66,6 +86,8 @@ export default function Delivery() {
   const updateStockEntry = useUpdateDeliveryStockEntry();
   const deleteStockEntry = useDeleteDeliveryStockEntry();
   const createAssignment = useCreateDeliveryAssignment();
+  const updateAssignment = useUpdateDeliveryAssignment();
+  const deleteAssignment = useDeleteDeliveryAssignment();
   const updatePaidStatus = useUpdateDeliveryAssignmentPaid();
 
   // Handlers
@@ -191,6 +213,89 @@ export default function Delivery() {
     }
   };
 
+  const handleStartEditAssignment = (assignment: any) => {
+    setEditingAssignmentId(assignment.id);
+    setEditAssignDeliveryId(assignment.deliveryId);
+    setEditAssignProductId(assignment.productId);
+    setEditAssignQuantity(String(assignment.quantity));
+    setEditAssignNote(assignment.note || "");
+  };
+
+  const handleCancelEditAssignment = () => {
+    setEditingAssignmentId(null);
+    setEditAssignDeliveryId("");
+    setEditAssignProductId("");
+    setEditAssignQuantity("");
+    setEditAssignNote("");
+  };
+
+  const handleSaveEditAssignment = async () => {
+    if (!editingAssignmentId || !editAssignDeliveryId || !editAssignProductId || !editAssignQuantity) return;
+
+    const product = products.find((item: any) => item.id === editAssignProductId);
+    if (!product) {
+      toast({
+        title: "Error",
+        description: "Producto no encontrado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await updateAssignment.mutateAsync({
+        id: editingAssignmentId,
+        data: {
+          deliveryId: editAssignDeliveryId,
+          productId: editAssignProductId,
+          quantity: parseInt(editAssignQuantity, 10),
+          unitPriceSnapshot: String(product.price),
+          note: editAssignNote.trim() || null,
+        },
+      });
+      toast({
+        title: "Asignacion actualizada",
+        description: "El valor anterior quedo guardado en el historial",
+      });
+      handleCancelEditAssignment();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la asignacion",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteAssignment = async (assignmentId: string) => {
+    try {
+      await deleteAssignment.mutateAsync(assignmentId);
+      toast({
+        title: "Asignacion eliminada",
+        description: "La asignacion se quito del saldo actual y quedo respaldada",
+      });
+      if (editingAssignmentId === assignmentId) {
+        handleCancelEditAssignment();
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la asignacion",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openDeleteAssignmentDialog = (assignment: any) => {
+    setAssignmentToDelete(assignment);
+  };
+
+  const handleConfirmDeleteAssignment = async () => {
+    if (!assignmentToDelete) return;
+    await handleDeleteAssignment(assignmentToDelete.id);
+    setAssignmentToDelete(null);
+  };
+
   const handleTogglePaid = async (assignmentId: string, currentStatus: number) => {
     try {
       await updatePaidStatus.mutateAsync({
@@ -216,7 +321,7 @@ export default function Delivery() {
     const current = stockBalance.get(entry.productId) || 0;
     stockBalance.set(entry.productId, current + entry.quantity);
   });
-  report?.assignments?.forEach((assignment: any) => {
+  deliveryAssignments.forEach((assignment: any) => {
     const current = stockBalance.get(assignment.productId) || 0;
     stockBalance.set(assignment.productId, current - assignment.quantity);
   });
@@ -237,6 +342,18 @@ export default function Delivery() {
     "h-16 w-full rounded-2xl bg-slate-900 text-white shadow-xl shadow-slate-200 transition-all hover:bg-indigo-600 active:scale-[0.99]";
   const tabButtonClass =
     "h-9 rounded-xl border border-slate-100 bg-white px-2 py-1.5 text-[11px] font-bold tracking-tight text-slate-500 shadow-sm data-[state=active]:border-transparent data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-indigo-200 sm:text-xs";
+  const formatShortDateTime = (value: string | Date | null | undefined) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return new Intl.DateTimeFormat("es-BO", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  };
 
   return (
     <div className="mx-auto w-full max-w-none space-y-5 px-1 sm:px-4 lg:px-6">
@@ -700,80 +817,407 @@ export default function Delivery() {
 
               {reportLoading ? (
                 <p className="text-center text-muted-foreground">Cargando reporte...</p>
-              ) : report && report.byDelivery && report.byDelivery.length > 0 ? (
+              ) : (
                 <>
-                  {report.byDelivery.map((deliveryData: any) => (
-                    <Card key={deliveryData.delivery.id} className={bentoCardClass}>
-                      <CardHeader>
-                        <CardTitle className="text-lg">{deliveryData.delivery.name}</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <div className="rounded-lg border">
-                          <table className="w-full">
-                            <thead className="border-b bg-muted/50">
-                              <tr>
-                                <th className="p-2 text-left text-sm font-medium">Producto</th>
-                                <th className="p-2 text-center text-sm font-medium">Cant.</th>
-                                <th className="p-2 text-right text-sm font-medium">Precio</th>
-                                <th className="p-2 text-right text-sm font-medium">Total</th>
-                                <th className="p-2 text-center text-sm font-medium">Pagado</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {deliveryData.assignments.map((assignment: any) => (
-                                <tr key={assignment.id} className="border-b">
-                                  <td className="p-2 text-sm">{assignment.product?.name}</td>
-                                  <td className="p-2 text-center text-sm font-mono">{assignment.quantity}</td>
-                                  <td className="p-2 text-right text-sm font-mono">
-                                    {parseFloat(assignment.unitPriceSnapshot).toFixed(2)} Bs
-                                  </td>
-                                  <td className="p-2 text-right text-sm font-mono">
-                                    {(assignment.quantity * parseFloat(assignment.unitPriceSnapshot)).toFixed(2)} Bs
-                                  </td>
-                                  <td className="p-2 text-center">
-                                    <Checkbox
-                                      checked={assignment.isPaid === 1}
-                                      onCheckedChange={() => handleTogglePaid(assignment.id, assignment.isPaid)}
-                                      data-testid={`checkbox-paid-${assignment.id}`}
-                                    />
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <div className="flex justify-end">
-                          <div className="text-right">
-                            <p className="text-sm text-muted-foreground">Total del delivery:</p>
-                            <p className="text-xl font-bold" data-testid={`total-${deliveryData.delivery.id}`}>
-                              {deliveryData.total.toFixed(2)} Bs
-                            </p>
+                  {report && report.byDelivery && report.byDelivery.length > 0 ? (
+                    <>
+                      {report.byDelivery.map((deliveryData: any) => (
+                        <Card key={deliveryData.delivery.id} className={bentoCardClass}>
+                          <CardHeader>
+                            <CardTitle className="text-lg">{deliveryData.delivery.name}</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <div className="hidden overflow-x-auto rounded-lg border md:block">
+                              <table className="w-full">
+                                <thead className="border-b bg-muted/50">
+                                  <tr>
+                                    <th className="p-2 text-left text-sm font-medium">Producto</th>
+                                    <th className="p-2 text-center text-sm font-medium">Cant.</th>
+                                    <th className="p-2 text-right text-sm font-medium">Precio</th>
+                                    <th className="p-2 text-right text-sm font-medium">Total</th>
+                                    <th className="p-2 text-center text-sm font-medium">Pagado</th>
+                                    <th className="p-2 text-center text-sm font-medium">Acciones</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {deliveryData.assignments.map((assignment: any) => {
+                                    const editing = editingAssignmentId === assignment.id;
+                                    const activePrice = parseFloat(
+                                      String(
+                                        products.find((product: any) => product.id === editAssignProductId)?.price ||
+                                          assignment.unitPriceSnapshot
+                                      )
+                                    );
+                                    return (
+                                      <tr key={assignment.id} className="border-b align-top">
+                                        <td className="p-2 text-sm">
+                                          {editing ? (
+                                            <div className="space-y-2">
+                                              <Select value={editAssignProductId} onValueChange={setEditAssignProductId}>
+                                                <SelectTrigger className="h-9 min-w-[220px]">
+                                                  <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  {products.map((product: any) => (
+                                                    <SelectItem key={product.id} value={product.id}>
+                                                      {product.name}
+                                                    </SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                              <Input
+                                                value={editAssignNote}
+                                                onChange={(e) => setEditAssignNote(e.target.value)}
+                                                placeholder="Nota opcional"
+                                                className="h-9"
+                                              />
+                                            </div>
+                                          ) : (
+                                            <div className="space-y-1">
+                                              <p>{assignment.product?.name}</p>
+                                              {assignment.note ? (
+                                                <p className="text-xs text-slate-500">{assignment.note}</p>
+                                              ) : null}
+                                            </div>
+                                          )}
+                                        </td>
+                                        <td className="p-2 text-center text-sm font-mono">
+                                          {editing ? (
+                                            <Input
+                                              type="number"
+                                              value={editAssignQuantity}
+                                              onChange={(e) => setEditAssignQuantity(e.target.value)}
+                                              className="mx-auto h-9 w-20 text-center"
+                                            />
+                                          ) : (
+                                            assignment.quantity
+                                          )}
+                                        </td>
+                                        <td className="p-2 text-right text-sm font-mono">
+                                          {(editing ? activePrice : parseFloat(assignment.unitPriceSnapshot)).toFixed(2)} Bs
+                                        </td>
+                                        <td className="p-2 text-right text-sm font-mono">
+                                          {(
+                                            (editing ? activePrice : parseFloat(assignment.unitPriceSnapshot)) *
+                                            (editing ? parseInt(editAssignQuantity || "0", 10) || 0 : assignment.quantity)
+                                          ).toFixed(2)} Bs
+                                        </td>
+                                        <td className="p-2 text-center">
+                                          <Checkbox
+                                            checked={assignment.isPaid === 1}
+                                            onCheckedChange={() => handleTogglePaid(assignment.id, assignment.isPaid)}
+                                            data-testid={`checkbox-paid-${assignment.id}`}
+                                          />
+                                        </td>
+                                        <td className="p-2">
+                                          {editing ? (
+                                            <div className="space-y-2">
+                                              <Select value={editAssignDeliveryId} onValueChange={setEditAssignDeliveryId}>
+                                                <SelectTrigger className="h-9 min-w-[180px]">
+                                                  <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  {deliveries.map((delivery: any) => (
+                                                    <SelectItem key={delivery.id} value={delivery.id}>
+                                                      {delivery.name}
+                                                    </SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                              <div className="flex items-center justify-center gap-1">
+                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleSaveEditAssignment}>
+                                                  <Check className="h-4 w-4 text-green-600" />
+                                                </Button>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCancelEditAssignment}>
+                                                  <X className="h-4 w-4" />
+                                                </Button>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <div className="flex items-center justify-center gap-1">
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8"
+                                                onClick={() => handleStartEditAssignment(assignment)}
+                                                data-testid={`button-edit-assignment-${assignment.id}`}
+                                              >
+                                                <Pencil className="h-4 w-4" />
+                                              </Button>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8"
+                                                onClick={() => openDeleteAssignmentDialog(assignment)}
+                                                data-testid={`button-delete-assignment-${assignment.id}`}
+                                              >
+                                                <Trash2 className="h-4 w-4 text-red-500" />
+                                              </Button>
+                                            </div>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            <div className="space-y-3 md:hidden">
+                              {deliveryData.assignments.map((assignment: any) => {
+                                const editing = editingAssignmentId === assignment.id;
+                                const activePrice = parseFloat(
+                                  String(
+                                    products.find((product: any) => product.id === editAssignProductId)?.price ||
+                                      assignment.unitPriceSnapshot
+                                  )
+                                );
+                                const rowPrice = editing ? activePrice : parseFloat(assignment.unitPriceSnapshot);
+                                const rowQuantity = editing ? parseInt(editAssignQuantity || "0", 10) || 0 : assignment.quantity;
+                                return (
+                                  <div key={assignment.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+                                    {editing ? (
+                                      <div className="space-y-3">
+                                        <Select value={editAssignProductId} onValueChange={setEditAssignProductId}>
+                                          <SelectTrigger className="h-11">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {products.map((product: any) => (
+                                              <SelectItem key={product.id} value={product.id}>
+                                                {product.name}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                        <Select value={editAssignDeliveryId} onValueChange={setEditAssignDeliveryId}>
+                                          <SelectTrigger className="h-11">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {deliveries.map((delivery: any) => (
+                                              <SelectItem key={delivery.id} value={delivery.id}>
+                                                {delivery.name}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                        <Input
+                                          type="number"
+                                          value={editAssignQuantity}
+                                          onChange={(e) => setEditAssignQuantity(e.target.value)}
+                                          className="h-11"
+                                        />
+                                        <Input
+                                          value={editAssignNote}
+                                          onChange={(e) => setEditAssignNote(e.target.value)}
+                                          placeholder="Nota opcional"
+                                          className="h-11"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="min-w-0">
+                                            <p className="font-semibold text-slate-900">{assignment.product?.name}</p>
+                                            <p className="text-sm text-slate-500">{assignment.delivery?.name}</p>
+                                            {assignment.note ? (
+                                              <p className="mt-1 text-xs text-slate-500">{assignment.note}</p>
+                                            ) : null}
+                                          </div>
+                                          <Checkbox
+                                            checked={assignment.isPaid === 1}
+                                            onCheckedChange={() => handleTogglePaid(assignment.id, assignment.isPaid)}
+                                            data-testid={`checkbox-paid-mobile-${assignment.id}`}
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                                      <div className="rounded-xl bg-white px-3 py-2">
+                                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Cant.</p>
+                                        <p className="font-semibold text-slate-800">{rowQuantity}</p>
+                                      </div>
+                                      <div className="rounded-xl bg-white px-3 py-2">
+                                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Precio</p>
+                                        <p className="font-semibold text-slate-800">{rowPrice.toFixed(2)} Bs</p>
+                                      </div>
+                                      <div className="rounded-xl bg-white px-3 py-2">
+                                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Total</p>
+                                        <p className="font-semibold text-slate-800">{(rowPrice * rowQuantity).toFixed(2)} Bs</p>
+                                      </div>
+                                    </div>
+                                    <div className="mt-3 flex items-center justify-end gap-2">
+                                      {editing ? (
+                                        <>
+                                          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleSaveEditAssignment}>
+                                            <Check className="h-4 w-4 text-green-600" />
+                                          </Button>
+                                          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleCancelEditAssignment}>
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-9 w-9"
+                                            onClick={() => handleStartEditAssignment(assignment)}
+                                          >
+                                            <Pencil className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-9 w-9"
+                                            onClick={() => openDeleteAssignmentDialog(assignment)}
+                                          >
+                                            <Trash2 className="h-4 w-4 text-red-500" />
+                                          </Button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <div className="flex justify-end">
+                              <div className="text-right">
+                                <p className="text-sm text-muted-foreground">Total del delivery:</p>
+                                <p className="text-xl font-bold" data-testid={`total-${deliveryData.delivery.id}`}>
+                                  {deliveryData.total.toFixed(2)} Bs
+                                </p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+
+                      <Card className={bentoCardClass}>
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <span className="text-lg font-medium text-slate-700">Total General del Periodo:</span>
+                            <span className="text-3xl font-bold text-primary" data-testid="text-grand-total">
+                              {parseFloat(report.grandTotal).toFixed(2)} Bs
+                            </span>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    </>
+                  ) : (
+                    <p className="rounded-2xl border border-dashed border-slate-200 py-8 text-center text-muted-foreground">
+                      No hay asignaciones activas en este periodo
+                    </p>
+                  )}
 
                   <Card className={bentoCardClass}>
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <span className="text-lg font-medium text-slate-700">Total General del Periodo:</span>
-                        <span className="text-3xl font-bold text-primary" data-testid="text-grand-total">
-                          {parseFloat(report.grandTotal).toFixed(2)} Bs
-                        </span>
-                      </div>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-xl font-bold text-slate-800">Historial de cambios</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {assignmentAudit.length === 0 ? (
+                        <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                          No hubo asignaciones editadas o eliminadas en este rango
+                        </p>
+                      ) : (
+                        assignmentAudit.map((log: any) => {
+                          const isEdited = log.action === "edited";
+                          return (
+                            <div
+                              key={log.id}
+                              className={`rounded-2xl border px-4 py-4 ${
+                                isEdited ? "border-amber-200 bg-amber-50/40" : "border-rose-200 bg-rose-50/40"
+                              }`}
+                            >
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div className="space-y-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span
+                                      className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] ${
+                                        isEdited ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"
+                                      }`}
+                                    >
+                                      {isEdited ? "Editado" : "Eliminado"}
+                                    </span>
+                                    <span className="text-xs text-slate-500">{formatShortDateTime(log.createdAt)}</span>
+                                  </div>
+                                  <div className="space-y-1 text-sm text-slate-700">
+                                    <p className="font-semibold text-slate-900">
+                                      {log.product?.name || "Producto"} • {log.quantity} und • {log.delivery?.name || "Delivery"}
+                                    </p>
+                                    <p>Precio guardado: {parseFloat(log.unitPriceSnapshot).toFixed(2)} Bs</p>
+                                    {log.note ? <p>Nota anterior: {log.note}</p> : null}
+                                    <p>Asignado originalmente: {formatShortDateTime(log.assignedAt)}</p>
+                                  </div>
+                                </div>
+                                <div className="lg:max-w-[340px]">
+                                  {isEdited && log.nextState ? (
+                                    <div className="rounded-xl border border-slate-200 bg-white/90 px-3 py-3 text-sm text-slate-700">
+                                      <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                                        Nuevo valor activo
+                                      </p>
+                                      <p className="font-medium">
+                                        {log.nextProduct?.name || "Producto"} • {log.nextState.quantity} und •{" "}
+                                        {log.nextDelivery?.name || "Delivery"}
+                                      </p>
+                                      <p>Precio: {parseFloat(log.nextState.unitPriceSnapshot).toFixed(2)} Bs</p>
+                                      {log.nextState.note ? <p>Nota: {log.nextState.note}</p> : null}
+                                    </div>
+                                  ) : (
+                                    <div className="rounded-xl border border-slate-200 bg-white/90 px-3 py-3 text-sm text-slate-700">
+                                      Este registro ya no afecta el saldo ni el inventario actual.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </CardContent>
                   </Card>
                 </>
-              ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  No hay asignaciones en este periodo
-                </p>
               )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={!!assignmentToDelete} onOpenChange={(open) => !open && setAssignmentToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar asignacion</AlertDialogTitle>
+            <AlertDialogDescription>
+              {assignmentToDelete ? (
+                <>
+                  Vas a eliminar la asignacion de{" "}
+                  <span className="font-semibold text-slate-900">
+                    {assignmentToDelete.product?.name || "Producto"}
+                  </span>{" "}
+                  para{" "}
+                  <span className="font-semibold text-slate-900">
+                    {assignmentToDelete.delivery?.name || "Delivery"}
+                  </span>
+                  . El saldo actual se actualizara y el registro quedara guardado en el historial de cambios.
+                </>
+              ) : (
+                "Confirma si deseas eliminar esta asignacion."
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeleteAssignment}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Eliminar asignacion
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

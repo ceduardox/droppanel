@@ -97,6 +97,14 @@ const adminUserNameUpdateSchema = z.object({
   name: z.string().trim().min(2).max(120),
 });
 
+const deliveryAssignmentUpdateSchema = z.object({
+  deliveryId: z.string().min(1),
+  productId: z.string().min(1),
+  quantity: z.number().int().positive(),
+  unitPriceSnapshot: z.string().min(1),
+  note: z.string().trim().max(1000).nullable().optional(),
+});
+
 const requireAdmin = (req: any, res: any, next: any) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "No autenticado" });
@@ -1482,6 +1490,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/delivery-assignments/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const assignment = await storage.getDeliveryAssignment(id);
+      if (!assignment || assignment.userId !== getEffectiveUserId(req)) {
+        return res.status(404).json({ error: "Asignacion no encontrada" });
+      }
+
+      const data = deliveryAssignmentUpdateSchema.parse({
+        ...req.body,
+        note: req.body.note ?? null,
+      });
+
+      await storage.createDeliveryAssignmentAuditLog({
+        assignmentId: assignment.id,
+        action: "edited",
+        deliveryId: assignment.deliveryId,
+        productId: assignment.productId,
+        quantity: assignment.quantity,
+        unitPriceSnapshot: String(assignment.unitPriceSnapshot),
+        note: assignment.note ?? null,
+        assignedAt: assignment.assignedAt,
+        isPaid: assignment.isPaid,
+        nextState: {
+          deliveryId: data.deliveryId,
+          productId: data.productId,
+          quantity: data.quantity,
+          unitPriceSnapshot: data.unitPriceSnapshot,
+          note: data.note ?? null,
+          isPaid: assignment.isPaid,
+        },
+        userId: assignment.userId,
+      });
+
+      const updated = await storage.updateDeliveryAssignment(id, data);
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al actualizar asignacion" });
+    }
+  });
+
+  app.delete("/api/delivery-assignments/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const assignment = await storage.getDeliveryAssignment(id);
+      if (!assignment || assignment.userId !== getEffectiveUserId(req)) {
+        return res.status(404).json({ error: "Asignacion no encontrada" });
+      }
+
+      await storage.createDeliveryAssignmentAuditLog({
+        assignmentId: assignment.id,
+        action: "deleted",
+        deliveryId: assignment.deliveryId,
+        productId: assignment.productId,
+        quantity: assignment.quantity,
+        unitPriceSnapshot: String(assignment.unitPriceSnapshot),
+        note: assignment.note ?? null,
+        assignedAt: assignment.assignedAt,
+        isPaid: assignment.isPaid,
+        nextState: null,
+        userId: assignment.userId,
+      });
+
+      await storage.deleteDeliveryAssignment(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Error al eliminar asignacion" });
+    }
+  });
+
   app.patch("/api/delivery-assignments/:id/paid", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
@@ -1493,6 +1574,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(assignment);
     } catch (error) {
       res.status(500).json({ error: "Error al actualizar estado de pago" });
+    }
+  });
+
+  app.get("/api/delivery-assignments/audit", requireAuth, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const access = await getAccessContext(req);
+
+      if (!startDate || !endDate) {
+        return res.status(400).json({ error: "Se requieren fechas de inicio y fin" });
+      }
+
+      if (access.isAccountant && access.visibleFrom && String(endDate) < access.visibleFrom) {
+        return res.json([]);
+      }
+
+      const effectiveStartDate = access.isAccountant
+        ? clampStartDate(String(startDate), access.visibleFrom)
+        : String(startDate);
+
+      const [auditLogs, deliveries, products] = await Promise.all([
+        storage.getDeliveryAssignmentAuditLogsByDateRange(
+          getEffectiveUserId(req),
+          effectiveStartDate,
+          String(endDate)
+        ),
+        storage.getDeliveries(getEffectiveUserId(req)),
+        storage.getProducts(getEffectiveUserId(req)),
+      ]);
+
+      const deliveryMap = new Map(deliveries.map((delivery) => [delivery.id, delivery]));
+      const productMap = new Map(products.map((product) => [product.id, product]));
+
+      res.json(
+        auditLogs.map((log) => ({
+          ...log,
+          delivery: deliveryMap.get(log.deliveryId) || null,
+          product: productMap.get(log.productId) || null,
+          nextDelivery: log.nextState?.deliveryId ? deliveryMap.get(log.nextState.deliveryId) || null : null,
+          nextProduct: log.nextState?.productId ? productMap.get(log.nextState.productId) || null : null,
+        }))
+      );
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener historial de cambios" });
     }
   });
 

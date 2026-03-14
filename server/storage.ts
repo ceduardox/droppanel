@@ -12,6 +12,7 @@ import {
   deliveries,
   deliveryStockEntries,
   deliveryAssignments,
+  deliveryAssignmentAuditLogs,
   capitalMovements,
   grossCapitalMovements,
   sellers,
@@ -38,6 +39,7 @@ import {
   type InsertDeliveryStockEntry,
   type DeliveryAssignment,
   type InsertDeliveryAssignment,
+  type DeliveryAssignmentAuditLog,
   type CapitalMovement,
   type InsertCapitalMovement,
   type GrossCapitalMovement,
@@ -50,6 +52,27 @@ import {
 import bcrypt from "bcrypt";
 
 const SALT_ROUNDS = 10;
+
+type DeliveryAssignmentAuditPayload = {
+  assignmentId: string;
+  action: string;
+  deliveryId: string;
+  productId: string;
+  quantity: number;
+  unitPriceSnapshot: string;
+  note?: string | null;
+  assignedAt?: Date | null;
+  isPaid: number;
+  nextState?: {
+    deliveryId: string;
+    productId: string;
+    quantity: number;
+    unitPriceSnapshot: string;
+    note?: string | null;
+    isPaid: number;
+  } | null;
+  userId: string;
+};
 
 export interface IStorage {
   // Users
@@ -106,10 +129,28 @@ export interface IStorage {
   deleteDeliveryStockEntry(id: string): Promise<void>;
 
   // Delivery Assignments
+  getDeliveryAssignment(id: string): Promise<DeliveryAssignment | undefined>;
   getDeliveryAssignments(userId: string): Promise<DeliveryAssignment[]>;
   getDeliveryAssignmentsByDateRange(userId: string, startDate: string, endDate: string): Promise<DeliveryAssignment[]>;
   createDeliveryAssignment(assignment: InsertDeliveryAssignment): Promise<DeliveryAssignment>;
+  updateDeliveryAssignment(
+    id: string,
+    data: {
+      deliveryId?: string;
+      productId?: string;
+      quantity?: number;
+      unitPriceSnapshot?: string;
+      note?: string | null;
+    }
+  ): Promise<DeliveryAssignment | undefined>;
+  deleteDeliveryAssignment(id: string): Promise<boolean>;
   updateDeliveryAssignmentPaid(id: string, isPaid: number): Promise<DeliveryAssignment | undefined>;
+  getDeliveryAssignmentAuditLogsByDateRange(
+    userId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<DeliveryAssignmentAuditLog[]>;
+  createDeliveryAssignmentAuditLog(log: DeliveryAssignmentAuditPayload): Promise<DeliveryAssignmentAuditLog>;
 
   // Capital Movements
   getCapitalMovements(userId: string): Promise<CapitalMovement[]>;
@@ -436,6 +477,11 @@ export class DbStorage implements IStorage {
   }
 
   // Delivery Assignments
+  async getDeliveryAssignment(id: string): Promise<DeliveryAssignment | undefined> {
+    const result = await db.select().from(deliveryAssignments).where(eq(deliveryAssignments.id, id));
+    return result[0];
+  }
+
   async getDeliveryAssignments(userId: string): Promise<DeliveryAssignment[]> {
     return db.select().from(deliveryAssignments).where(eq(deliveryAssignments.userId, userId)).orderBy(desc(deliveryAssignments.assignedAt));
   }
@@ -466,12 +512,67 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
+  async updateDeliveryAssignment(
+    id: string,
+    data: {
+      deliveryId?: string;
+      productId?: string;
+      quantity?: number;
+      unitPriceSnapshot?: string;
+      note?: string | null;
+    }
+  ): Promise<DeliveryAssignment | undefined> {
+    const result = await db
+      .update(deliveryAssignments)
+      .set(data)
+      .where(eq(deliveryAssignments.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteDeliveryAssignment(id: string): Promise<boolean> {
+    const result = await db.delete(deliveryAssignments).where(eq(deliveryAssignments.id, id)).returning();
+    return result.length > 0;
+  }
+
   async updateDeliveryAssignmentPaid(id: string, isPaid: number): Promise<DeliveryAssignment | undefined> {
     const result = await db
       .update(deliveryAssignments)
       .set({ isPaid })
       .where(eq(deliveryAssignments.id, id))
       .returning();
+    return result[0];
+  }
+
+  async getDeliveryAssignmentAuditLogsByDateRange(
+    userId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<DeliveryAssignmentAuditLog[]> {
+    const start = new Date(`${startDate}T00:00:00.000`);
+    const end = new Date(`${endDate}T23:59:59.999`);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new Error("Invalid date range for delivery assignment audit");
+    }
+
+    return db
+      .select()
+      .from(deliveryAssignmentAuditLogs)
+      .where(
+        and(
+          eq(deliveryAssignmentAuditLogs.userId, userId),
+          gte(deliveryAssignmentAuditLogs.createdAt, start),
+          lte(deliveryAssignmentAuditLogs.createdAt, end)
+        )
+      )
+      .orderBy(desc(deliveryAssignmentAuditLogs.createdAt));
+  }
+
+  async createDeliveryAssignmentAuditLog(
+    log: DeliveryAssignmentAuditPayload
+  ): Promise<DeliveryAssignmentAuditLog> {
+    const result = await db.insert(deliveryAssignmentAuditLogs).values(log).returning();
     return result[0];
   }
 

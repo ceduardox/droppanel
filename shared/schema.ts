@@ -215,6 +215,37 @@ export const insertDeliveryAssignmentSchema = createInsertSchema(deliveryAssignm
 export type InsertDeliveryAssignment = z.infer<typeof insertDeliveryAssignmentSchema>;
 export type DeliveryAssignment = typeof deliveryAssignments.$inferSelect;
 
+export const deliveryAssignmentAuditLogs = pgTable("delivery_assignment_audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assignmentId: varchar("assignment_id").notNull(),
+  action: text("action").notNull(),
+  deliveryId: varchar("delivery_id").notNull(),
+  productId: varchar("product_id").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitPriceSnapshot: numeric("unit_price_snapshot", { precision: 10, scale: 2 }).notNull(),
+  note: text("note"),
+  assignedAt: timestamp("assigned_at"),
+  isPaid: integer("is_paid").default(0).notNull(),
+  nextState: jsonb("next_state").$type<{
+    deliveryId: string;
+    productId: string;
+    quantity: number;
+    unitPriceSnapshot: string;
+    note?: string | null;
+    isPaid: number;
+  } | null>(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDeliveryAssignmentAuditLogSchema = createInsertSchema(deliveryAssignmentAuditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertDeliveryAssignmentAuditLog = z.infer<typeof insertDeliveryAssignmentAuditLogSchema>;
+export type DeliveryAssignmentAuditLog = typeof deliveryAssignmentAuditLogs.$inferSelect;
+
 export const capitalMovements = pgTable("capital_movements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   type: text("type").notNull(), // "credito" o "retiro"

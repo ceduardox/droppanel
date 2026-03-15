@@ -1,15 +1,35 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useReports } from "@/lib/api";
 import { ChevronDown, Eye } from "lucide-react";
 
+function formatDetailDate(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-");
+  const months = [
+    "ene",
+    "feb",
+    "mar",
+    "abr",
+    "may",
+    "jun",
+    "jul",
+    "ago",
+    "sep",
+    "oct",
+    "nov",
+    "dic",
+  ];
+  return `${parseInt(day)} ${months[parseInt(month) - 1]} ${year}`;
+}
+
 export default function SalesReport() {
   const { data: salesWithProducts = [], isLoading } = useReports();
   const today = new Date().toISOString().split('T')[0];
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
+  const [expandedProducts, setExpandedProducts] = useState<string[]>([]);
 
   // Filtrar por rango de fechas
   const filteredSales = (salesWithProducts as any[]).filter((item: any) => {
@@ -18,7 +38,21 @@ export default function SalesReport() {
   });
 
   // Agrupar por producto y sumar cantidades
-  const productSummary = new Map<string, { name: string; quantity: number; total: number }>();
+  const productSummary = new Map<
+    string,
+    {
+      name: string;
+      quantity: number;
+      total: number;
+      entries: Array<{
+        saleId: string;
+        saleDate: string;
+        quantity: number;
+        unitPrice: number;
+        total: number;
+      }>;
+    }
+  >();
   
   filteredSales.forEach((item: any) => {
     if (!item.product) return;
@@ -30,18 +64,44 @@ export default function SalesReport() {
     if (existing) {
       existing.quantity += item.quantity;
       existing.total += saleTotal;
+      existing.entries.push({
+        saleId: item.id,
+        saleDate: item.saleDate,
+        quantity: item.quantity,
+        unitPrice: price,
+        total: saleTotal,
+      });
     } else {
       productSummary.set(productId, {
         name: item.product.name,
         quantity: item.quantity,
         total: saleTotal,
+        entries: [
+          {
+            saleId: item.id,
+            saleDate: item.saleDate,
+            quantity: item.quantity,
+            unitPrice: price,
+            total: saleTotal,
+          },
+        ],
       });
     }
   });
 
-  const summaryArray = Array.from(productSummary.values());
+  const summaryArray = Array.from(productSummary.entries()).map(([productId, value]) => ({
+    productId,
+    ...value,
+    entries: [...value.entries].sort((a, b) => a.saleDate.localeCompare(b.saleDate)),
+  }));
   const grandTotalUnits = summaryArray.reduce((sum, p) => sum + p.quantity, 0);
   const grandTotalSales = summaryArray.reduce((sum, p) => sum + p.total, 0);
+
+  const toggleExpandedProduct = (productId: string) => {
+    setExpandedProducts((prev) =>
+      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
+    );
+  };
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64">Cargando...</div>;
@@ -94,7 +154,7 @@ export default function SalesReport() {
               <div className="space-y-2 md:hidden">
                 {summaryArray.map((product, index) => (
                   <details
-                    key={index}
+                    key={product.productId}
                     className="rounded-xl border-2 border-[#b9cbea] bg-gradient-to-r from-[#f4f8ff] to-white p-3 shadow-sm"
                     data-testid={`row-product-${index}`}
                   >
@@ -129,6 +189,37 @@ export default function SalesReport() {
                         <span className="text-muted-foreground">Total Ventas</span>
                         <span className="font-mono whitespace-nowrap">{product.total.toFixed(2)} Bs</span>
                       </div>
+                      <div className="rounded-xl border border-[#d7e4f8] bg-white/90 p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#57709a]">
+                            Ventas del rango
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {product.entries.length} registro{product.entries.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {product.entries.map((entry) => (
+                            <div
+                              key={entry.saleId}
+                              className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-xs font-semibold text-slate-600">
+                                  {formatDetailDate(entry.saleDate)}
+                                </span>
+                                <span className="font-mono text-xs whitespace-nowrap">
+                                  {entry.total.toFixed(2)} Bs
+                                </span>
+                              </div>
+                              <div className="mt-1 flex items-center justify-between gap-3 text-xs text-slate-600">
+                                <span>{entry.quantity} und x {entry.unitPrice.toFixed(2)} Bs</span>
+                                <span>Venta individual</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </details>
                 ))}
@@ -149,22 +240,74 @@ export default function SalesReport() {
                   <table className="w-full min-w-[560px]">
                     <thead className="border-b bg-muted/50">
                       <tr>
+                        <th className="w-14 p-2 text-center text-sm font-medium sm:p-3">Detalle</th>
                         <th className="p-2 text-left text-sm font-medium sm:p-3">Producto</th>
                         <th className="p-2 text-center text-sm font-medium sm:p-3">Unidades Vendidas</th>
                         <th className="p-2 text-right text-sm font-medium sm:p-3">Total Ventas</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {summaryArray.map((product, index) => (
-                        <tr key={index} className="border-b" data-testid={`row-product-${index}`}>
-                          <td className="p-2 font-medium sm:p-3">{product.name}</td>
-                          <td className="p-2 text-center font-mono sm:p-3">{product.quantity}</td>
-                          <td className="p-2 text-right font-mono whitespace-nowrap sm:p-3">{product.total.toFixed(2)} Bs</td>
-                        </tr>
-                      ))}
+                      {summaryArray.map((product, index) => {
+                        const isExpanded = expandedProducts.includes(product.productId);
+                        return (
+                          <Fragment key={product.productId}>
+                            <tr
+                              className={`border-b transition-colors hover:bg-slate-50 ${isExpanded ? "bg-slate-50/70" : ""}`}
+                              data-testid={`row-product-${index}`}
+                            >
+                              <td className="p-2 text-center sm:p-3">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandedProduct(product.productId)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#c9d8ee] bg-[#eef5ff] text-[#1d438b] transition-transform"
+                                  data-testid={`button-toggle-product-${index}`}
+                                >
+                                  <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                                </button>
+                              </td>
+                              <td className="p-2 font-medium sm:p-3">{product.name}</td>
+                              <td className="p-2 text-center font-mono sm:p-3">{product.quantity}</td>
+                              <td className="p-2 text-right font-mono whitespace-nowrap sm:p-3">{product.total.toFixed(2)} Bs</td>
+                            </tr>
+                            {isExpanded && (
+                              <tr className="border-b bg-slate-50/40">
+                                <td colSpan={4} className="p-3 sm:p-4">
+                                  <div className="rounded-xl border border-[#d7e4f8] bg-white p-4">
+                                    <div className="mb-3 flex items-center justify-between">
+                                      <div>
+                                        <p className="text-sm font-semibold text-slate-800">Detalle de ventas filtradas</p>
+                                        <p className="text-xs text-slate-500">
+                                          {product.entries.length} registro{product.entries.length !== 1 ? "s" : ""} dentro del rango seleccionado
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="grid gap-2">
+                                      {product.entries.map((entry) => (
+                                        <div
+                                          key={entry.saleId}
+                                          className="grid grid-cols-[140px_1fr_160px] items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                                        >
+                                          <span className="font-medium text-slate-600">{formatDetailDate(entry.saleDate)}</span>
+                                          <span className="text-slate-600">
+                                            {entry.quantity} und x {entry.unitPrice.toFixed(2)} Bs
+                                          </span>
+                                          <span className="text-right font-mono whitespace-nowrap text-slate-900">
+                                            {entry.total.toFixed(2)} Bs
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                     <tfoot className="bg-muted/50">
                       <tr>
+                        <td className="p-2 sm:p-3"></td>
                         <td className="p-2 font-bold sm:p-3">TOTAL</td>
                         <td className="p-2 text-center font-mono font-bold sm:p-3" data-testid="text-total-units">{grandTotalUnits}</td>
                         <td className="p-2 text-right font-mono font-bold whitespace-nowrap sm:p-3" data-testid="text-total-sales">{grandTotalSales.toFixed(2)} Bs</td>

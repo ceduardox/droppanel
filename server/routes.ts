@@ -408,6 +408,73 @@ async function ensureSystemTables() {
     WHERE lower(trim(role)) = 'contador'
       AND visible_from IS NULL;
   `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS delivery_assignment_audit_logs (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      assignment_id varchar NOT NULL,
+      action text NOT NULL,
+      delivery_id varchar NOT NULL,
+      product_id varchar NOT NULL,
+      quantity integer NOT NULL,
+      unit_price_snapshot numeric(10,2) NOT NULL,
+      note text,
+      assigned_at timestamp,
+      is_paid integer NOT NULL DEFAULT 0,
+      next_state jsonb,
+      user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at timestamp NOT NULL DEFAULT now()
+    );
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE delivery_assignment_audit_logs
+    ADD COLUMN IF NOT EXISTS assignment_id varchar;
+  `);
+  await db.execute(sql`
+    ALTER TABLE delivery_assignment_audit_logs
+    ADD COLUMN IF NOT EXISTS action text;
+  `);
+  await db.execute(sql`
+    ALTER TABLE delivery_assignment_audit_logs
+    ADD COLUMN IF NOT EXISTS delivery_id varchar;
+  `);
+  await db.execute(sql`
+    ALTER TABLE delivery_assignment_audit_logs
+    ADD COLUMN IF NOT EXISTS product_id varchar;
+  `);
+  await db.execute(sql`
+    ALTER TABLE delivery_assignment_audit_logs
+    ADD COLUMN IF NOT EXISTS quantity integer;
+  `);
+  await db.execute(sql`
+    ALTER TABLE delivery_assignment_audit_logs
+    ADD COLUMN IF NOT EXISTS unit_price_snapshot numeric(10,2);
+  `);
+  await db.execute(sql`
+    ALTER TABLE delivery_assignment_audit_logs
+    ADD COLUMN IF NOT EXISTS note text;
+  `);
+  await db.execute(sql`
+    ALTER TABLE delivery_assignment_audit_logs
+    ADD COLUMN IF NOT EXISTS assigned_at timestamp;
+  `);
+  await db.execute(sql`
+    ALTER TABLE delivery_assignment_audit_logs
+    ADD COLUMN IF NOT EXISTS is_paid integer NOT NULL DEFAULT 0;
+  `);
+  await db.execute(sql`
+    ALTER TABLE delivery_assignment_audit_logs
+    ADD COLUMN IF NOT EXISTS next_state jsonb;
+  `);
+  await db.execute(sql`
+    ALTER TABLE delivery_assignment_audit_logs
+    ADD COLUMN IF NOT EXISTS user_id varchar;
+  `);
+  await db.execute(sql`
+    ALTER TABLE delivery_assignment_audit_logs
+    ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now();
+  `);
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {

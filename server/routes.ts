@@ -410,6 +410,11 @@ async function ensureSystemTables() {
   `);
 
   await db.execute(sql`
+    ALTER TABLE sales
+    ADD COLUMN IF NOT EXISTS unit_price numeric(10,2);
+  `);
+
+  await db.execute(sql`
     CREATE TABLE IF NOT EXISTS delivery_assignment_audit_logs (
       id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
       assignment_id varchar NOT NULL,
@@ -1100,7 +1105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/sales", requireAuth, async (req, res) => {
     try {
-      const { productId, quantity, date } = req.body;
+      const { productId, quantity, date, unitPrice } = req.body;
       
       const product = await storage.getProduct(productId);
       
@@ -1108,9 +1113,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Producto no encontrado" });
       }
 
+      const parsedQuantity = parseInt(String(quantity), 10);
+      if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+        return res.status(400).json({ error: "Cantidad invalida" });
+      }
+
+      const parsedBaseCost = parseFloat(String(product.baseCost ?? ""));
+      const parsedCost = parseFloat(String(product.cost ?? 0));
+      const minimumUnitPrice =
+        Number.isFinite(parsedBaseCost) && parsedBaseCost > 0
+          ? parsedBaseCost
+          : parsedCost;
+
+      const parsedUnitPrice =
+        unitPrice !== undefined && unitPrice !== null && unitPrice !== ""
+          ? parseFloat(String(unitPrice))
+          : parseFloat(String(product.price ?? 0));
+
+      if (!Number.isFinite(parsedUnitPrice) || parsedUnitPrice <= 0) {
+        return res.status(400).json({ error: "Precio unitario invalido" });
+      }
+
+      if (Number.isFinite(minimumUnitPrice) && parsedUnitPrice < minimumUnitPrice) {
+        return res.status(400).json({
+          error: `El precio unitario no puede ser menor al capital bruto (${minimumUnitPrice.toFixed(2)} Bs)`,
+        });
+      }
+
       const sale = await storage.createSale({
         productId,
-        quantity: parseInt(quantity),
+        quantity: parsedQuantity,
+        unitPrice: parsedUnitPrice.toFixed(2),
         saleDate: date,
         userId: getEffectiveUserId(req),
       });
@@ -1276,6 +1309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const safeProduct = access.isAccountant && product
           ? sanitizeProductForRestrictedRole(product)
           : product;
+        const effectiveUnitPrice = sale.unitPrice ?? safeProduct?.price ?? product?.price ?? null;
         // Normalize date to YYYY-MM-DD format
         const dateValue: any = sale.saleDate;
         const saleDate = dateValue instanceof Date 
@@ -1285,6 +1319,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             : dateValue;
         return {
           ...sale,
+          unitPrice: effectiveUnitPrice,
           saleDate,
           product: safeProduct,
         };

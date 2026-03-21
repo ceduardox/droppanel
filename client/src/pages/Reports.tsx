@@ -29,6 +29,11 @@ function formatDateString(dateStr: string): string {
   return `${parseInt(day)} de ${monthName} de ${year}`;
 }
 
+function getSaleUnitPrice(item: any): number {
+  const parsed = parseFloat(String(item?.unitPrice ?? item?.product?.price ?? 0));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export default function Reports() {
   const { user } = useAuth();
   const { data: salesWithProducts = [], isLoading } = useReports();
@@ -78,7 +83,7 @@ export default function Reports() {
     }
 
     const totalSales = filteredSales.reduce((sum: number, item: any) => {
-      const price = parseFloat(item.product?.price || 0);
+      const price = getSaleUnitPrice(item);
       return sum + price * item.quantity;
     }, 0);
 
@@ -109,7 +114,7 @@ export default function Reports() {
       const product = item.product;
       if (!product) return;
 
-      const price = parseFloat(product.price);
+      const price = getSaleUnitPrice(item);
       const cost = parseFloat(product.cost);
       const quantity = item.quantity;
       const saleTotal = price * quantity;
@@ -174,7 +179,7 @@ export default function Reports() {
       id: item.id,
       productName: item.product.name,
       quantity: item.quantity,
-      price: parseFloat(item.product.price),
+      price: getSaleUnitPrice(item),
       cost: parseFloat(item.product.cost),
       baseCost: item.product.baseCost ? parseFloat(item.product.baseCost) : undefined,
       capitalIncrease: item.product.capitalIncrease ? parseFloat(item.product.capitalIncrease) : undefined,

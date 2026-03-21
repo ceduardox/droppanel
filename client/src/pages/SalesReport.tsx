@@ -24,6 +24,11 @@ function formatDetailDate(dateStr: string): string {
   return `${parseInt(day)} ${months[parseInt(month) - 1]} ${year}`;
 }
 
+function getSaleUnitPrice(item: any): number {
+  const parsed = parseFloat(String(item?.unitPrice ?? item?.product?.price ?? 0));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export default function SalesReport() {
   const { data: salesWithProducts = [], isLoading } = useReports();
   const today = new Date().toISOString().split('T')[0];
@@ -58,7 +63,7 @@ export default function SalesReport() {
     if (!item.product) return;
     const productId = item.productId;
     const existing = productSummary.get(productId);
-    const price = parseFloat(item.product.price);
+    const price = getSaleUnitPrice(item);
     const saleTotal = price * item.quantity;
     
     if (existing) {

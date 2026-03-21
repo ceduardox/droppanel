@@ -9,7 +9,7 @@ export default function Sales() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  const handleSubmit = async (data: { productId: string; quantity: number; date: string }) => {
+  const handleSubmit = async (data: { productId: string; quantity: number; date: string; unitPrice: number }) => {
     try {
       await createSale.mutateAsync(data);
       toast({ 
@@ -31,11 +31,12 @@ export default function Sales() {
     return <div className="flex items-center justify-center h-64">Cargando...</div>;
   }
 
-  const formattedProducts = products.map((p: any) => ({
+  const formattedProducts = (products as any[]).map((p: any) => ({
     id: p.id,
     name: p.name,
     price: parseFloat(p.price),
     cost: parseFloat(p.cost),
+    baseCost: p.baseCost !== null && p.baseCost !== undefined ? parseFloat(p.baseCost) : null,
   }));
 
   return (

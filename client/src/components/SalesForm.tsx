@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Calendar } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,17 +13,20 @@ interface Product {
   name: string;
   price: number;
   cost: number;
+  baseCost?: number | null;
 }
 
 interface SalesFormProps {
   products: Product[];
-  onSubmit: (data: { productId: string; quantity: number; date: string }) => void;
+  onSubmit: (data: { productId: string; quantity: number; date: string; unitPrice: number }) => void;
 }
 
 export default function SalesForm({ products, onSubmit }: SalesFormProps) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [productId, setProductId] = useState("");
   const [quantity, setQuantity] = useState("1");
+  const [unitPrice, setUnitPrice] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
   const parsedQuantity = Number.parseInt(quantity || "0", 10);
@@ -30,15 +34,48 @@ export default function SalesForm({ products, onSubmit }: SalesFormProps) {
   const selectedProduct = products.find((product) => product.id === productId);
   const safeProductCost =
     selectedProduct && Number.isFinite(selectedProduct.cost) ? selectedProduct.cost : 0;
-  const total = selectedProduct ? selectedProduct.price * safeQuantity : 0;
+  const parsedUnitPrice = Number.parseFloat(unitPrice || "0");
+  const safeUnitPrice = Number.isFinite(parsedUnitPrice) && parsedUnitPrice > 0 ? parsedUnitPrice : 0;
+  const minUnitPrice = selectedProduct
+    ? Number.isFinite(selectedProduct.baseCost as number) && Number(selectedProduct.baseCost) > 0
+      ? Number(selectedProduct.baseCost)
+      : safeProductCost
+    : 0;
+  const total = safeUnitPrice * safeQuantity;
   const totalCost = selectedProduct ? safeProductCost * safeQuantity : 0;
   const profit = total - totalCost;
   const profitPerPartner = profit / 2;
   const isAccountant = user?.role?.trim().toLowerCase() === "contador";
 
+  useEffect(() => {
+    if (selectedProduct) {
+      setUnitPrice(selectedProduct.price.toFixed(2));
+    }
+  }, [selectedProduct?.id]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ productId, quantity: safeQuantity, date });
+
+    if (!productId) {
+      toast({ title: "Error", description: "Selecciona un producto", variant: "destructive" });
+      return;
+    }
+
+    if (!Number.isFinite(safeUnitPrice) || safeUnitPrice <= 0) {
+      toast({ title: "Error", description: "Ingresa un precio unitario valido", variant: "destructive" });
+      return;
+    }
+
+    if (Number.isFinite(minUnitPrice) && safeUnitPrice < minUnitPrice) {
+      toast({
+        title: "Precio invalido",
+        description: `El precio no puede ser menor al capital bruto (${minUnitPrice.toFixed(2)} Bs)`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    onSubmit({ productId, quantity: safeQuantity, date, unitPrice: safeUnitPrice });
     setQuantity("1");
   };
 
@@ -60,7 +97,7 @@ export default function SalesForm({ products, onSubmit }: SalesFormProps) {
                 <SelectContent>
                   {products.map((product) => (
                     <SelectItem key={product.id} value={product.id}>
-                      {product.name} - {product.price} Bs
+                      {product.name} - {product.price.toFixed(2)} Bs
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -78,6 +115,25 @@ export default function SalesForm({ products, onSubmit }: SalesFormProps) {
                 onChange={(e) => setQuantity(e.target.value)}
                 required
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="unitPrice">Precio Unitario Vendido (Bs)</Label>
+              <Input
+                id="unitPrice"
+                data-testid="input-unit-price"
+                type="number"
+                step="0.01"
+                min={minUnitPrice > 0 ? minUnitPrice.toFixed(2) : "0"}
+                value={unitPrice}
+                onChange={(e) => setUnitPrice(e.target.value)}
+                required
+              />
+              {selectedProduct && (
+                <p className="text-xs text-muted-foreground">
+                  Minimo permitido: {minUnitPrice.toFixed(2)} Bs (capital bruto)
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

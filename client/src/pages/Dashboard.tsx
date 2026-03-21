@@ -32,6 +32,11 @@ function getTodayIsoLocal(): string {
   return `${year}-${month}-${day}`;
 }
 
+function getSaleUnitPrice(item: any): number {
+  const parsed = parseFloat(String(item?.unitPrice ?? item?.product?.price ?? 0));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export default function Dashboard() {
   const { data: salesWithProducts = [], isLoading } = useReports();
   const { data: expenses = [] } = useExpenses();
@@ -43,7 +48,7 @@ export default function Dashboard() {
   }
 
   const totalSales = (salesWithProducts as any[]).reduce((sum: number, item: any) => {
-    const price = parseFloat(item.product?.price || 0);
+    const price = getSaleUnitPrice(item);
     return sum + price * item.quantity;
   }, 0);
 
@@ -63,14 +68,14 @@ export default function Dashboard() {
       id: item.id,
       productName: item.product.name,
       quantity: item.quantity,
-      total: parseFloat(item.product.price) * item.quantity,
+      total: getSaleUnitPrice(item) * item.quantity,
       date: item.saleDate,
     }));
 
   const todayIso = getTodayIsoLocal();
   const todaySales = (salesWithProducts as any[]).reduce((sum: number, item: any) => {
     if (toIsoDate(item.saleDate) !== todayIso) return sum;
-    const price = parseFloat(item.product?.price || 0);
+    const price = getSaleUnitPrice(item);
     return sum + price * item.quantity;
   }, 0);
 

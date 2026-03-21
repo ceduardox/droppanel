@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar, DollarSign, Package, Receipt, TrendingUp } from "lucide-react";
 import { useExpenses, useReports } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { getEffectiveUnitCost, getSaleUnitPrice } from "@/lib/sales-pricing";
 
 function formatDateLabel(date: Date): string {
   return new Intl.DateTimeFormat("es-BO", {
@@ -32,11 +33,6 @@ function getTodayIsoLocal(): string {
   return `${year}-${month}-${day}`;
 }
 
-function getSaleUnitPrice(item: any): number {
-  const parsed = parseFloat(String(item?.unitPrice ?? item?.product?.price ?? 0));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 export default function Dashboard() {
   const { data: salesWithProducts = [], isLoading } = useReports();
   const { data: expenses = [] } = useExpenses();
@@ -55,8 +51,7 @@ export default function Dashboard() {
   const totalProducts = (salesWithProducts as any[]).reduce((sum: number, item: any) => sum + item.quantity, 0);
 
   const totalCost = (salesWithProducts as any[]).reduce((sum: number, item: any) => {
-    const cost = parseFloat(item.product?.cost || 0);
-    return sum + cost * item.quantity;
+    return sum + getEffectiveUnitCost(item) * item.quantity;
   }, 0);
 
   const totalProfit = totalSales - totalCost;

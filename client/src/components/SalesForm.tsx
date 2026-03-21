@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getEffectiveUnitCostForProduct, getMinUnitPriceForProduct } from "@/lib/sales-pricing";
 
 interface Product {
   id: string;
@@ -14,11 +15,12 @@ interface Product {
   price: number;
   cost: number;
   baseCost?: number | null;
+  costTransport?: number | null;
 }
 
 interface SalesFormProps {
   products: Product[];
-  onSubmit: (data: { productId: string; quantity: number; date: string; unitPrice: number }) => void;
+  onSubmit: (data: { productId: string; quantity: number; date: string; unitPrice: number; unitTransport: number }) => void;
 }
 
 export default function SalesForm({ products, onSubmit }: SalesFormProps) {
@@ -27,22 +29,25 @@ export default function SalesForm({ products, onSubmit }: SalesFormProps) {
   const [productId, setProductId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [unitPrice, setUnitPrice] = useState("");
+  const [unitTransport, setUnitTransport] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
   const parsedQuantity = Number.parseInt(quantity || "0", 10);
   const safeQuantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity : 0;
   const selectedProduct = products.find((product) => product.id === productId);
-  const safeProductCost =
-    selectedProduct && Number.isFinite(selectedProduct.cost) ? selectedProduct.cost : 0;
   const parsedUnitPrice = Number.parseFloat(unitPrice || "0");
   const safeUnitPrice = Number.isFinite(parsedUnitPrice) && parsedUnitPrice > 0 ? parsedUnitPrice : 0;
+  const parsedUnitTransport = Number.parseFloat(unitTransport || "0");
+  const safeUnitTransport =
+    Number.isFinite(parsedUnitTransport) && parsedUnitTransport >= 0 ? parsedUnitTransport : 0;
   const minUnitPrice = selectedProduct
-    ? Number.isFinite(selectedProduct.baseCost as number) && Number(selectedProduct.baseCost) > 0
-      ? Number(selectedProduct.baseCost)
-      : safeProductCost
+    ? getMinUnitPriceForProduct(selectedProduct, safeUnitTransport)
+    : 0;
+  const effectiveUnitCost = selectedProduct
+    ? getEffectiveUnitCostForProduct(selectedProduct, safeUnitTransport)
     : 0;
   const total = safeUnitPrice * safeQuantity;
-  const totalCost = selectedProduct ? safeProductCost * safeQuantity : 0;
+  const totalCost = effectiveUnitCost * safeQuantity;
   const profit = total - totalCost;
   const profitPerPartner = profit / 2;
   const isAccountant = user?.role?.trim().toLowerCase() === "contador";
@@ -50,6 +55,7 @@ export default function SalesForm({ products, onSubmit }: SalesFormProps) {
   useEffect(() => {
     if (selectedProduct) {
       setUnitPrice(selectedProduct.price.toFixed(2));
+      setUnitTransport((selectedProduct.costTransport ?? 0).toFixed(2));
     }
   }, [selectedProduct?.id]);
 
@@ -66,6 +72,11 @@ export default function SalesForm({ products, onSubmit }: SalesFormProps) {
       return;
     }
 
+    if (!Number.isFinite(safeUnitTransport) || safeUnitTransport < 0) {
+      toast({ title: "Error", description: "Ingresa un transporte valido", variant: "destructive" });
+      return;
+    }
+
     if (Number.isFinite(minUnitPrice) && safeUnitPrice < minUnitPrice) {
       toast({
         title: "Precio invalido",
@@ -75,7 +86,13 @@ export default function SalesForm({ products, onSubmit }: SalesFormProps) {
       return;
     }
 
-    onSubmit({ productId, quantity: safeQuantity, date, unitPrice: safeUnitPrice });
+    onSubmit({
+      productId,
+      quantity: safeQuantity,
+      date,
+      unitPrice: safeUnitPrice,
+      unitTransport: safeUnitTransport,
+    });
     setQuantity("1");
   };
 
@@ -150,6 +167,20 @@ export default function SalesForm({ products, onSubmit }: SalesFormProps) {
                   required
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="unitTransport">Transporte por Venta (Bs)</Label>
+              <Input
+                id="unitTransport"
+                data-testid="input-unit-transport"
+                type="number"
+                step="0.01"
+                min="0"
+                value={unitTransport}
+                onChange={(e) => setUnitTransport(e.target.value)}
+                required
+              />
             </div>
 
             <Button type="submit" className="w-full" data-testid="button-submit-sale">

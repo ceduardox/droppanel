@@ -415,6 +415,11 @@ async function ensureSystemTables() {
   `);
 
   await db.execute(sql`
+    ALTER TABLE sales
+    ADD COLUMN IF NOT EXISTS unit_transport numeric(10,2);
+  `);
+
+  await db.execute(sql`
     CREATE TABLE IF NOT EXISTS delivery_assignment_audit_logs (
       id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
       assignment_id varchar NOT NULL,
@@ -1105,7 +1110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/sales", requireAuth, async (req, res) => {
     try {
-      const { productId, quantity, date, unitPrice } = req.body;
+      const { productId, quantity, date, unitPrice, unitTransport } = req.body;
       
       const product = await storage.getProduct(productId);
       
@@ -1120,10 +1125,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const parsedBaseCost = parseFloat(String(product.baseCost ?? ""));
       const parsedCost = parseFloat(String(product.cost ?? 0));
-      const minimumUnitPrice =
-        Number.isFinite(parsedBaseCost) && parsedBaseCost > 0
-          ? parsedBaseCost
-          : parsedCost;
+      const parsedProductTransport = parseFloat(String(product.costTransport ?? 0));
+      const safeProductTransport =
+        Number.isFinite(parsedProductTransport) && parsedProductTransport >= 0
+          ? parsedProductTransport
+          : 0;
+      const rawReferenceBaseCost =
+        Number.isFinite(parsedBaseCost) && parsedBaseCost > 0 ? parsedBaseCost : parsedCost;
+      const referenceBaseCost = Number.isFinite(rawReferenceBaseCost) ? rawReferenceBaseCost : 0;
+
+      const parsedUnitTransport =
+        unitTransport !== undefined && unitTransport !== null && unitTransport !== ""
+          ? parseFloat(String(unitTransport))
+          : safeProductTransport;
+
+      if (!Number.isFinite(parsedUnitTransport) || parsedUnitTransport < 0) {
+        return res.status(400).json({ error: "Transporte unitario invalido" });
+      }
+
+      const minimumUnitPrice = Math.max(
+        referenceBaseCost - safeProductTransport + parsedUnitTransport,
+        0
+      );
 
       const parsedUnitPrice =
         unitPrice !== undefined && unitPrice !== null && unitPrice !== ""
@@ -1144,6 +1167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         productId,
         quantity: parsedQuantity,
         unitPrice: parsedUnitPrice.toFixed(2),
+        unitTransport: parsedUnitTransport.toFixed(2),
         saleDate: date,
         userId: getEffectiveUserId(req),
       });
@@ -1310,6 +1334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? sanitizeProductForRestrictedRole(product)
           : product;
         const effectiveUnitPrice = sale.unitPrice ?? safeProduct?.price ?? product?.price ?? null;
+        const effectiveUnitTransport = sale.unitTransport ?? product?.costTransport ?? null;
         // Normalize date to YYYY-MM-DD format
         const dateValue: any = sale.saleDate;
         const saleDate = dateValue instanceof Date 
@@ -1320,6 +1345,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return {
           ...sale,
           unitPrice: effectiveUnitPrice,
+          unitTransport: effectiveUnitTransport,
           saleDate,
           product: safeProduct,
         };

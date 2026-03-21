@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Eye, Upload, Minus, Pencil, Trash2, Check, X, Plus } from "lucide-react";
+import { getEffectiveUnitBaseCost } from "@/lib/sales-pricing";
 
 interface GrossCapitalMovement {
   id: string;
@@ -115,7 +116,7 @@ export default function GrossCapitalReport() {
   const salesWithBaseCost = useMemo(() => {
     return (salesWithProducts as any[]).filter((item: any) => {
       if (!item?.product) return false;
-      return parseAmount(item.product.baseCost) > 0;
+      return getEffectiveUnitBaseCost(item) > 0;
     });
   }, [salesWithProducts]);
 
@@ -148,7 +149,7 @@ export default function GrossCapitalReport() {
 
   const salesEntries = useMemo<LedgerEntry[]>(() => {
     return salesWithBaseCost.map((item: any, index: number) => {
-      const baseCost = parseAmount(item.product.baseCost);
+      const baseCost = getEffectiveUnitBaseCost(item);
       const quantity = parseAmount(item.quantity);
       const movementAmount = baseCost * quantity;
 
@@ -384,7 +385,7 @@ export default function GrossCapitalReport() {
               {Object.entries(
                 filteredSales.reduce((acc: Record<string, { name: string; total: number; qty: number }>, item: any) => {
                   const name = item.product.name;
-                  const baseCost = parseFloat(item.product.baseCost || 0);
+                  const baseCost = getEffectiveUnitBaseCost(item);
                   if (!acc[name]) acc[name] = { name, total: 0, qty: 0 };
                   acc[name].total += baseCost * item.quantity;
                   acc[name].qty += item.quantity;
@@ -579,7 +580,7 @@ export default function GrossCapitalReport() {
           <CardContent>
             <div className="space-y-3">
               {filteredSales.map((item: any) => {
-                const baseCost = parseFloat(item.product.baseCost);
+                const baseCost = getEffectiveUnitBaseCost(item);
                 const totalBruto = baseCost * item.quantity;
 
                 return (

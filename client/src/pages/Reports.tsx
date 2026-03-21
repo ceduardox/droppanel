@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "lucide-react";
+import { getEffectiveUnitBaseCost, getEffectiveUnitCost, getSaleUnitPrice } from "@/lib/sales-pricing";
 
 function formatDateString(dateStr: string): string {
   const [year, month, day] = dateStr.split("-");
@@ -27,11 +28,6 @@ function formatDateString(dateStr: string): string {
   ];
   const monthName = months[parseInt(month) - 1];
   return `${parseInt(day)} de ${monthName} de ${year}`;
-}
-
-function getSaleUnitPrice(item: any): number {
-  const parsed = parseFloat(String(item?.unitPrice ?? item?.product?.price ?? 0));
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 export default function Reports() {
@@ -88,13 +84,11 @@ export default function Reports() {
     }, 0);
 
     const totalCost = filteredSales.reduce((sum: number, item: any) => {
-      const cost = parseFloat(item.product?.cost || 0);
-      return sum + cost * item.quantity;
+      return sum + getEffectiveUnitCost(item) * item.quantity;
     }, 0);
 
     const totalBaseCost = filteredSales.reduce((sum: number, item: any) => {
-      const baseCost = parseFloat(item.product?.baseCost || 0);
-      return sum + baseCost * item.quantity;
+      return sum + getEffectiveUnitBaseCost(item) * item.quantity;
     }, 0);
 
     const totalProfit = totalSales - totalCost;
@@ -115,10 +109,11 @@ export default function Reports() {
       if (!product) return;
 
       const price = getSaleUnitPrice(item);
-      const cost = parseFloat(product.cost);
+      const unitCost = getEffectiveUnitCost(item);
+      const unitBaseCost = getEffectiveUnitBaseCost(item);
       const quantity = item.quantity;
       const saleTotal = price * quantity;
-      const saleCost = cost * quantity;
+      const saleCost = unitCost * quantity;
       const saleProfit = saleTotal - saleCost;
       const profitPerPartnerSale = saleProfit / 2;
 
@@ -129,11 +124,10 @@ export default function Reports() {
       report += `Precio Unitario: ${price.toFixed(2)} Bs\n`;
       report += `Total: ${saleTotal.toFixed(2)} Bs\n`;
 
-      if (product.baseCost !== null && product.baseCost !== undefined) {
-        const baseCost = parseFloat(product.baseCost);
+      if (unitBaseCost > 0) {
         const capitalIncrease = parseFloat(product.capitalIncrease || 0);
         report += `Costo: ${saleCost.toFixed(2)} Bs\n`;
-        report += `  - Bruto: ${(baseCost * quantity).toFixed(2)} Bs\n`;
+        report += `  - Bruto: ${(unitBaseCost * quantity).toFixed(2)} Bs\n`;
         report += `  - Capital: ${(capitalIncrease * quantity).toFixed(2)} Bs\n`;
       } else {
         report += `Costo: ${saleCost.toFixed(2)} Bs\n`;
@@ -175,16 +169,19 @@ export default function Reports() {
 
   const salesForDisplay = filteredSales
     .filter((item: any) => item.product)
-    .map((item: any) => ({
-      id: item.id,
-      productName: item.product.name,
-      quantity: item.quantity,
-      price: getSaleUnitPrice(item),
-      cost: parseFloat(item.product.cost),
-      baseCost: item.product.baseCost ? parseFloat(item.product.baseCost) : undefined,
-      capitalIncrease: item.product.capitalIncrease ? parseFloat(item.product.capitalIncrease) : undefined,
-      date: item.saleDate,
-    }));
+    .map((item: any) => {
+      const effectiveBaseCost = getEffectiveUnitBaseCost(item);
+      return {
+        id: item.id,
+        productName: item.product.name,
+        quantity: item.quantity,
+        price: getSaleUnitPrice(item),
+        cost: getEffectiveUnitCost(item),
+        baseCost: effectiveBaseCost > 0 ? effectiveBaseCost : undefined,
+        capitalIncrease: item.product.capitalIncrease ? parseFloat(item.product.capitalIncrease) : undefined,
+        date: item.saleDate,
+      };
+    });
 
   return (
     <div className="space-y-6">

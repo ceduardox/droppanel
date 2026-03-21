@@ -233,7 +233,7 @@ export function useSales() {
 
 export function useCreateSale() {
   return useMutation({
-    mutationFn: async (data: { productId: string; quantity: number; date: string; unitPrice: number }) => {
+    mutationFn: async (data: { productId: string; quantity: number; date: string; unitPrice: number; unitTransport: number }) => {
       return apiRequest("/api/sales", {
         method: "POST",
         body: JSON.stringify(data),

@@ -9,7 +9,7 @@ export default function Sales() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  const handleSubmit = async (data: { productId: string; quantity: number; date: string; unitPrice: number }) => {
+  const handleSubmit = async (data: { productId: string; quantity: number; date: string; unitPrice: number; unitTransport: number }) => {
     try {
       await createSale.mutateAsync(data);
       toast({ 
@@ -37,6 +37,7 @@ export default function Sales() {
     price: parseFloat(p.price),
     cost: parseFloat(p.cost),
     baseCost: p.baseCost !== null && p.baseCost !== undefined ? parseFloat(p.baseCost) : null,
+    costTransport: p.costTransport !== null && p.costTransport !== undefined ? parseFloat(p.costTransport) : 0,
   }));
 
   return (

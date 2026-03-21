@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lock, User } from "lucide-react";
+import { Eye, EyeOff, Lock, User } from "lucide-react";
 
 interface AuthFormProps {
   mode: "login" | "register";
@@ -16,6 +16,7 @@ export default function AuthForm({ mode, onToggleMode, onSubmit, showModeToggle 
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,13 +81,22 @@ export default function AuthForm({ mode, onToggleMode, onSubmit, showModeToggle 
               <Input
                 id="password"
                 data-testid="input-password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="********"
-                className="h-11 rounded-xl border-input/80 bg-background/90 pl-10"
+                className="h-11 rounded-xl border-input/80 bg-background/90 pl-10 pr-10"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => setShowPassword((value) => !value)}
+                aria-label={showPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+                data-testid="button-toggle-password-visibility"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
             </div>
           </div>
         </CardContent>

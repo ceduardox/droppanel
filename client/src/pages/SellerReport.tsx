@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSellers, useCreateSeller, useProducts, useSellerSales, useCreateSellerSale, useUpdateSellerSale, useDeleteSellerSale } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,8 @@ interface Product {
   id: string;
   name: string;
   price: string;
+  cost: string;
+  baseCost?: string | null;
 }
 
 interface SellerSale {
@@ -44,6 +46,18 @@ function formatDateString(dateStr: string): string {
   return `${parseInt(day)} ${months[parseInt(month) - 1]} ${year}`;
 }
 
+function parseAmount(value: unknown): number {
+  const parsed = parseFloat(String(value ?? 0));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getMinUnitPrice(product?: Product | null): number {
+  if (!product) return 0;
+  const baseCost = parseAmount(product.baseCost);
+  if (baseCost > 0) return baseCost;
+  return parseAmount(product.cost);
+}
+
 export default function SellerReport() {
   const { data: sellers = [], isLoading: loadingSellers } = useSellers();
   const { data: products = [], isLoading: loadingProducts } = useProducts();
@@ -64,13 +78,26 @@ export default function SellerReport() {
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
   const [editProductId, setEditProductId] = useState("");
   const [editQuantity, setEditQuantity] = useState("");
+  const [editUnitPrice, setEditUnitPrice] = useState("");
   
   const [selectedSeller, setSelectedSeller] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
   const [quantity, setQuantity] = useState("1");
+  const [unitPrice, setUnitPrice] = useState("");
   const [saleDate, setSaleDate] = useState(today);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!selectedProduct) {
+      setUnitPrice("");
+      return;
+    }
+    const product = (products as Product[]).find((p) => p.id === selectedProduct);
+    if (product) {
+      setUnitPrice(parseAmount(product.price).toFixed(2));
+    }
+  }, [selectedProduct, products]);
 
   const handleAddSeller = async () => {
     if (!newSellerName.trim()) {
@@ -94,25 +121,49 @@ export default function SellerReport() {
     const product = (products as Product[]).find(p => p.id === selectedProduct);
     if (!product) return;
 
-    const qty = parseInt(quantity) || 1;
+    const qty = parseInt(quantity, 10);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      toast({ title: "Error", description: "Ingresa una cantidad valida", variant: "destructive" });
+      return;
+    }
+    const parsedUnitPrice = parseAmount(unitPrice);
+    const minimumUnitPrice = getMinUnitPrice(product);
+
+    if (!Number.isFinite(parsedUnitPrice) || parsedUnitPrice <= 0) {
+      toast({ title: "Error", description: "Ingresa un precio unitario valido", variant: "destructive" });
+      return;
+    }
+
+    if (minimumUnitPrice > 0 && parsedUnitPrice < minimumUnitPrice) {
+      toast({
+        title: "Precio invalido",
+        description: `No puede ser menor al capital bruto (${minimumUnitPrice.toFixed(2)} Bs)`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const formattedUnitPrice = parsedUnitPrice.toFixed(2);
     const existingIdx = cart.findIndex(c => c.productId === selectedProduct);
     
     if (existingIdx >= 0) {
       const newCart = [...cart];
       newCart[existingIdx].quantity += qty;
-      newCart[existingIdx].total = parseFloat(newCart[existingIdx].unitPrice) * newCart[existingIdx].quantity;
+      newCart[existingIdx].unitPrice = formattedUnitPrice;
+      newCart[existingIdx].total = parseFloat(formattedUnitPrice) * newCart[existingIdx].quantity;
       setCart(newCart);
     } else {
       setCart([...cart, {
         productId: product.id,
         productName: product.name,
         quantity: qty,
-        unitPrice: product.price,
-        total: parseFloat(product.price) * qty,
+        unitPrice: formattedUnitPrice,
+        total: parseFloat(formattedUnitPrice) * qty,
       }]);
     }
     setSelectedProduct("");
     setQuantity("1");
+    setUnitPrice("");
   };
 
   const removeFromCart = (idx: number) => {
@@ -150,29 +201,53 @@ export default function SellerReport() {
 
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
 
-  const handleStartEdit = (sale: SellerSale) => {
+  const handleStartEdit = (sale: Pick<SellerSale, "id" | "productId" | "quantity" | "unitPrice">) => {
     setEditingSaleId(sale.id);
     setEditProductId(sale.productId);
     setEditQuantity(sale.quantity.toString());
+    setEditUnitPrice(parseAmount(sale.unitPrice).toFixed(2));
   };
 
   const handleCancelEdit = () => {
     setEditingSaleId(null);
     setEditProductId("");
     setEditQuantity("");
+    setEditUnitPrice("");
   };
 
   const handleSaveEdit = async (saleId: string) => {
     const product = (products as Product[]).find(p => p.id === editProductId);
     if (!product) return;
+    const minimumUnitPrice = getMinUnitPrice(product);
+    const parsedUnitPrice = parseAmount(editUnitPrice);
+    const parsedQuantity = parseInt(editQuantity, 10);
+
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      toast({ title: "Error", description: "Cantidad invalida", variant: "destructive" });
+      return;
+    }
+
+    if (!Number.isFinite(parsedUnitPrice) || parsedUnitPrice <= 0) {
+      toast({ title: "Error", description: "Precio unitario invalido", variant: "destructive" });
+      return;
+    }
+
+    if (minimumUnitPrice > 0 && parsedUnitPrice < minimumUnitPrice) {
+      toast({
+        title: "Precio invalido",
+        description: `No puede ser menor al capital bruto (${minimumUnitPrice.toFixed(2)} Bs)`,
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       await updateSale.mutateAsync({
         id: saleId,
         data: {
           productId: editProductId,
-          quantity: parseInt(editQuantity),
-          unitPrice: product.price,
+          quantity: parsedQuantity,
+          unitPrice: parsedUnitPrice.toFixed(2),
         },
       });
       toast({ title: "Éxito", description: "Venta actualizada" });
@@ -204,7 +279,7 @@ export default function SellerReport() {
     const product = (products as Product[]).find(p => p.id === sale.productId);
     if (!seller || !product) return acc;
 
-    const total = parseFloat(sale.unitPrice) * sale.quantity;
+    const total = parseAmount(sale.unitPrice) * sale.quantity;
     if (!acc[seller.name]) {
       acc[seller.name] = { sales: [], total: 0, totalProducts: 0 };
     }
@@ -250,7 +325,11 @@ export default function SellerReport() {
   const selectedProductData = selectedProduct 
     ? (products as Product[]).find(p => p.id === selectedProduct)
     : null;
-  const currentItemTotal = selectedProductData ? parseFloat(selectedProductData.price) * parseInt(quantity || "0") : 0;
+  const selectedProductMinPrice = getMinUnitPrice(selectedProductData);
+  const currentItemTotal =
+    selectedProductData && parseInt(quantity || "0", 10) > 0
+      ? parseAmount(unitPrice) * parseInt(quantity || "0", 10)
+      : 0;
 
   if (loadingSellers || loadingProducts || loadingSales) {
     return <div className="flex items-center justify-center h-64">Cargando...</div>;
@@ -329,7 +408,7 @@ export default function SellerReport() {
 
             <div className="border-t pt-4">
               <Label className="text-sm text-muted-foreground mb-2 block">Agregar productos:</Label>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_5rem_6rem_auto] sm:items-end">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_5rem_7rem_6rem_auto] sm:items-end">
                 <div className="min-w-0">
                   <Select value={selectedProduct} onValueChange={setSelectedProduct}>
                     <SelectTrigger data-testid="select-product">
@@ -337,7 +416,7 @@ export default function SellerReport() {
                     </SelectTrigger>
                     <SelectContent>
                       {(products as Product[]).map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name} - {parseFloat(p.price).toFixed(2)} Bs</SelectItem>
+                        <SelectItem key={p.id} value={p.id}>{p.name} - {parseAmount(p.price).toFixed(2)} Bs</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -352,6 +431,17 @@ export default function SellerReport() {
                     data-testid="input-quantity"
                   />
                 </div>
+                <div className="sm:w-28">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={selectedProductMinPrice > 0 ? selectedProductMinPrice.toFixed(2) : "0"}
+                    value={unitPrice}
+                    onChange={(e) => setUnitPrice(e.target.value)}
+                    placeholder="Precio"
+                    data-testid="input-unit-price"
+                  />
+                </div>
                 <div className="text-sm font-medium sm:w-24 sm:text-right">
                   {currentItemTotal.toFixed(2)} Bs
                 </div>
@@ -359,13 +449,18 @@ export default function SellerReport() {
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
+              {selectedProductData && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Minimo permitido: {selectedProductMinPrice.toFixed(2)} Bs (capital bruto)
+                </p>
+              )}
             </div>
 
             {cart.length > 0 && (
               <div className="border rounded-lg p-3 bg-muted/50 space-y-2">
                 {cart.map((item, idx) => (
                   <div key={idx} className="flex flex-wrap items-center justify-between gap-2 text-sm" data-testid={`cart-item-${idx}`}>
-                    <span className="min-w-0 break-words">{item.productName} x{item.quantity}</span>
+                    <span className="min-w-0 break-words">{item.productName} x{item.quantity} @ {parseAmount(item.unitPrice).toFixed(2)} Bs</span>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{item.total.toFixed(2)} Bs</span>
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeFromCart(idx)} data-testid={`button-remove-${idx}`}>
@@ -452,7 +547,16 @@ export default function SellerReport() {
                         <div key={sale.id} className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between" data-testid={`row-sale-${sale.id}`}>
                           {editingSaleId === sale.id ? (
                             <div className="grid flex-1 grid-cols-1 gap-2 sm:flex sm:items-center sm:gap-2">
-                              <Select value={editProductId} onValueChange={setEditProductId}>
+                              <Select
+                                value={editProductId}
+                                onValueChange={(value) => {
+                                  setEditProductId(value);
+                                  const product = (products as Product[]).find((p) => p.id === value);
+                                  if (product) {
+                                    setEditUnitPrice(parseAmount(product.price).toFixed(2));
+                                  }
+                                }}
+                              >
                                 <SelectTrigger className="h-8 flex-1" data-testid="edit-select-product">
                                   <SelectValue />
                                 </SelectTrigger>
@@ -470,6 +574,19 @@ export default function SellerReport() {
                                 className="h-8 sm:w-16"
                                 data-testid="edit-input-quantity"
                               />
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min={(() => {
+                                  const currentProduct = (products as Product[]).find((p) => p.id === editProductId);
+                                  const minPrice = getMinUnitPrice(currentProduct);
+                                  return minPrice > 0 ? minPrice.toFixed(2) : "0";
+                                })()}
+                                value={editUnitPrice}
+                                onChange={(e) => setEditUnitPrice(e.target.value)}
+                                className="h-8 sm:w-24"
+                                data-testid="edit-input-unit-price"
+                              />
                               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSaveEdit(sale.id)} data-testid="button-save-edit">
                                 <Check className="h-4 w-4 text-green-600" />
                               </Button>
@@ -479,10 +596,25 @@ export default function SellerReport() {
                             </div>
                           ) : (
                             <>
-                              <span className="min-w-0 break-words text-muted-foreground">{sale.product} x{sale.quantity}</span>
+                              <span className="min-w-0 break-words text-muted-foreground">
+                                {sale.product} x{sale.quantity} @ {parseAmount(sale.unitPrice).toFixed(2)} Bs
+                              </span>
                               <div className="flex items-center gap-2">
                                 <span className="text-muted-foreground">{sale.total.toFixed(2)} Bs</span>
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleStartEdit({ id: sale.id, productId: sale.productId, quantity: sale.quantity } as SellerSale)} data-testid={`button-edit-${sale.id}`}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() =>
+                                    handleStartEdit({
+                                      id: sale.id,
+                                      productId: sale.productId,
+                                      quantity: sale.quantity,
+                                      unitPrice: sale.unitPrice,
+                                    })
+                                  }
+                                  data-testid={`button-edit-${sale.id}`}
+                                >
                                   <Pencil className="h-3 w-3" />
                                 </Button>
                                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDeleteSale(sale.id)} data-testid={`button-delete-${sale.id}`}>

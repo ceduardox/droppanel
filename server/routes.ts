@@ -1970,13 +1970,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: `Solo puedes registrar ventas desde ${access.visibleFrom}` });
       }
 
+      const userId = getEffectiveUserId(req);
+      const product = await storage.getProduct(req.body.productId);
+      if (!product || product.userId !== userId) {
+        return res.status(404).json({ error: "Producto no encontrado" });
+      }
+
+      const parsedQuantity = parseInt(String(req.body.quantity), 10);
+      if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+        return res.status(400).json({ error: "Cantidad invalida" });
+      }
+
+      const parsedUnitPrice = parseFloat(String(req.body.unitPrice));
+      if (!Number.isFinite(parsedUnitPrice) || parsedUnitPrice <= 0) {
+        return res.status(400).json({ error: "Precio unitario invalido" });
+      }
+
+      const parsedBaseCost = parseFloat(String(product.baseCost ?? ""));
+      const parsedCost = parseFloat(String(product.cost ?? 0));
+      const minimumUnitPrice =
+        Number.isFinite(parsedBaseCost) && parsedBaseCost > 0
+          ? parsedBaseCost
+          : parsedCost;
+
+      if (Number.isFinite(minimumUnitPrice) && parsedUnitPrice < minimumUnitPrice) {
+        return res.status(400).json({
+          error: `El precio unitario no puede ser menor al capital bruto (${minimumUnitPrice.toFixed(2)} Bs)`,
+        });
+      }
+
       const data = insertSellerSaleSchema.parse({
         sellerId: req.body.sellerId,
         productId: req.body.productId,
-        quantity: parseInt(req.body.quantity),
-        unitPrice: req.body.unitPrice,
+        quantity: parsedQuantity,
+        unitPrice: parsedUnitPrice.toFixed(2),
         saleDate: req.body.saleDate,
-        userId: getEffectiveUserId(req),
+        userId,
       });
       const sale = await storage.createSellerSale(data);
       res.json(sale);
@@ -1992,11 +2021,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/seller-sales/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      const userId = getEffectiveUserId(req);
       const { productId, quantity, unitPrice } = req.body;
+
+      const existingSale = await storage.getSellerSale(id);
+      if (!existingSale || existingSale.userId !== userId) {
+        return res.status(404).json({ error: "Venta no encontrada" });
+      }
+
+      const targetProductId = productId || existingSale.productId;
+      const product = await storage.getProduct(targetProductId);
+      if (!product || product.userId !== userId) {
+        return res.status(404).json({ error: "Producto no encontrado" });
+      }
+
+      const parsedQuantity =
+        quantity !== undefined && quantity !== null && quantity !== ""
+          ? parseInt(String(quantity), 10)
+          : existingSale.quantity;
+      if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+        return res.status(400).json({ error: "Cantidad invalida" });
+      }
+
+      const parsedUnitPrice =
+        unitPrice !== undefined && unitPrice !== null && unitPrice !== ""
+          ? parseFloat(String(unitPrice))
+          : parseFloat(String(existingSale.unitPrice));
+      if (!Number.isFinite(parsedUnitPrice) || parsedUnitPrice <= 0) {
+        return res.status(400).json({ error: "Precio unitario invalido" });
+      }
+
+      const parsedBaseCost = parseFloat(String(product.baseCost ?? ""));
+      const parsedCost = parseFloat(String(product.cost ?? 0));
+      const minimumUnitPrice =
+        Number.isFinite(parsedBaseCost) && parsedBaseCost > 0
+          ? parsedBaseCost
+          : parsedCost;
+
+      if (Number.isFinite(minimumUnitPrice) && parsedUnitPrice < minimumUnitPrice) {
+        return res.status(400).json({
+          error: `El precio unitario no puede ser menor al capital bruto (${minimumUnitPrice.toFixed(2)} Bs)`,
+        });
+      }
+
       const sale = await storage.updateSellerSale(id, { 
-        productId, 
-        quantity: quantity ? parseInt(quantity) : undefined, 
-        unitPrice 
+        productId: productId ?? undefined,
+        quantity:
+          quantity !== undefined && quantity !== null && quantity !== ""
+            ? parsedQuantity
+            : undefined,
+        unitPrice:
+          unitPrice !== undefined && unitPrice !== null && unitPrice !== ""
+            ? parsedUnitPrice.toFixed(2)
+            : undefined,
       });
       if (!sale) {
         return res.status(404).json({ error: "Venta no encontrada" });

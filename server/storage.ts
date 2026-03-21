@@ -167,6 +167,7 @@ export interface IStorage {
   createSeller(seller: InsertSeller): Promise<Seller>;
 
   // Seller Sales
+  getSellerSale(id: string): Promise<SellerSale | undefined>;
   getSellerSales(userId: string): Promise<SellerSale[]>;
   createSellerSale(sale: InsertSellerSale): Promise<SellerSale>;
   updateSellerSale(id: string, data: { productId?: string; quantity?: number; unitPrice?: string }): Promise<SellerSale | undefined>;
@@ -617,6 +618,11 @@ export class DbStorage implements IStorage {
   }
 
   // Seller Sales
+  async getSellerSale(id: string): Promise<SellerSale | undefined> {
+    const result = await db.select().from(sellerSales).where(eq(sellerSales.id, id));
+    return result[0];
+  }
+
   async getSellerSales(userId: string): Promise<SellerSale[]> {
     return db.select().from(sellerSales).where(eq(sellerSales.userId, userId)).orderBy(desc(sellerSales.saleDate));
   }

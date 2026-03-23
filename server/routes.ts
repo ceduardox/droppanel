@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { db } from "./db";
+import { db, pool } from "./db";
 import multer from "multer";
 import { insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema, insertGrossCapitalMovementSchema, insertSellerSchema, insertSellerSaleSchema } from "@shared/schema";
 import { sql } from "drizzle-orm";
@@ -492,7 +492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const PgSessionStore = connectPgSimple(session);
   const sessionStore = new PgSessionStore({
-    conString: process.env.DATABASE_URL,
+    pool,
     createTableIfMissing: true,
     tableName: "user_sessions",
     pruneSessionInterval: 60 * 15,

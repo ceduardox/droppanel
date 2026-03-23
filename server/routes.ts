@@ -309,6 +309,8 @@ const STORAGE_BACKFILL_MARKER = path.join(
   ".object-storage-backfill-complete",
 );
 let storageBackfillStarted = false;
+let objectStorageClient: Client | null = null;
+let objectStorageDisabled = false;
 
 const sanitizeFileName = (fileName: string): string =>
   fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -335,6 +337,42 @@ const resolveUploadPath = (key: string): string => {
 
 const shouldSkipStorageKey = (key: string): boolean =>
   !key || /^https?:\/\//i.test(key);
+
+const getErrorMessage = (error: unknown): string => {
+  if (!error) return "";
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && "message" in error) {
+    return String((error as { message?: unknown }).message ?? "");
+  }
+  return String(error);
+};
+
+const isReplitObjectStorageUnavailable = (error: unknown): boolean => {
+  const message = getErrorMessage(error);
+  return (
+    message.includes("127.0.0.1:1106") ||
+    message.includes("credential failed") ||
+    message.includes("running on Replit")
+  );
+};
+
+function markObjectStorageUnavailable(error: unknown): void {
+  if (isReplitObjectStorageUnavailable(error) && !objectStorageDisabled) {
+    objectStorageDisabled = true;
+    console.warn(
+      "Replit Object Storage unavailable in this runtime; using local uploads only.",
+    );
+  }
+}
+
+function getObjectStorageClient(): Client | null {
+  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID?.trim();
+  if (!bucketId || objectStorageDisabled) return null;
+  if (!objectStorageClient) {
+    objectStorageClient = new Client({ bucketId });
+  }
+  return objectStorageClient;
+}
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -371,21 +409,22 @@ async function uploadToStorage(key: string, bytes: Buffer): Promise<boolean> {
   if (shouldSkipStorageKey(normalizedKey)) return false;
 
   const localOk = await writeLocalUpload(normalizedKey, bytes);
-  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
   let remoteOk = false;
 
-  if (bucketId) {
+  const objectStorage = getObjectStorageClient();
+  if (objectStorage) {
     try {
-      const objectStorage = new Client({ bucketId });
       const result = await objectStorage.uploadFromBytes(normalizedKey, bytes);
       remoteOk = result.ok;
       if (!result.ok) {
+        markObjectStorageUnavailable(result.error);
         console.warn(
           "Object storage upload failed; local copy was kept.",
           result.error,
         );
       }
     } catch (error) {
+      markObjectStorageUnavailable(error);
       console.warn("Object storage upload failed; local copy was kept.");
       console.warn(error);
     }
@@ -401,11 +440,9 @@ async function downloadFromStorage(key: string): Promise<Buffer | null> {
   const localFile = await readLocalUpload(normalizedKey);
   if (localFile) return localFile;
 
-  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
-
-  if (bucketId) {
+  const objectStorage = getObjectStorageClient();
+  if (objectStorage) {
     try {
-      const objectStorage = new Client({ bucketId });
       const result = await objectStorage.downloadAsBytes(normalizedKey);
       if (result.ok) {
         const bytes = Buffer.from(result.value[0]);
@@ -418,6 +455,7 @@ async function downloadFromStorage(key: string): Promise<Buffer | null> {
         }
         return bytes;
       }
+      markObjectStorageUnavailable(result.error);
       if (result.error?.statusCode !== 404) {
         console.warn(
           "Object storage download returned non-404 error:",
@@ -425,6 +463,7 @@ async function downloadFromStorage(key: string): Promise<Buffer | null> {
         );
       }
     } catch (error) {
+      markObjectStorageUnavailable(error);
       console.warn(
         "Object storage download failed, trying local uploads fallback.",
       );
@@ -498,8 +537,7 @@ async function collectReferencedStorageKeys(): Promise<{
 }
 
 async function runObjectStorageBackfill(): Promise<void> {
-  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
-  if (!bucketId) return;
+  if (!getObjectStorageClient()) return;
 
   if (await fileExists(STORAGE_BACKFILL_MARKER)) {
     return;

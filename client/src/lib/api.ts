@@ -657,6 +657,26 @@ export function useSellers() {
   });
 }
 
+export function useDirectors() {
+  return useQuery({
+    queryKey: ["/api/directors"],
+  });
+}
+
+export function useCreateDirector() {
+  return useMutation({
+    mutationFn: async (data: { name: string }) => {
+      return apiRequest("/api/directors", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/directors"] });
+    },
+  });
+}
+
 export function useCreateSeller() {
   return useMutation({
     mutationFn: async (data: { name: string }) => {
@@ -667,6 +687,27 @@ export function useCreateSeller() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/sellers"] });
+    },
+  });
+}
+
+export function useAssignSellerDirector() {
+  return useMutation({
+    mutationFn: async ({
+      sellerId,
+      data,
+    }: {
+      sellerId: string;
+      data: { directorId: string | null; effectiveFrom: string };
+    }) => {
+      return apiRequest(`/api/sellers/${sellerId}/director`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }) as Promise<{ seller: any; affectedSales: number }>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sellers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/seller-sales"] });
     },
   });
 }

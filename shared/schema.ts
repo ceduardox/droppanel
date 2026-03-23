@@ -286,10 +286,28 @@ export const insertGrossCapitalMovementSchema = createInsertSchema(grossCapitalM
 export type InsertGrossCapitalMovement = z.infer<typeof insertGrossCapitalMovementSchema>;
 export type GrossCapitalMovement = typeof grossCapitalMovements.$inferSelect;
 
+// Directores
+export const directors = pgTable("directors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDirectorSchema = createInsertSchema(directors).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertDirector = z.infer<typeof insertDirectorSchema>;
+export type Director = typeof directors.$inferSelect;
+
 // Vendedores
 export const sellers = pgTable("sellers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  directorId: varchar("director_id").references(() => directors.id),
+  directorAssignedFrom: date("director_assigned_from"),
   userId: varchar("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -306,6 +324,7 @@ export type Seller = typeof sellers.$inferSelect;
 export const sellerSales = pgTable("seller_sales", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   sellerId: varchar("seller_id").notNull().references(() => sellers.id),
+  directorId: varchar("director_id").references(() => directors.id),
   productId: varchar("product_id").notNull().references(() => products.id),
   quantity: integer("quantity").notNull(),
   unitPrice: numeric("unit_price", { precision: 10, scale: 2 }).notNull(),

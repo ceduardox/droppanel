@@ -1,5 +1,16 @@
 import { useEffect, useState } from "react";
-import { useSellers, useCreateSeller, useProducts, useSellerSales, useCreateSellerSale, useUpdateSellerSale, useDeleteSellerSale } from "@/lib/api";
+import {
+  useSellers,
+  useCreateSeller,
+  useProducts,
+  useSellerSales,
+  useCreateSellerSale,
+  useUpdateSellerSale,
+  useDeleteSellerSale,
+  useDirectors,
+  useCreateDirector,
+  useAssignSellerDirector,
+} from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -11,6 +22,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import WhatsAppReport from "@/components/WhatsAppReport";
 
 interface Seller {
+  id: string;
+  name: string;
+  directorId?: string | null;
+  directorAssignedFrom?: string | null;
+}
+
+interface Director {
   id: string;
   name: string;
 }
@@ -26,6 +44,7 @@ interface Product {
 interface SellerSale {
   id: string;
   sellerId: string;
+  directorId?: string | null;
   productId: string;
   quantity: number;
   unitPrice: string;
@@ -60,9 +79,12 @@ function getMinUnitPrice(product?: Product | null): number {
 
 export default function SellerReport() {
   const { data: sellers = [], isLoading: loadingSellers } = useSellers();
+  const { data: directors = [], isLoading: loadingDirectors } = useDirectors();
   const { data: products = [], isLoading: loadingProducts } = useProducts();
   const { data: sellerSales = [], isLoading: loadingSales } = useSellerSales();
   const createSeller = useCreateSeller();
+  const createDirector = useCreateDirector();
+  const assignSellerDirector = useAssignSellerDirector();
   const createSale = useCreateSellerSale();
   const updateSale = useUpdateSellerSale();
   const deleteSale = useDeleteSellerSale();
@@ -73,7 +95,12 @@ export default function SellerReport() {
   const [filterDate, setFilterDate] = useState(today);
   const [filterDateFrom, setFilterDateFrom] = useState(today);
   const [filterDateTo, setFilterDateTo] = useState(today);
+  const [filterDirector, setFilterDirector] = useState("all");
   const [newSellerName, setNewSellerName] = useState("");
+  const [newDirectorName, setNewDirectorName] = useState("");
+  const [assignSellerId, setAssignSellerId] = useState("");
+  const [assignDirectorId, setAssignDirectorId] = useState("none");
+  const [assignEffectiveFrom, setAssignEffectiveFrom] = useState(today);
   
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
   const [editProductId, setEditProductId] = useState("");
@@ -87,6 +114,13 @@ export default function SellerReport() {
   const [saleDate, setSaleDate] = useState(today);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!assignSellerId) return;
+    const seller = (sellers as Seller[]).find((s) => s.id === assignSellerId);
+    if (!seller) return;
+    setAssignDirectorId(seller.directorId || "none");
+  }, [assignSellerId, sellers]);
 
   useEffect(() => {
     if (!selectedProduct) {
@@ -110,6 +144,55 @@ export default function SellerReport() {
       setNewSellerName("");
     } catch {
       toast({ title: "Error", description: "No se pudo agregar el vendedor", variant: "destructive" });
+    }
+  };
+
+  const handleAddDirector = async () => {
+    if (!newDirectorName.trim()) {
+      toast({ title: "Error", description: "Ingresa el nombre del director", variant: "destructive" });
+      return;
+    }
+    try {
+      await createDirector.mutateAsync({ name: newDirectorName.trim() });
+      toast({ title: "Exito", description: "Director agregado" });
+      setNewDirectorName("");
+    } catch {
+      toast({ title: "Error", description: "No se pudo agregar el director", variant: "destructive" });
+    }
+  };
+
+  const handleAssignDirectorToSeller = async () => {
+    if (!assignSellerId) {
+      toast({ title: "Error", description: "Selecciona un vendedor", variant: "destructive" });
+      return;
+    }
+
+    if (!assignEffectiveFrom) {
+      toast({ title: "Error", description: "Selecciona fecha de vigencia", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const response = await assignSellerDirector.mutateAsync({
+        sellerId: assignSellerId,
+        data: {
+          directorId: assignDirectorId === "none" ? null : assignDirectorId,
+          effectiveFrom: assignEffectiveFrom,
+        },
+      });
+
+      const sellerName = (sellers as Seller[]).find((s) => s.id === assignSellerId)?.name || "Vendedor";
+      const directorName =
+        assignDirectorId === "none"
+          ? "Sin director"
+          : (directors as Director[]).find((d) => d.id === assignDirectorId)?.name || "Director";
+
+      toast({
+        title: "Exito",
+        description: `${sellerName} => ${directorName}. Ventas actualizadas desde ${formatDateString(assignEffectiveFrom)}: ${response.affectedSales}`,
+      });
+    } catch {
+      toast({ title: "Error", description: "No se pudo asignar director", variant: "destructive" });
     }
   };
 
@@ -266,12 +349,16 @@ export default function SellerReport() {
     }
   };
 
-  const filteredSales = (sellerSales as SellerSale[]).filter(s => {
-    if (filterMode === "day") {
-      return s.saleDate === filterDate;
-    } else {
-      return s.saleDate >= filterDateFrom && s.saleDate <= filterDateTo;
-    }
+  const filteredSales = (sellerSales as SellerSale[]).filter((sale) => {
+    const dateMatches =
+      filterMode === "day"
+        ? sale.saleDate === filterDate
+        : sale.saleDate >= filterDateFrom && sale.saleDate <= filterDateTo;
+
+    if (!dateMatches) return false;
+    if (filterDirector === "all") return true;
+    if (filterDirector === "none") return !sale.directorId;
+    return sale.directorId === filterDirector;
   });
 
   const salesByDay = filteredSales.reduce((acc, sale) => {
@@ -280,8 +367,13 @@ export default function SellerReport() {
     if (!seller || !product) return acc;
 
     const total = parseAmount(sale.unitPrice) * sale.quantity;
+    const directorName =
+      sale.directorId
+        ? (directors as Director[]).find((director) => director.id === sale.directorId)?.name || "Director"
+        : "Sin director";
+
     if (!acc[seller.name]) {
-      acc[seller.name] = { sales: [], total: 0, totalProducts: 0 };
+      acc[seller.name] = { sales: [], total: 0, totalProducts: 0, directorName };
     }
     acc[seller.name].sales.push({ 
       id: sale.id, 
@@ -294,29 +386,36 @@ export default function SellerReport() {
     acc[seller.name].total += total;
     acc[seller.name].totalProducts += sale.quantity;
     return acc;
-  }, {} as Record<string, { sales: { id: string; productId: string; product: string; quantity: number; unitPrice: string; total: number }[]; total: number; totalProducts: number }>);
+  }, {} as Record<string, { sales: { id: string; productId: string; product: string; quantity: number; unitPrice: string; total: number }[]; total: number; totalProducts: number; directorName: string }>);
 
   const grandTotal = Object.values(salesByDay).reduce((sum, s) => sum + s.total, 0);
   const grandTotalProducts = Object.values(salesByDay).reduce((sum, s) => sum + s.totalProducts, 0);
+  const selectedDirectorLabel =
+    filterDirector === "all"
+      ? "Todos"
+      : filterDirector === "none"
+        ? "Sin director"
+        : (directors as Director[]).find((director) => director.id === filterDirector)?.name || "Director";
 
   const generateWhatsAppText = () => {
-    let text = `📊 *REPORTE VENDEDORES*\n`;
+    let text = `REPORTE VENDEDORES\n`;
     if (filterMode === "day") {
-      text += `📅 Fecha: ${formatDateString(filterDate)}\n\n`;
+      text += `Fecha: ${formatDateString(filterDate)}\n`;
     } else {
-      text += `📅 Desde: ${formatDateString(filterDateFrom)} hasta ${formatDateString(filterDateTo)}\n\n`;
+      text += `Desde: ${formatDateString(filterDateFrom)} hasta ${formatDateString(filterDateTo)}\n`;
     }
+    text += `Director: ${selectedDirectorLabel}\n\n`;
 
     Object.entries(salesByDay).forEach(([sellerName, data]) => {
-      text += `👤 *${sellerName}*\n`;
-      data.sales.forEach(sale => {
-        text += `  • ${sale.product} x${sale.quantity} = ${sale.total.toFixed(2)} Bs\n`;
+      text += `${sellerName} (${data.directorName})\n`;
+      data.sales.forEach((sale) => {
+        text += `  - ${sale.product} x${sale.quantity} = ${sale.total.toFixed(2)} Bs\n`;
       });
-      text += `  💰 Subtotal: ${data.total.toFixed(2)} Bs\n\n`;
+      text += `  Subtotal: ${data.total.toFixed(2)} Bs\n\n`;
     });
 
-    text += `═══════════════════\n`;
-    text += `💵 *TOTAL${filterMode === "range" ? " DEL PERÍODO" : " DEL DÍA"}: ${grandTotal.toFixed(2)} Bs*`;
+    text += `===================\n`;
+    text += `TOTAL${filterMode === "range" ? " DEL PERIODO" : " DEL DIA"}: ${grandTotal.toFixed(2)} Bs`;
 
     return text;
   };
@@ -331,7 +430,7 @@ export default function SellerReport() {
       ? parseAmount(unitPrice) * parseInt(quantity || "0", 10)
       : 0;
 
-  if (loadingSellers || loadingProducts || loadingSales) {
+  if (loadingSellers || loadingDirectors || loadingProducts || loadingSales) {
     return <div className="flex items-center justify-center h-64">Cargando...</div>;
   }
 
@@ -354,16 +453,21 @@ export default function SellerReport() {
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label>Vendedor</Label>
-                <Select value={selectedSeller} onValueChange={setSelectedSeller}>
-                  <SelectTrigger data-testid="select-seller">
-                    <SelectValue placeholder="Seleccionar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(sellers as Seller[]).map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+	                <Select value={selectedSeller} onValueChange={setSelectedSeller}>
+	                  <SelectTrigger data-testid="select-seller">
+	                    <SelectValue placeholder="Seleccionar" />
+	                  </SelectTrigger>
+	                  <SelectContent>
+	                    {(sellers as Seller[]).map((s) => (
+	                      <SelectItem key={s.id} value={s.id}>
+	                        {s.name}
+	                        {s.directorId
+	                          ? ` - ${(directors as Director[]).find((d) => d.id === s.directorId)?.name || "Director"}`
+	                          : " - Sin director"}
+	                      </SelectItem>
+	                    ))}
+	                  </SelectContent>
+	                </Select>
                 <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
                   <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
                     Crear vendedor rapido
@@ -385,10 +489,74 @@ export default function SellerReport() {
                     >
                       <Plus className="mr-2 h-4 w-4" />
                       Agregar
-                    </Button>
-                  </div>
-                </div>
-              </div>
+	                    </Button>
+	                  </div>
+	                </div>
+	                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+	                  <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+	                    Crear director
+	                  </p>
+	                  <div className="flex flex-col gap-2 sm:flex-row">
+	                    <Input
+	                      className="min-w-0 flex-1 bg-white"
+	                      placeholder="Nombre del director"
+	                      value={newDirectorName}
+	                      onChange={(e) => setNewDirectorName(e.target.value)}
+	                      onKeyDown={(e) => e.key === "Enter" && handleAddDirector()}
+	                      data-testid="input-director-name"
+	                    />
+	                    <Button
+	                      onClick={handleAddDirector}
+	                      disabled={createDirector.isPending}
+	                      className="w-full sm:w-auto"
+	                      data-testid="button-add-director"
+	                    >
+	                      <Plus className="mr-2 h-4 w-4" />
+	                      Agregar
+	                    </Button>
+	                  </div>
+	                </div>
+	                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 space-y-2">
+	                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+	                    Asignar director por fecha
+	                  </p>
+	                  <Select value={assignSellerId} onValueChange={setAssignSellerId}>
+	                    <SelectTrigger data-testid="select-assign-seller">
+	                      <SelectValue placeholder="Vendedor" />
+	                    </SelectTrigger>
+	                    <SelectContent>
+	                      {(sellers as Seller[]).map((s) => (
+	                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+	                      ))}
+	                    </SelectContent>
+	                  </Select>
+	                  <Select value={assignDirectorId} onValueChange={setAssignDirectorId}>
+	                    <SelectTrigger data-testid="select-assign-director">
+	                      <SelectValue />
+	                    </SelectTrigger>
+	                    <SelectContent>
+	                      <SelectItem value="none">Sin director</SelectItem>
+	                      {(directors as Director[]).map((d) => (
+	                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+	                      ))}
+	                    </SelectContent>
+	                  </Select>
+	                  <Input
+	                    type="date"
+	                    value={assignEffectiveFrom}
+	                    onChange={(e) => setAssignEffectiveFrom(e.target.value)}
+	                    data-testid="input-assign-effective-from"
+	                  />
+	                  <Button
+	                    onClick={handleAssignDirectorToSeller}
+	                    disabled={assignSellerDirector.isPending}
+	                    className="w-full"
+	                    data-testid="button-assign-director"
+	                  >
+	                    {assignSellerDirector.isPending ? "Asignando..." : "Guardar Asignacion"}
+	                  </Button>
+	                </div>
+	              </div>
               <div className="space-y-2">
                 <Label>Fecha</Label>
                 <Input
@@ -494,6 +662,20 @@ export default function SellerReport() {
                   <SelectItem value="range">Por rango</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={filterDirector} onValueChange={setFilterDirector}>
+                <SelectTrigger className="w-full sm:w-44" data-testid="select-filter-director">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos directores</SelectItem>
+                  <SelectItem value="none">Sin director</SelectItem>
+                  {(directors as Director[]).map((director) => (
+                    <SelectItem key={director.id} value={director.id}>
+                      {director.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {filterMode === "day" ? (
                 <Input
                   type="date"
@@ -521,9 +703,12 @@ export default function SellerReport() {
                   />
                 </div>
               )}
-            </div>
-          </div>
-        </CardHeader>
+	            </div>
+	          </div>
+	          <p className="text-sm text-muted-foreground">
+	            Filtro Director: <span className="font-medium text-foreground">{selectedDirectorLabel}</span>
+	          </p>
+	        </CardHeader>
         <CardContent>
           {Object.keys(salesByDay).length === 0 ? (
             <p className="text-center text-muted-foreground py-8">No hay ventas para esta fecha</p>
@@ -532,10 +717,13 @@ export default function SellerReport() {
               {Object.entries(salesByDay).map(([sellerName, data]) => (
                 <Collapsible key={sellerName} className="border rounded-lg" data-testid={`card-seller-sales-${sellerName}`}>
                   <CollapsibleTrigger className="w-full p-3 sm:p-4 flex flex-wrap justify-between items-center gap-2 hover-elevate rounded-lg">
-                    <div className="min-w-0 flex items-center gap-2 sm:gap-3">
-                      <h3 className="truncate text-base font-bold sm:text-lg">{sellerName}</h3>
-                      <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground sm:text-sm">{data.totalProducts} productos</span>
-                    </div>
+	                    <div className="min-w-0 flex items-center gap-2 sm:gap-3">
+	                      <div className="min-w-0">
+	                        <h3 className="truncate text-base font-bold sm:text-lg">{sellerName}</h3>
+	                        <p className="text-xs text-muted-foreground">{data.directorName}</p>
+	                      </div>
+	                      <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground sm:text-sm">{data.totalProducts} productos</span>
+	                    </div>
                     <div className="flex items-center gap-2">
                       <span className="text-base font-bold text-primary sm:text-lg">{data.total.toFixed(2)} Bs</span>
                       <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />

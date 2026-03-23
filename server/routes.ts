@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db, pool } from "./db";
 import multer from "multer";
-import { insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema, insertGrossCapitalMovementSchema, insertSellerSchema, insertSellerSaleSchema } from "@shared/schema";
+import { insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema, insertGrossCapitalMovementSchema, insertDirectorSchema, insertSellerSchema, insertSellerSaleSchema } from "@shared/schema";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import session from "express-session";
@@ -103,6 +103,13 @@ const deliveryAssignmentUpdateSchema = z.object({
   quantity: z.number().int().positive(),
   unitPriceSnapshot: z.string().min(1),
   note: z.string().trim().max(1000).nullable().optional(),
+});
+
+const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha invalida. Usa YYYY-MM-DD");
+
+const sellerDirectorUpdateSchema = z.object({
+  directorId: z.string().trim().min(1).nullable().optional(),
+  effectiveFrom: isoDateSchema,
 });
 
 const requireAdmin = (req: any, res: any, next: any) => {
@@ -666,6 +673,30 @@ async function ensureSystemTables() {
   await db.execute(sql`
     ALTER TABLE sales
     ADD COLUMN IF NOT EXISTS unit_transport numeric(10,2);
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS directors (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      name text NOT NULL,
+      user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at timestamp NOT NULL DEFAULT now()
+    );
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE sellers
+    ADD COLUMN IF NOT EXISTS director_id varchar;
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE sellers
+    ADD COLUMN IF NOT EXISTS director_assigned_from date;
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE seller_sales
+    ADD COLUMN IF NOT EXISTS director_id varchar;
   `);
 
   await db.execute(sql`
@@ -2213,6 +2244,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Directors routes
+  app.get("/api/directors", requireAuth, async (req, res) => {
+    try {
+      const directorsList = await storage.getDirectors(getEffectiveUserId(req));
+      res.json(directorsList);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener directores" });
+    }
+  });
+
+  app.post("/api/directors", requireAuth, async (req, res) => {
+    try {
+      const data = insertDirectorSchema.parse({
+        name: req.body.name,
+        userId: getEffectiveUserId(req),
+      });
+      const director = await storage.createDirector(data);
+      res.json(director);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al crear director" });
+    }
+  });
+
   // Sellers routes
   app.get("/api/sellers", requireAuth, async (req, res) => {
     try {
@@ -2239,6 +2296,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/sellers/:id/director", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = getEffectiveUserId(req);
+      const parsed = sellerDirectorUpdateSchema.parse({
+        directorId:
+          req.body.directorId === null || req.body.directorId === undefined || `${req.body.directorId}`.trim() === ""
+            ? null
+            : `${req.body.directorId}`.trim(),
+        effectiveFrom: req.body.effectiveFrom,
+      });
+
+      const seller = await storage.getSeller(id);
+      if (!seller || seller.userId !== userId) {
+        return res.status(404).json({ error: "Vendedor no encontrado" });
+      }
+
+      if (parsed.directorId) {
+        const director = await storage.getDirector(parsed.directorId);
+        if (!director || director.userId !== userId) {
+          return res.status(404).json({ error: "Director no encontrado" });
+        }
+      }
+
+      const updatedSeller = await storage.updateSellerDirector(id, userId, {
+        directorId: parsed.directorId ?? null,
+        directorAssignedFrom: parsed.effectiveFrom,
+      });
+
+      if (!updatedSeller) {
+        return res.status(404).json({ error: "Vendedor no encontrado" });
+      }
+
+      const affectedSales = await storage.updateSellerSalesDirectorFromDate(
+        id,
+        userId,
+        parsed.directorId ?? null,
+        parsed.effectiveFrom,
+      );
+
+      res.json({
+        seller: updatedSeller,
+        affectedSales,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al asignar director al vendedor" });
+    }
+  });
+
   // Seller Sales routes
   app.get("/api/seller-sales", requireAuth, async (req, res) => {
     try {
@@ -2261,6 +2370,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const userId = getEffectiveUserId(req);
+      const seller = await storage.getSeller(req.body.sellerId);
+      if (!seller || seller.userId !== userId) {
+        return res.status(404).json({ error: "Vendedor no encontrado" });
+      }
+
       const product = await storage.getProduct(req.body.productId);
       if (!product || product.userId !== userId) {
         return res.status(404).json({ error: "Producto no encontrado" });
@@ -2295,6 +2409,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         quantity: parsedQuantity,
         unitPrice: parsedUnitPrice.toFixed(2),
         saleDate: req.body.saleDate,
+        directorId: seller.directorId || null,
         userId,
       });
       const sale = await storage.createSellerSale(data);

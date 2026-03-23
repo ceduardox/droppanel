@@ -15,6 +15,7 @@ import {
   deliveryAssignmentAuditLogs,
   capitalMovements,
   grossCapitalMovements,
+  directors,
   sellers,
   sellerSales,
   type User, 
@@ -44,6 +45,8 @@ import {
   type InsertCapitalMovement,
   type GrossCapitalMovement,
   type InsertGrossCapitalMovement,
+  type Director,
+  type InsertDirector,
   type Seller,
   type InsertSeller,
   type SellerSale,
@@ -163,9 +166,26 @@ export interface IStorage {
   updateGrossCapitalMovement(id: string, data: { description?: string; amount?: string; movementDate?: string }): Promise<GrossCapitalMovement | undefined>;
   deleteGrossCapitalMovement(id: string): Promise<boolean>;
 
+  // Directors
+  getDirector(id: string): Promise<Director | undefined>;
+  getDirectors(userId: string): Promise<Director[]>;
+  createDirector(director: InsertDirector): Promise<Director>;
+
   // Sellers
+  getSeller(id: string): Promise<Seller | undefined>;
   getSellers(userId: string): Promise<Seller[]>;
   createSeller(seller: InsertSeller): Promise<Seller>;
+  updateSellerDirector(
+    sellerId: string,
+    userId: string,
+    data: { directorId?: string | null; directorAssignedFrom?: string | null },
+  ): Promise<Seller | undefined>;
+  updateSellerSalesDirectorFromDate(
+    sellerId: string,
+    userId: string,
+    directorId: string | null,
+    effectiveFrom: string,
+  ): Promise<number>;
 
   // Seller Sales
   getSellerSale(id: string): Promise<SellerSale | undefined>;
@@ -615,7 +635,27 @@ export class DbStorage implements IStorage {
     return result.length > 0;
   }
 
+  // Directors
+  async getDirector(id: string): Promise<Director | undefined> {
+    const result = await db.select().from(directors).where(eq(directors.id, id));
+    return result[0];
+  }
+
+  async getDirectors(userId: string): Promise<Director[]> {
+    return db.select().from(directors).where(eq(directors.userId, userId)).orderBy(desc(directors.createdAt));
+  }
+
+  async createDirector(director: InsertDirector): Promise<Director> {
+    const result = await db.insert(directors).values(director).returning();
+    return result[0];
+  }
+
   // Sellers
+  async getSeller(id: string): Promise<Seller | undefined> {
+    const result = await db.select().from(sellers).where(eq(sellers.id, id));
+    return result[0];
+  }
+
   async getSellers(userId: string): Promise<Seller[]> {
     return db.select().from(sellers).where(eq(sellers.userId, userId)).orderBy(desc(sellers.createdAt));
   }
@@ -623,6 +663,39 @@ export class DbStorage implements IStorage {
   async createSeller(seller: InsertSeller): Promise<Seller> {
     const result = await db.insert(sellers).values(seller).returning();
     return result[0];
+  }
+
+  async updateSellerDirector(
+    sellerId: string,
+    userId: string,
+    data: { directorId?: string | null; directorAssignedFrom?: string | null },
+  ): Promise<Seller | undefined> {
+    const result = await db
+      .update(sellers)
+      .set(data)
+      .where(and(eq(sellers.id, sellerId), eq(sellers.userId, userId)))
+      .returning();
+    return result[0];
+  }
+
+  async updateSellerSalesDirectorFromDate(
+    sellerId: string,
+    userId: string,
+    directorId: string | null,
+    effectiveFrom: string,
+  ): Promise<number> {
+    const result = await db
+      .update(sellerSales)
+      .set({ directorId })
+      .where(
+        and(
+          eq(sellerSales.sellerId, sellerId),
+          eq(sellerSales.userId, userId),
+          gte(sellerSales.saleDate, effectiveFrom),
+        ),
+      )
+      .returning({ id: sellerSales.id });
+    return result.length;
   }
 
   // Seller Sales

@@ -304,6 +304,11 @@ const businessSettingsPayloadSchema = z.object({
 });
 
 const UPLOADS_ROOT = path.join(process.cwd(), "uploads");
+const STORAGE_BACKFILL_MARKER = path.join(
+  UPLOADS_ROOT,
+  ".object-storage-backfill-complete",
+);
+let storageBackfillStarted = false;
 
 const sanitizeFileName = (fileName: string): string =>
   fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -328,53 +333,259 @@ const resolveUploadPath = (key: string): string => {
   return resolvedPath;
 };
 
-async function uploadToStorage(key: string, bytes: Buffer): Promise<boolean> {
-  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
+const shouldSkipStorageKey = (key: string): boolean =>
+  !key || /^https?:\/\//i.test(key);
 
-  if (bucketId) {
-    try {
-      const objectStorage = new Client({ bucketId });
-      const { ok } = await objectStorage.uploadFromBytes(key, bytes);
-      if (ok) return true;
-    } catch (error) {
-      console.warn("Object storage upload failed, using local uploads fallback.");
-      console.warn(error);
-    }
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
   }
+}
 
+async function writeLocalUpload(key: string, bytes: Buffer): Promise<boolean> {
   try {
     const localFilePath = resolveUploadPath(key);
     await fs.mkdir(path.dirname(localFilePath), { recursive: true });
     await fs.writeFile(localFilePath, bytes);
     return true;
   } catch (error) {
-    console.error("Local upload fallback failed:", error);
+    console.error("Local upload write failed:", error);
     return false;
   }
 }
 
-async function downloadFromStorage(key: string): Promise<Buffer | null> {
-  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
-
-  if (bucketId) {
-    try {
-      const objectStorage = new Client({ bucketId });
-      const result = await objectStorage.downloadAsBytes(key);
-      if (result.ok) {
-        return Buffer.from(result.value[0]);
-      }
-    } catch (error) {
-      console.warn("Object storage download failed, trying local uploads fallback.");
-      console.warn(error);
-    }
-  }
-
+async function readLocalUpload(key: string): Promise<Buffer | null> {
   try {
     const localFilePath = resolveUploadPath(key);
     return await fs.readFile(localFilePath);
   } catch {
     return null;
   }
+}
+
+async function uploadToStorage(key: string, bytes: Buffer): Promise<boolean> {
+  const normalizedKey = normalizeStorageKey(key);
+  if (shouldSkipStorageKey(normalizedKey)) return false;
+
+  const localOk = await writeLocalUpload(normalizedKey, bytes);
+  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
+  let remoteOk = false;
+
+  if (bucketId) {
+    try {
+      const objectStorage = new Client({ bucketId });
+      const result = await objectStorage.uploadFromBytes(normalizedKey, bytes);
+      remoteOk = result.ok;
+      if (!result.ok) {
+        console.warn(
+          "Object storage upload failed; local copy was kept.",
+          result.error,
+        );
+      }
+    } catch (error) {
+      console.warn("Object storage upload failed; local copy was kept.");
+      console.warn(error);
+    }
+  }
+
+  return localOk || remoteOk;
+}
+
+async function downloadFromStorage(key: string): Promise<Buffer | null> {
+  const normalizedKey = normalizeStorageKey(key);
+  if (shouldSkipStorageKey(normalizedKey)) return null;
+
+  const localFile = await readLocalUpload(normalizedKey);
+  if (localFile) return localFile;
+
+  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
+
+  if (bucketId) {
+    try {
+      const objectStorage = new Client({ bucketId });
+      const result = await objectStorage.downloadAsBytes(normalizedKey);
+      if (result.ok) {
+        const bytes = Buffer.from(result.value[0]);
+        const cached = await writeLocalUpload(normalizedKey, bytes);
+        if (!cached) {
+          console.warn(
+            "Downloaded from object storage but failed to cache locally:",
+            normalizedKey,
+          );
+        }
+        return bytes;
+      }
+      if (result.error?.statusCode !== 404) {
+        console.warn(
+          "Object storage download returned non-404 error:",
+          result.error,
+        );
+      }
+    } catch (error) {
+      console.warn(
+        "Object storage download failed, trying local uploads fallback.",
+      );
+      console.warn(error);
+    }
+  }
+
+  return null;
+}
+
+const storageReferenceQueries: Array<{ label: string; query: string }> = [
+  {
+    label: "business_settings.logo_url",
+    query:
+      "SELECT DISTINCT logo_url AS key FROM business_settings WHERE logo_url IS NOT NULL AND btrim(logo_url) <> ''",
+  },
+  {
+    label: "products.image_url",
+    query:
+      "SELECT DISTINCT image_url AS key FROM products WHERE image_url IS NOT NULL AND btrim(image_url) <> ''",
+  },
+  {
+    label: "daily_payments.image_comision_url",
+    query:
+      "SELECT DISTINCT image_comision_url AS key FROM daily_payments WHERE image_comision_url IS NOT NULL AND btrim(image_comision_url) <> ''",
+  },
+  {
+    label: "daily_payments.image_costo_url",
+    query:
+      "SELECT DISTINCT image_costo_url AS key FROM daily_payments WHERE image_costo_url IS NOT NULL AND btrim(image_costo_url) <> ''",
+  },
+  {
+    label: "expenses.image_url",
+    query:
+      "SELECT DISTINCT image_url AS key FROM expenses WHERE image_url IS NOT NULL AND btrim(image_url) <> ''",
+  },
+  {
+    label: "capital_movements.image_url",
+    query:
+      "SELECT DISTINCT image_url AS key FROM capital_movements WHERE image_url IS NOT NULL AND btrim(image_url) <> ''",
+  },
+  {
+    label: "gross_capital_movements.image_url",
+    query:
+      "SELECT DISTINCT image_url AS key FROM gross_capital_movements WHERE image_url IS NOT NULL AND btrim(image_url) <> ''",
+  },
+];
+
+async function collectReferencedStorageKeys(): Promise<{
+  keys: string[];
+  failedQueries: number;
+}> {
+  const keys = new Set<string>();
+  let failedQueries = 0;
+
+  for (const { label, query } of storageReferenceQueries) {
+    try {
+      const result = await pool.query<{ key: string }>(query);
+      for (const row of result.rows) {
+        const value = (row.key || "").trim();
+        if (!value || shouldSkipStorageKey(value)) continue;
+        keys.add(normalizeStorageKey(value));
+      }
+    } catch (error) {
+      failedQueries += 1;
+      console.warn(`Storage key query skipped (${label})`, error);
+    }
+  }
+
+  return { keys: Array.from(keys), failedQueries };
+}
+
+async function runObjectStorageBackfill(): Promise<void> {
+  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
+  if (!bucketId) return;
+
+  if (await fileExists(STORAGE_BACKFILL_MARKER)) {
+    return;
+  }
+
+  try {
+    const { keys, failedQueries } = await collectReferencedStorageKeys();
+
+    if (failedQueries === storageReferenceQueries.length) {
+      console.warn(
+        "[StorageBackfill] all storage key queries failed, will retry on next boot.",
+      );
+      return;
+    }
+
+    if (keys.length === 0) {
+      await fs.mkdir(path.dirname(STORAGE_BACKFILL_MARKER), { recursive: true });
+      await fs.writeFile(
+        STORAGE_BACKFILL_MARKER,
+        JSON.stringify(
+          {
+            completedAt: new Date().toISOString(),
+            totalKeys: 0,
+            downloaded: 0,
+            missing: 0,
+            skippedLocal: 0,
+            failedQueries,
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
+    let downloaded = 0;
+    let missing = 0;
+    let skippedLocal = 0;
+
+    for (const key of keys) {
+      const localFilePath = resolveUploadPath(key);
+      if (await fileExists(localFilePath)) {
+        skippedLocal += 1;
+        continue;
+      }
+
+      const file = await downloadFromStorage(key);
+      if (file) downloaded += 1;
+      else missing += 1;
+    }
+
+    console.log(
+      `[StorageBackfill] scanned=${keys.length} downloaded=${downloaded} local=${skippedLocal} missing=${missing} failedQueries=${failedQueries}`,
+    );
+
+    if (missing === 0 && failedQueries === 0) {
+      await fs.mkdir(path.dirname(STORAGE_BACKFILL_MARKER), {
+        recursive: true,
+      });
+      await fs.writeFile(
+        STORAGE_BACKFILL_MARKER,
+        JSON.stringify(
+          {
+            completedAt: new Date().toISOString(),
+            totalKeys: keys.length,
+            downloaded,
+            missing,
+            skippedLocal,
+            failedQueries,
+          },
+          null,
+          2,
+        ),
+      );
+    }
+  } catch (error) {
+    console.warn("[StorageBackfill] failed:", error);
+  }
+}
+
+function startObjectStorageBackfillOnce(): void {
+  if (storageBackfillStarted) return;
+  storageBackfillStarted = true;
+  setTimeout(() => {
+    void runObjectStorageBackfill();
+  }, 0);
 }
 
 async function ensureSystemTables() {
@@ -489,6 +700,7 @@ async function ensureSystemTables() {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await ensureSystemTables();
+  startObjectStorageBackfillOnce();
 
   const PgSessionStore = connectPgSimple(session);
   const sessionStore = new PgSessionStore({

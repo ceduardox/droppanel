@@ -2,9 +2,9 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCapitalMovements, useExpenses, useGrossCapitalMovements, useReports } from "@/lib/api";
+import { useExpenses, useGrossCapitalMovements, useReports } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { getEffectiveUnitBaseCost, getEffectiveUnitCost, getSaleUnitPrice } from "@/lib/sales-pricing";
+import { getEffectiveUnitCost, getSaleUnitPrice } from "@/lib/sales-pricing";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, Scale } from "lucide-react";
 
 type LedgerRow = {
@@ -101,12 +101,10 @@ export default function FinancialStatus() {
 
   const salesQuery = useReports();
   const expensesQuery = useExpenses();
-  const capitalQuery = useCapitalMovements(!isAccountant);
   const grossCapitalQuery = useGrossCapitalMovements(!isAccountant);
 
   const salesWithProducts = (salesQuery.data as any[]) || [];
   const expenses = (expensesQuery.data as any[]) || [];
-  const capitalMovements = (capitalQuery.data as any[]) || [];
   const grossCapitalMovements = (grossCapitalQuery.data as any[]) || [];
 
   const filteredSales = useMemo(
@@ -117,11 +115,6 @@ export default function FinancialStatus() {
   const filteredExpenses = useMemo(
     () => expenses.filter((item: any) => inRange(toIsoDate(item.expenseDate), startDate, endDate)),
     [expenses, startDate, endDate]
-  );
-
-  const filteredCapitalMovements = useMemo(
-    () => capitalMovements.filter((item: any) => inRange(toIsoDate(item.movementDate), startDate, endDate)),
-    [capitalMovements, startDate, endDate]
   );
 
   const filteredGrossCapitalMovements = useMemo(
@@ -155,42 +148,13 @@ export default function FinancialStatus() {
   const grossProfit = totalIncome - totalCostOfSales;
   const operatingNet = isAccountant ? totalIncome - totalExpenses : grossProfit - totalExpenses;
 
-  const manualCredits = useMemo(
-    () =>
-      filteredCapitalMovements.reduce((sum: number, item: any) => {
-        const amount = parseAmount(item.amount);
-        return item.type === "credito" ? sum + amount : sum;
-      }, 0),
-    [filteredCapitalMovements]
-  );
-
-  const manualDebits = useMemo(
-    () =>
-      filteredCapitalMovements.reduce((sum: number, item: any) => {
-        const amount = parseAmount(item.amount);
-        return item.type === "credito" ? sum : sum + amount;
-      }, 0),
-    [filteredCapitalMovements]
-  );
-
-  const manualCapitalNet = manualCredits - manualDebits;
-
-  const grossCapitalIncome = useMemo(
-    () =>
-      filteredSales.reduce((sum: number, item: any) => {
-        const quantity = parseAmount(item.quantity);
-        return sum + getEffectiveUnitBaseCost(item) * quantity;
-      }, 0),
-    [filteredSales]
-  );
-
   const grossCapitalWithdrawals = useMemo(
     () => filteredGrossCapitalMovements.reduce((sum: number, item: any) => sum + parseAmount(item.amount), 0),
     [filteredGrossCapitalMovements]
   );
 
-  const grossCapitalNet = grossCapitalIncome - grossCapitalWithdrawals;
-  const consolidatedBalance = isAccountant ? operatingNet : operatingNet + manualCapitalNet + grossCapitalNet;
+  const realNetProfit = isAccountant ? operatingNet : operatingNet - grossCapitalWithdrawals;
+  const sharePerPartner = realNetProfit / 2;
 
   const rowsWithBalance = useMemo(() => {
     const rows: LedgerRow[] = [];
@@ -198,46 +162,29 @@ export default function FinancialStatus() {
     filteredSales.forEach((sale: any) => {
       const date = toIsoDate(sale.saleDate);
       const quantity = parseAmount(sale.quantity);
-      const unitPrice = getSaleUnitPrice(sale);
-      const saleTotal = unitPrice * quantity;
       const productName = sale?.product?.name || "Producto";
-
-      rows.push({
-        id: `sale-income-${sale.id}`,
-        date,
-        module: "Ingresos",
-        detail: `Venta ${productName} (${quantity} u)`,
-        income: saleTotal,
-        expense: 0,
-        order: 10,
-      });
-
-      if (!isAccountant) {
-        const costTotal = getEffectiveUnitCost(sale) * quantity;
-        if (costTotal > 0) {
-          rows.push({
-            id: `sale-cost-${sale.id}`,
-            date,
-            module: "Costo de Ventas",
-            detail: `Costo ${productName} (${quantity} u)`,
-            income: 0,
-            expense: costTotal,
-            order: 20,
-          });
-        }
-
-        const baseTotal = getEffectiveUnitBaseCost(sale) * quantity;
-        if (baseTotal > 0) {
-          rows.push({
-            id: `gross-income-${sale.id}`,
-            date,
-            module: "Capital Bruto",
-            detail: `Ingreso bruto ${productName} (${quantity} u)`,
-            income: baseTotal,
-            expense: 0,
-            order: 40,
-          });
-        }
+      if (isAccountant) {
+        const saleTotal = getSaleUnitPrice(sale) * quantity;
+        rows.push({
+          id: `sale-income-${sale.id}`,
+          date,
+          module: "Ingresos",
+          detail: `Venta ${productName} (${quantity} u)`,
+          income: saleTotal,
+          expense: 0,
+          order: 10,
+        });
+      } else {
+        const saleProfit = (getSaleUnitPrice(sale) - getEffectiveUnitCost(sale)) * quantity;
+        rows.push({
+          id: `sale-profit-${sale.id}`,
+          date,
+          module: "Utilidad por Venta",
+          detail: `${productName} (${quantity} u)`,
+          income: saleProfit,
+          expense: 0,
+          order: 10,
+        });
       }
     });
 
@@ -250,36 +197,21 @@ export default function FinancialStatus() {
         detail: `${expense.category || expense.category?.name || "Gasto"} (${parseAmount(expense.amount).toFixed(2)} Bs)`,
         income: 0,
         expense: parseAmount(expense.amount),
-        order: 30,
+        order: 20,
       });
     });
 
     if (!isAccountant) {
-      filteredCapitalMovements.forEach((movement: any) => {
-        const date = toIsoDate(movement.movementDate);
-        const amount = parseAmount(movement.amount);
-        const isCredit = movement.type === "credito";
-        rows.push({
-          id: `capital-${movement.id}`,
-          date,
-          module: "Capital Manual",
-          detail: movement.description?.trim() || (isCredit ? "Credito manual" : "Debito manual"),
-          income: isCredit ? amount : 0,
-          expense: isCredit ? 0 : amount,
-          order: 50,
-        });
-      });
-
       filteredGrossCapitalMovements.forEach((movement: any) => {
         const date = toIsoDate(movement.movementDate);
         rows.push({
           id: `gross-withdraw-${movement.id}`,
           date,
-          module: "Capital Bruto",
+          module: "Retiro Capital Bruto",
           detail: movement.description?.trim() || "Retiro de capital bruto",
           income: 0,
           expense: parseAmount(movement.amount),
-          order: 60,
+          order: 30,
         });
       });
     }
@@ -298,16 +230,15 @@ export default function FinancialStatus() {
   }, [
     filteredSales,
     filteredExpenses,
-    filteredCapitalMovements,
     filteredGrossCapitalMovements,
     isAccountant,
   ]);
 
-  const capitalDataWarning = !isAccountant && (capitalQuery.isError || grossCapitalQuery.isError);
+  const capitalDataWarning = !isAccountant && grossCapitalQuery.isError;
   const isLoading =
     salesQuery.isLoading ||
     expensesQuery.isLoading ||
-    (!isAccountant && (capitalQuery.isLoading || grossCapitalQuery.isLoading));
+    (!isAccountant && grossCapitalQuery.isLoading);
 
   if (isLoading) {
     return <div className="flex h-64 items-center justify-center">Cargando...</div>;
@@ -318,7 +249,7 @@ export default function FinancialStatus() {
       <div>
         <h1 className="text-3xl font-bold">Estado Financiero</h1>
         <p className="mt-1 text-muted-foreground">
-          Resumen detallado de ingresos, costos, gastos y saldos por periodo.
+          Utilidad real del periodo: utilidad por producto menos gastos y retiros de capital bruto.
         </p>
       </div>
 
@@ -376,24 +307,43 @@ export default function FinancialStatus() {
 
       {!isAccountant && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard title="Capital Manual (+/-)" value={formatMoney(manualCapitalNet)} subtitle="Creditos manuales - debitos manuales" emphasize={manualCapitalNet >= 0 ? "positive" : "negative"} />
-          <KpiCard title="Capital Bruto (+/-)" value={formatMoney(grossCapitalNet)} subtitle="Ingresos de bruto - retiros bruto" emphasize={grossCapitalNet >= 0 ? "positive" : "negative"} />
+          <KpiCard
+            title="Retiros Capital Bruto"
+            value={formatMoney(grossCapitalWithdrawals)}
+            subtitle="Egreso adicional que descuenta utilidad real"
+            emphasize={grossCapitalWithdrawals > 0 ? "negative" : "neutral"}
+          />
+          <KpiCard
+            title="Utilidad Real"
+            value={formatMoney(realNetProfit)}
+            subtitle="Utilidad por producto - gastos - retiros capital bruto"
+            emphasize={realNetProfit >= 0 ? "positive" : "negative"}
+          />
           <Card className="md:col-span-2 xl:col-span-2">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">
                 <Scale className="h-4 w-4" />
-                Saldo Consolidado
+                Reparto 50/50
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className={`text-3xl font-bold ${consolidatedBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                {formatMoney(consolidatedBalance)}
-              </p>
+            <CardContent className="space-y-3">
+              <div className="rounded-lg border bg-background p-3">
+                <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Jose Eduardo</p>
+                <p className={`text-2xl font-bold ${sharePerPartner >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {formatMoney(sharePerPartner)}
+                </p>
+              </div>
+              <div className="rounded-lg border bg-background p-3">
+                <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Jhonatan</p>
+                <p className={`text-2xl font-bold ${sharePerPartner >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {formatMoney(sharePerPartner)}
+                </p>
+              </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Formula: utilidad neta operativa + capital manual neto + capital bruto neto.
+                Formula: utilidad real / 2 para cada socio.
               </p>
-              <p className="mt-2 inline-flex items-center gap-1 text-sm font-medium">
-                {consolidatedBalance >= 0 ? (
+              <p className="inline-flex items-center gap-1 text-sm font-medium">
+                {realNetProfit >= 0 ? (
                   <>
                     <ArrowUpRight className="h-4 w-4 text-green-600" />
                     A favor
@@ -413,12 +363,12 @@ export default function FinancialStatus() {
       {capitalDataWarning && (
         <Card className="border-amber-300 bg-amber-50/80">
           <CardContent className="flex items-start gap-2 p-4 text-amber-900">
-            <AlertTriangle className="mt-0.5 h-4 w-4" />
-            <p className="text-sm">
-              No se pudieron cargar algunos datos de capital. El resumen operativo sigue siendo valido, pero el saldo consolidado puede ser incompleto.
-            </p>
-          </CardContent>
-        </Card>
+              <AlertTriangle className="mt-0.5 h-4 w-4" />
+              <p className="text-sm">
+                No se pudieron cargar los retiros de capital bruto. La utilidad real puede estar incompleta.
+              </p>
+            </CardContent>
+          </Card>
       )}
 
       <Card>
@@ -467,4 +417,3 @@ export default function FinancialStatus() {
     </div>
   );
 }
-

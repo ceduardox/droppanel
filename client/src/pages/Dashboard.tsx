@@ -2,7 +2,7 @@ import StatsCard from "@/components/StatsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, DollarSign, Package, Receipt, TrendingUp } from "lucide-react";
-import { useExpenses, useReports } from "@/lib/api";
+import { useExpenses, useGrossCapitalMovements, useReports } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { getEffectiveUnitCost, getSaleUnitPrice } from "@/lib/sales-pricing";
 
@@ -34,10 +34,13 @@ function getTodayIsoLocal(): string {
 }
 
 export default function Dashboard() {
-  const { data: salesWithProducts = [], isLoading } = useReports();
-  const { data: expenses = [] } = useExpenses();
+  const { data: salesWithProducts = [], isLoading: reportsLoading } = useReports();
+  const { data: expenses = [], isLoading: expensesLoading } = useExpenses();
   const { user } = useAuth();
   const isAccountant = user?.role?.trim().toLowerCase() === "contador";
+  const { data: grossCapitalMovements = [], isLoading: grossLoading } = useGrossCapitalMovements(!isAccountant);
+
+  const isLoading = reportsLoading || expensesLoading || (!isAccountant && grossLoading);
 
   if (isLoading) {
     return <div className="flex h-64 items-center justify-center">Cargando...</div>;
@@ -60,7 +63,14 @@ export default function Dashboard() {
     return sum + parseFloat(expense.amount || 0);
   }, 0);
 
-  const netBalance = totalProfit - totalExpenses;
+  const totalGrossWithdrawals = isAccountant
+    ? 0
+    : (grossCapitalMovements as any[]).reduce((sum: number, movement: any) => {
+        return sum + parseFloat(movement.amount || 0);
+      }, 0);
+
+  const realNetProfit = totalProfit - totalExpenses - totalGrossWithdrawals;
+  const partnerShare = realNetProfit / 2;
 
   const recentSales = (salesWithProducts as any[])
     .filter((item: any) => item.product)
@@ -90,8 +100,15 @@ export default function Dashboard() {
     return sum + parseFloat(expense.amount || 0);
   }, 0);
 
+  const todayGrossWithdrawals = isAccountant
+    ? 0
+    : (grossCapitalMovements as any[]).reduce((sum: number, movement: any) => {
+        if (toIsoDate(movement.movementDate) !== todayIso) return sum;
+        return sum + parseFloat(movement.amount || 0);
+      }, 0);
+
   const dailyUtility = todaySales - todayExpenses;
-  const dailyNetUtility = todaySales - todayCost - todayExpenses;
+  const dailyNetUtility = todaySales - todayCost - todayExpenses - todayGrossWithdrawals;
 
   return (
     <div className="space-y-5">
@@ -185,12 +202,15 @@ export default function Dashboard() {
                 <StatsCard title="Ventas Totales" value={`${totalSales.toFixed(2)} Bs`} subtitle="Total acumulado" icon={DollarSign} />
                 <StatsCard title="Utilidad Total" value={`${totalProfit.toFixed(2)} Bs`} subtitle="Ventas - costos" icon={TrendingUp} />
                 <StatsCard title="Gastos Totales" value={`${totalExpenses.toFixed(2)} Bs`} subtitle="Egresos acumulados" icon={Receipt} />
+                <StatsCard title="Retiros Capital Bruto" value={`${totalGrossWithdrawals.toFixed(2)} Bs`} subtitle="Egresos por retiro de bruto" icon={Receipt} />
                 <StatsCard
-                  title="Saldo Neto"
-                  value={`${netBalance.toFixed(2)} Bs`}
-                  subtitle={netBalance >= 0 ? "A favor (utilidad - gastos)" : "En contra (utilidad - gastos)"}
+                  title="Utilidad Real"
+                  value={`${realNetProfit.toFixed(2)} Bs`}
+                  subtitle={realNetProfit >= 0 ? "A favor (utilidad - gastos - retiros bruto)" : "En contra (utilidad - gastos - retiros bruto)"}
                   icon={TrendingUp}
                 />
+                <StatsCard title="50% Jose Eduardo" value={`${partnerShare.toFixed(2)} Bs`} subtitle="Mitad de utilidad real" icon={TrendingUp} />
+                <StatsCard title="50% Jhonatan" value={`${partnerShare.toFixed(2)} Bs`} subtitle="Mitad de utilidad real" icon={TrendingUp} />
               </div>
             </div>
           </div>

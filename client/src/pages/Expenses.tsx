@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Check, X, Image, Eye, Calendar as CalendarIcon, Upload } from "lucide-react";
+import { Plus, Pencil, Check, X, Image, Eye, Calendar as CalendarIcon, Upload, Trash2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
@@ -16,6 +16,7 @@ import {
   useCreateExpense,
   useExpensesSummary,
   useUpdateExpense,
+  useDeleteExpense,
 } from "@/lib/api";
 
 function toISODate(date: Date): string {
@@ -101,6 +102,7 @@ export default function Expenses() {
   const createCategory = useCreateExpenseCategory();
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
+  const deleteExpense = useDeleteExpense();
   const { data: summary, isLoading: summaryLoading } = useExpensesSummary(startDate, endDate);
 
   const handleCreateCategory = async (e: React.FormEvent) => {
@@ -178,6 +180,21 @@ export default function Expenses() {
       cancelEdit();
     } catch {
       toast({ title: "Error", description: "No se pudo actualizar", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    const confirmed = window.confirm("¿Seguro que deseas eliminar este gasto?");
+    if (!confirmed) return;
+
+    try {
+      await deleteExpense.mutateAsync(expenseId);
+      if (editingId === expenseId) {
+        cancelEdit();
+      }
+      toast({ title: "Éxito", description: "Gasto eliminado" });
+    } catch {
+      toast({ title: "Error", description: "No se pudo eliminar", variant: "destructive" });
     }
   };
 
@@ -351,7 +368,7 @@ export default function Expenses() {
                       <th className="p-3 text-left font-medium">Fecha</th>
                       <th className="p-3 text-right font-medium">Monto (Bs)</th>
                       <th className="p-3 text-center font-medium">Comprobante</th>
-                      <th className="p-3 text-center font-medium w-20">Editar</th>
+                      <th className="p-3 text-center font-medium w-28">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -426,9 +443,21 @@ export default function Expenses() {
                               )}
                             </td>
                             <td className="p-3 text-center">
-                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(expense)} data-testid={`button-edit-${expense.id}`}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
+                              <div className="flex justify-center gap-1">
+                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(expense)} data-testid={`button-edit-${expense.id}`}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  onClick={() => handleDeleteExpense(expense.id)}
+                                  disabled={deleteExpense.isPending}
+                                  data-testid={`button-delete-${expense.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </div>
                             </td>
                           </>
                         )}

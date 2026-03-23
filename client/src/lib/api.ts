@@ -369,6 +369,20 @@ export function useUpdateExpense() {
   });
 }
 
+export function useDeleteExpense() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/expenses/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses", "summary"] });
+    },
+  });
+}
+
 // Expenses Summary
 export function useExpensesSummary(startDate: string, endDate: string) {
   return useQuery({

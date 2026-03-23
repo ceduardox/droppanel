@@ -117,6 +117,7 @@ export interface IStorage {
   getExpensesByDateRange(userId: string, startDate: string, endDate: string): Promise<Expense[]>;
   createExpense(expense: InsertExpense): Promise<Expense>;
   updateExpense(id: string, data: { categoryId?: string; expenseDate?: string }): Promise<Expense>;
+  deleteExpense(id: string): Promise<boolean>;
 
   // Deliveries
   getDeliveries(userId: string): Promise<Delivery[]>;
@@ -337,14 +338,16 @@ export class DbStorage implements IStorage {
   }
 
   async createProduct(product: InsertProduct): Promise<Product> {
-    const result = await db.insert(products).values(product).returning();
+    const values = product as typeof products.$inferInsert;
+    const result = await db.insert(products).values(values).returning();
     return result[0];
   }
 
   async updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined> {
+    const updates = product as Partial<typeof products.$inferInsert>;
     const result = await db
       .update(products)
-      .set(product)
+      .set(updates)
       .where(eq(products.id, id))
       .returning();
     return result[0];
@@ -446,6 +449,11 @@ export class DbStorage implements IStorage {
   async updateExpense(id: string, data: { categoryId?: string; expenseDate?: string }): Promise<Expense> {
     const result = await db.update(expenses).set(data).where(eq(expenses.id, id)).returning();
     return result[0];
+  }
+
+  async deleteExpense(id: string): Promise<boolean> {
+    const result = await db.delete(expenses).where(eq(expenses.id, id)).returning();
+    return result.length > 0;
   }
 
   // Deliveries

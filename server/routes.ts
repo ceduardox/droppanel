@@ -1704,6 +1704,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/expenses/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteExpense(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Gasto no encontrado" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting expense:", error);
+      res.status(500).json({ error: "Error al eliminar gasto" });
+    }
+  });
+
   // Expenses summary with date filter
   app.get("/api/expenses/summary", requireAuth, async (req, res) => {
     try {

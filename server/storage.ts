@@ -16,6 +16,7 @@ import {
   capitalMovements,
   grossCapitalMovements,
   directors,
+  directorExpenses,
   sellers,
   sellerSales,
   type User, 
@@ -47,6 +48,8 @@ import {
   type InsertGrossCapitalMovement,
   type Director,
   type InsertDirector,
+  type DirectorExpense,
+  type InsertDirectorExpense,
   type Seller,
   type InsertSeller,
   type SellerSale,
@@ -170,6 +173,13 @@ export interface IStorage {
   getDirector(id: string): Promise<Director | undefined>;
   getDirectors(userId: string): Promise<Director[]>;
   createDirector(director: InsertDirector): Promise<Director>;
+  updateDirectorReportVisibility(id: string, userId: string, showProfitInReport: number): Promise<Director | undefined>;
+
+  // Director Expenses
+  getDirectorExpense(id: string): Promise<DirectorExpense | undefined>;
+  getDirectorExpenses(userId: string): Promise<DirectorExpense[]>;
+  createDirectorExpense(expense: InsertDirectorExpense): Promise<DirectorExpense>;
+  deleteDirectorExpense(id: string, userId: string): Promise<boolean>;
 
   // Sellers
   getSeller(id: string): Promise<Seller | undefined>;
@@ -648,6 +658,38 @@ export class DbStorage implements IStorage {
   async createDirector(director: InsertDirector): Promise<Director> {
     const result = await db.insert(directors).values(director).returning();
     return result[0];
+  }
+
+  async updateDirectorReportVisibility(id: string, userId: string, showProfitInReport: number): Promise<Director | undefined> {
+    const result = await db
+      .update(directors)
+      .set({ showProfitInReport })
+      .where(and(eq(directors.id, id), eq(directors.userId, userId)))
+      .returning();
+    return result[0];
+  }
+
+  // Director Expenses
+  async getDirectorExpense(id: string): Promise<DirectorExpense | undefined> {
+    const result = await db.select().from(directorExpenses).where(eq(directorExpenses.id, id));
+    return result[0];
+  }
+
+  async getDirectorExpenses(userId: string): Promise<DirectorExpense[]> {
+    return db.select().from(directorExpenses).where(eq(directorExpenses.userId, userId)).orderBy(desc(directorExpenses.expenseDate));
+  }
+
+  async createDirectorExpense(expense: InsertDirectorExpense): Promise<DirectorExpense> {
+    const result = await db.insert(directorExpenses).values(expense).returning();
+    return result[0];
+  }
+
+  async deleteDirectorExpense(id: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(directorExpenses)
+      .where(and(eq(directorExpenses.id, id), eq(directorExpenses.userId, userId)))
+      .returning();
+    return result.length > 0;
   }
 
   // Sellers

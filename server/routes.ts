@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db, pool } from "./db";
 import multer from "multer";
-import { insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema, insertGrossCapitalMovementSchema, insertDirectorSchema, insertSellerSchema, insertSellerSaleSchema } from "@shared/schema";
+import { insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema, insertGrossCapitalMovementSchema, insertDirectorSchema, insertDirectorExpenseSchema, insertSellerSchema, insertSellerSaleSchema } from "@shared/schema";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import session from "express-session";
@@ -110,6 +110,10 @@ const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha invalida. U
 const sellerDirectorUpdateSchema = z.object({
   directorId: z.string().trim().min(1).nullable().optional(),
   effectiveFrom: isoDateSchema,
+});
+
+const directorReportVisibilitySchema = z.object({
+  showProfitInReport: z.boolean(),
 });
 
 const requireAdmin = (req: any, res: any, next: any) => {
@@ -679,9 +683,15 @@ async function ensureSystemTables() {
     CREATE TABLE IF NOT EXISTS directors (
       id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
       name text NOT NULL,
+      show_profit_in_report integer NOT NULL DEFAULT 1,
       user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       created_at timestamp NOT NULL DEFAULT now()
     );
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE directors
+    ADD COLUMN IF NOT EXISTS show_profit_in_report integer NOT NULL DEFAULT 1;
   `);
 
   await db.execute(sql`
@@ -697,6 +707,18 @@ async function ensureSystemTables() {
   await db.execute(sql`
     ALTER TABLE seller_sales
     ADD COLUMN IF NOT EXISTS director_id varchar;
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS director_expenses (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      director_id varchar REFERENCES directors(id) ON DELETE SET NULL,
+      description text NOT NULL,
+      amount numeric(10,2) NOT NULL,
+      expense_date date NOT NULL,
+      user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at timestamp NOT NULL DEFAULT now()
+    );
   `);
 
   await db.execute(sql`
@@ -2267,6 +2289,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Error al crear director" });
+    }
+  });
+
+  app.patch("/api/directors/:id/report-visibility", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = getEffectiveUserId(req);
+      const parsed = directorReportVisibilitySchema.parse(req.body);
+      const updated = await storage.updateDirectorReportVisibility(
+        id,
+        userId,
+        parsed.showProfitInReport ? 1 : 0,
+      );
+      if (!updated) {
+        return res.status(404).json({ error: "Director no encontrado" });
+      }
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al actualizar visibilidad de utilidad" });
+    }
+  });
+
+  // Director Expenses routes
+  app.get("/api/director-expenses", requireAuth, async (req, res) => {
+    try {
+      const access = await getAccessContext(req);
+      const expenses = await storage.getDirectorExpenses(getEffectiveUserId(req));
+      const visibleExpenses = access.isAccountant && access.visibleFrom
+        ? expenses.filter((expense) => isOnOrAfterDate(expense.expenseDate, access.visibleFrom))
+        : expenses;
+      res.json(visibleExpenses);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener gastos de director" });
+    }
+  });
+
+  app.post("/api/director-expenses", requireAuth, async (req, res) => {
+    try {
+      const access = await getAccessContext(req);
+      if (access.isAccountant && access.visibleFrom && req.body.expenseDate < access.visibleFrom) {
+        return res.status(400).json({ error: `Solo puedes registrar gastos desde ${access.visibleFrom}` });
+      }
+
+      const userId = getEffectiveUserId(req);
+      const directorId =
+        req.body.directorId === null || req.body.directorId === undefined || `${req.body.directorId}`.trim() === ""
+          ? null
+          : `${req.body.directorId}`.trim();
+
+      if (directorId) {
+        const director = await storage.getDirector(directorId);
+        if (!director || director.userId !== userId) {
+          return res.status(404).json({ error: "Director no encontrado" });
+        }
+      }
+
+      const data = insertDirectorExpenseSchema.parse({
+        directorId,
+        description: req.body.description,
+        amount: req.body.amount,
+        expenseDate: req.body.expenseDate,
+        userId,
+      });
+
+      const expense = await storage.createDirectorExpense(data);
+      res.json(expense);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al crear gasto de director" });
+    }
+  });
+
+  app.delete("/api/director-expenses/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteDirectorExpense(id, getEffectiveUserId(req));
+      if (!deleted) {
+        return res.status(404).json({ error: "Gasto no encontrado" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Error al eliminar gasto de director" });
     }
   });
 

@@ -677,6 +677,59 @@ export function useCreateDirector() {
   });
 }
 
+export function useUpdateDirectorReportVisibility() {
+  return useMutation({
+    mutationFn: async ({
+      directorId,
+      showProfitInReport,
+    }: {
+      directorId: string;
+      showProfitInReport: boolean;
+    }) => {
+      return apiRequest(`/api/directors/${directorId}/report-visibility`, {
+        method: "PATCH",
+        body: JSON.stringify({ showProfitInReport }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/directors"] });
+    },
+  });
+}
+
+export function useDirectorExpenses() {
+  return useQuery({
+    queryKey: ["/api/director-expenses"],
+  });
+}
+
+export function useCreateDirectorExpense() {
+  return useMutation({
+    mutationFn: async (data: { directorId: string | null; description: string; amount: string; expenseDate: string }) => {
+      return apiRequest("/api/director-expenses", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/director-expenses"] });
+    },
+  });
+}
+
+export function useDeleteDirectorExpense() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/director-expenses/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/director-expenses"] });
+    },
+  });
+}
+
 export function useCreateSeller() {
   return useMutation({
     mutationFn: async (data: { name: string }) => {

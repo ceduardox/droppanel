@@ -9,6 +9,10 @@ import {
   useDeleteSellerSale,
   useDirectors,
   useCreateDirector,
+  useUpdateDirectorReportVisibility,
+  useDirectorExpenses,
+  useCreateDirectorExpense,
+  useDeleteDirectorExpense,
   useAssignSellerDirector,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar, Plus, ShoppingCart, X, Save, Pencil, Trash2, Check, ChevronDown } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import WhatsAppReport from "@/components/WhatsAppReport";
@@ -31,6 +36,15 @@ interface Seller {
 interface Director {
   id: string;
   name: string;
+  showProfitInReport?: number;
+}
+
+interface DirectorExpense {
+  id: string;
+  directorId?: string | null;
+  description: string;
+  amount: string;
+  expenseDate: string;
 }
 
 interface Product {
@@ -80,10 +94,14 @@ function getMinUnitPrice(product?: Product | null): number {
 export default function SellerReport() {
   const { data: sellers = [], isLoading: loadingSellers } = useSellers();
   const { data: directors = [], isLoading: loadingDirectors } = useDirectors();
+  const { data: directorExpenses = [], isLoading: loadingDirectorExpenses } = useDirectorExpenses();
   const { data: products = [], isLoading: loadingProducts } = useProducts();
   const { data: sellerSales = [], isLoading: loadingSales } = useSellerSales();
   const createSeller = useCreateSeller();
   const createDirector = useCreateDirector();
+  const updateDirectorReportVisibility = useUpdateDirectorReportVisibility();
+  const createDirectorExpense = useCreateDirectorExpense();
+  const deleteDirectorExpense = useDeleteDirectorExpense();
   const assignSellerDirector = useAssignSellerDirector();
   const createSale = useCreateSellerSale();
   const updateSale = useUpdateSellerSale();
@@ -101,6 +119,11 @@ export default function SellerReport() {
   const [assignSellerId, setAssignSellerId] = useState("");
   const [assignDirectorId, setAssignDirectorId] = useState("none");
   const [assignEffectiveFrom, setAssignEffectiveFrom] = useState(today);
+  const [expenseDirectorId, setExpenseDirectorId] = useState("none");
+  const [expenseDate, setExpenseDate] = useState(today);
+  const [expenseDescription, setExpenseDescription] = useState("");
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [showUtilityFallback, setShowUtilityFallback] = useState(true);
   
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
   const [editProductId, setEditProductId] = useState("");
@@ -193,6 +216,47 @@ export default function SellerReport() {
       });
     } catch {
       toast({ title: "Error", description: "No se pudo asignar director", variant: "destructive" });
+    }
+  };
+
+  const handleCreateDirectorExpense = async () => {
+    const amount = parseAmount(expenseAmount);
+    if (!expenseDescription.trim()) {
+      toast({ title: "Error", description: "Ingresa descripcion del gasto", variant: "destructive" });
+      return;
+    }
+    if (!expenseDate) {
+      toast({ title: "Error", description: "Selecciona fecha", variant: "destructive" });
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast({ title: "Error", description: "Ingresa un monto valido", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await createDirectorExpense.mutateAsync({
+        directorId: expenseDirectorId === "none" ? null : expenseDirectorId,
+        description: expenseDescription.trim(),
+        amount: amount.toFixed(2),
+        expenseDate,
+      });
+      toast({ title: "Exito", description: "Gasto registrado" });
+      setExpenseDescription("");
+      setExpenseAmount("");
+      setExpenseDate(today);
+      setExpenseDirectorId("none");
+    } catch {
+      toast({ title: "Error", description: "No se pudo registrar gasto", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteDirectorExpense = async (id: string) => {
+    try {
+      await deleteDirectorExpense.mutateAsync(id);
+      toast({ title: "Exito", description: "Gasto eliminado" });
+    } catch {
+      toast({ title: "Error", description: "No se pudo eliminar gasto", variant: "destructive" });
     }
   };
 
@@ -397,6 +461,61 @@ export default function SellerReport() {
         ? "Sin director"
         : (directors as Director[]).find((director) => director.id === filterDirector)?.name || "Director";
 
+  const selectedDirector =
+    filterDirector !== "all" && filterDirector !== "none"
+      ? (directors as Director[]).find((director) => director.id === filterDirector) || null
+      : null;
+
+  const showUtilityInReport = selectedDirector
+    ? (selectedDirector.showProfitInReport ?? 1) === 1
+    : showUtilityFallback;
+
+  const filteredDirectorExpenses = [...(directorExpenses as DirectorExpense[])]
+    .filter((expense) => {
+    const dateMatches =
+      filterMode === "day"
+        ? expense.expenseDate === filterDate
+        : expense.expenseDate >= filterDateFrom && expense.expenseDate <= filterDateTo;
+    if (!dateMatches) return false;
+    if (filterDirector === "all") return true;
+    if (filterDirector === "none") return !expense.directorId;
+    return expense.directorId === filterDirector;
+    })
+    .sort((a, b) => a.expenseDate.localeCompare(b.expenseDate));
+
+  const totalDirectorExpenses = filteredDirectorExpenses.reduce((sum, expense) => sum + parseAmount(expense.amount), 0);
+  const utilityTotal = grandTotal - totalDirectorExpenses;
+  const totalLabel = filterMode === "range" ? "TOTAL DEL PERIODO" : "TOTAL DEL DIA";
+
+  const getDirectorName = (directorId?: string | null) => {
+    if (!directorId) return "Sin director";
+    return (directors as Director[]).find((director) => director.id === directorId)?.name || "Director";
+  };
+
+  const handleToggleUtilityVisibility = async (checked: boolean) => {
+    if (!selectedDirector) {
+      setShowUtilityFallback(checked);
+      return;
+    }
+
+    try {
+      await updateDirectorReportVisibility.mutateAsync({
+        directorId: selectedDirector.id,
+        showProfitInReport: checked,
+      });
+      toast({
+        title: "Exito",
+        description: `Visibilidad de utilidad actualizada para ${selectedDirector.name}`,
+      });
+    } catch {
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la visibilidad de utilidad",
+        variant: "destructive",
+      });
+    }
+  };
+
   const generateWhatsAppText = () => {
     let text = `REPORTE VENDEDORES\n`;
     if (filterMode === "day") {
@@ -406,16 +525,34 @@ export default function SellerReport() {
     }
     text += `Director: ${selectedDirectorLabel}\n\n`;
 
-    Object.entries(salesByDay).forEach(([sellerName, data]) => {
-      text += `${sellerName} (${data.directorName})\n`;
-      data.sales.forEach((sale) => {
-        text += `  - ${sale.product} x${sale.quantity} = ${sale.total.toFixed(2)} Bs\n`;
+    if (Object.keys(salesByDay).length === 0) {
+      text += `Sin ventas en el periodo.\n\n`;
+    } else {
+      Object.entries(salesByDay).forEach(([sellerName, data]) => {
+        text += `${sellerName} (${data.directorName})\n`;
+        data.sales.forEach((sale) => {
+          text += `  - ${sale.product} x${sale.quantity} = ${sale.total.toFixed(2)} Bs\n`;
+        });
+        text += `  Subtotal: ${data.total.toFixed(2)} Bs\n\n`;
       });
-      text += `  Subtotal: ${data.total.toFixed(2)} Bs\n\n`;
-    });
+    }
 
     text += `===================\n`;
-    text += `TOTAL${filterMode === "range" ? " DEL PERIODO" : " DEL DIA"}: ${grandTotal.toFixed(2)} Bs`;
+    text += `${totalLabel}: ${grandTotal.toFixed(2)} Bs\n`;
+    text += `GASTOS:\n`;
+
+    if (filteredDirectorExpenses.length === 0) {
+      text += `  - Sin gastos registrados\n`;
+    } else {
+      filteredDirectorExpenses.forEach((expense) => {
+        text += `  - ${formatDateString(expense.expenseDate)} | ${getDirectorName(expense.directorId)} | ${expense.description}: ${parseAmount(expense.amount).toFixed(2)} Bs\n`;
+      });
+    }
+
+    text += `TOTAL GASTOS: ${totalDirectorExpenses.toFixed(2)} Bs\n`;
+    if (showUtilityInReport) {
+      text += `TOTAL UTILIDAD: ${utilityTotal.toFixed(2)} Bs`;
+    }
 
     return text;
   };
@@ -430,7 +567,7 @@ export default function SellerReport() {
       ? parseAmount(unitPrice) * parseInt(quantity || "0", 10)
       : 0;
 
-  if (loadingSellers || loadingDirectors || loadingProducts || loadingSales) {
+  if (loadingSellers || loadingDirectors || loadingDirectorExpenses || loadingProducts || loadingSales) {
     return <div className="flex items-center justify-center h-64">Cargando...</div>;
   }
 
@@ -646,6 +783,73 @@ export default function SellerReport() {
             </Button>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Registrar Gastos por Director
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Director</Label>
+                <Select value={expenseDirectorId} onValueChange={setExpenseDirectorId}>
+                  <SelectTrigger data-testid="select-expense-director">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin director</SelectItem>
+                    {(directors as Director[]).map((director) => (
+                      <SelectItem key={director.id} value={director.id}>
+                        {director.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha</Label>
+                <Input
+                  type="date"
+                  value={expenseDate}
+                  onChange={(e) => setExpenseDate(e.target.value)}
+                  data-testid="input-expense-date"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Descripcion</Label>
+                <Input
+                  value={expenseDescription}
+                  onChange={(e) => setExpenseDescription(e.target.value)}
+                  placeholder="Publicidad, comision, transporte, etc."
+                  data-testid="input-expense-description"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Monto (Bs)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={expenseAmount}
+                  onChange={(e) => setExpenseAmount(e.target.value)}
+                  placeholder="0.00"
+                  data-testid="input-expense-amount"
+                />
+              </div>
+            </div>
+            <Button
+              onClick={handleCreateDirectorExpense}
+              disabled={createDirectorExpense.isPending}
+              className="w-full sm:w-auto"
+              data-testid="button-create-director-expense"
+            >
+              {createDirectorExpense.isPending ? "Guardando..." : "Registrar gasto"}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -709,21 +913,21 @@ export default function SellerReport() {
 	            Filtro Director: <span className="font-medium text-foreground">{selectedDirectorLabel}</span>
 	          </p>
 	        </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {Object.keys(salesByDay).length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No hay ventas para esta fecha</p>
+            <p className="py-4 text-center text-muted-foreground">No hay ventas para este filtro</p>
           ) : (
             <div className="space-y-4">
               {Object.entries(salesByDay).map(([sellerName, data]) => (
                 <Collapsible key={sellerName} className="border rounded-lg" data-testid={`card-seller-sales-${sellerName}`}>
-                  <CollapsibleTrigger className="w-full p-3 sm:p-4 flex flex-wrap justify-between items-center gap-2 hover-elevate rounded-lg">
-	                    <div className="min-w-0 flex items-center gap-2 sm:gap-3">
-	                      <div className="min-w-0">
-	                        <h3 className="truncate text-base font-bold sm:text-lg">{sellerName}</h3>
-	                        <p className="text-xs text-muted-foreground">{data.directorName}</p>
-	                      </div>
-	                      <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground sm:text-sm">{data.totalProducts} productos</span>
-	                    </div>
+                  <CollapsibleTrigger className="group w-full rounded-lg p-3 sm:p-4 flex flex-wrap justify-between items-center gap-2 hover-elevate">
+                    <div className="min-w-0 flex items-center gap-2 sm:gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-base font-bold sm:text-lg">{sellerName}</h3>
+                        <p className="text-xs text-muted-foreground">{data.directorName}</p>
+                      </div>
+                      <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground sm:text-sm">{data.totalProducts} productos</span>
+                    </div>
                     <div className="flex items-center gap-2">
                       <span className="text-base font-bold text-primary sm:text-lg">{data.total.toFixed(2)} Bs</span>
                       <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
@@ -817,20 +1021,96 @@ export default function SellerReport() {
                   </CollapsibleContent>
                 </Collapsible>
               ))}
-              
-              <div className="border-t pt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <span className="text-xl font-bold">{filterMode === "range" ? "Total del Período" : "Total del Día"}</span>
-                  <span className="text-sm text-muted-foreground ml-2">({grandTotalProducts} productos)</span>
-                </div>
-                <span className="text-xl font-bold text-primary sm:text-2xl" data-testid="text-grand-total">{grandTotal.toFixed(2)} Bs</span>
-              </div>
             </div>
           )}
+
+          <div className="border-t pt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <span className="text-xl font-bold">{filterMode === "range" ? "Total del Periodo" : "Total del Dia"}</span>
+              <span className="text-sm text-muted-foreground ml-2">({grandTotalProducts} productos)</span>
+            </div>
+            <span className="text-xl font-bold text-primary sm:text-2xl" data-testid="text-grand-total">{grandTotal.toFixed(2)} Bs</span>
+          </div>
+
+          <div className="rounded-lg border bg-muted/20 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold">Mostrar utilidad en reporte</p>
+                <p className="text-xs text-muted-foreground">
+                  {selectedDirector
+                    ? `Se guarda para ${selectedDirector.name}`
+                    : "No se guarda por director (filtro general)"}
+                </p>
+              </div>
+              <Checkbox
+                checked={showUtilityInReport}
+                onCheckedChange={(checked) => void handleToggleUtilityVisibility(checked === true)}
+                disabled={updateDirectorReportVisibility.isPending}
+                data-testid="checkbox-show-utility"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-lg border p-3 space-y-3">
+            <p className="text-sm font-semibold">
+              Gastos del {filterMode === "range" ? "periodo" : "dia"} ({selectedDirectorLabel})
+            </p>
+            {filteredDirectorExpenses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Sin gastos registrados para este filtro</p>
+            ) : (
+              <div className="space-y-2">
+                {filteredDirectorExpenses.map((expense) => (
+                  <div
+                    key={expense.id}
+                    className="flex flex-col gap-2 rounded border bg-muted/20 p-2 sm:flex-row sm:items-center sm:justify-between"
+                    data-testid={`row-director-expense-${expense.id}`}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium break-words">{expense.description}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDateString(expense.expenseDate)} - {getDirectorName(expense.directorId)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-red-600">
+                        -{parseAmount(expense.amount).toFixed(2)} Bs
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleDeleteDirectorExpense(expense.id)}
+                        data-testid={`button-delete-director-expense-${expense.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-2 border-t pt-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">Total gastos</span>
+                <span className="font-semibold text-red-600" data-testid="text-total-director-expenses">
+                  -{totalDirectorExpenses.toFixed(2)} Bs
+                </span>
+              </div>
+              {showUtilityInReport && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">Total utilidad</span>
+                  <span className="font-semibold" data-testid="text-utility-total">
+                    {utilityTotal.toFixed(2)} Bs
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {filteredSales.length > 0 && (
+      {(filteredSales.length > 0 || filteredDirectorExpenses.length > 0) && (
         <WhatsAppReport reportText={generateWhatsAppText()} />
       )}
     </div>

@@ -290,6 +290,7 @@ export type GrossCapitalMovement = typeof grossCapitalMovements.$inferSelect;
 export const directors = pgTable("directors", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  showProfitInReport: integer("show_profit_in_report").notNull().default(1),
   userId: varchar("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -301,6 +302,25 @@ export const insertDirectorSchema = createInsertSchema(directors).omit({
 
 export type InsertDirector = z.infer<typeof insertDirectorSchema>;
 export type Director = typeof directors.$inferSelect;
+
+// Gastos por director (para reporte de vendedores)
+export const directorExpenses = pgTable("director_expenses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  directorId: varchar("director_id").references(() => directors.id),
+  description: text("description").notNull(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  expenseDate: date("expense_date").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDirectorExpenseSchema = createInsertSchema(directorExpenses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertDirectorExpense = z.infer<typeof insertDirectorExpenseSchema>;
+export type DirectorExpense = typeof directorExpenses.$inferSelect;
 
 // Vendedores
 export const sellers = pgTable("sellers", {

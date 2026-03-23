@@ -38,6 +38,7 @@ export const routePermissionMap: Record<string, AppPermissionKey> = {
   "/productos": "products",
   "/ventas": "sales",
   "/reportes": "reports",
+  "/estado-financiero": "reports",
   "/reporte-ventas": "salesReport",
   "/aumento-capital": "capitalIncrease",
   "/capital-bruto": "grossCapital",

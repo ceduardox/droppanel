@@ -56,6 +56,12 @@ export default function Dashboard() {
 
   const totalProfit = totalSales - totalCost;
 
+  const totalExpenses = (expenses as any[]).reduce((sum: number, expense: any) => {
+    return sum + parseFloat(expense.amount || 0);
+  }, 0);
+
+  const netBalance = totalProfit - totalExpenses;
+
   const recentSales = (salesWithProducts as any[])
     .filter((item: any) => item.product)
     .slice(0, 4)
@@ -74,12 +80,18 @@ export default function Dashboard() {
     return sum + price * item.quantity;
   }, 0);
 
+  const todayCost = (salesWithProducts as any[]).reduce((sum: number, item: any) => {
+    if (toIsoDate(item.saleDate) !== todayIso) return sum;
+    return sum + getEffectiveUnitCost(item) * item.quantity;
+  }, 0);
+
   const todayExpenses = (expenses as any[]).reduce((sum: number, expense: any) => {
     if (toIsoDate(expense.expenseDate) !== todayIso) return sum;
     return sum + parseFloat(expense.amount || 0);
   }, 0);
 
   const dailyUtility = todaySales - todayExpenses;
+  const dailyNetUtility = todaySales - todayCost - todayExpenses;
 
   return (
     <div className="space-y-5">
@@ -171,7 +183,14 @@ export default function Dashboard() {
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
                 <StatsCard title="Ventas Totales" value={`${totalSales.toFixed(2)} Bs`} subtitle="Total acumulado" icon={DollarSign} />
-                <StatsCard title="Utilidad Total" value={`${totalProfit.toFixed(2)} Bs`} subtitle="Ganancia neta" icon={TrendingUp} />
+                <StatsCard title="Utilidad Total" value={`${totalProfit.toFixed(2)} Bs`} subtitle="Ventas - costos" icon={TrendingUp} />
+                <StatsCard title="Gastos Totales" value={`${totalExpenses.toFixed(2)} Bs`} subtitle="Egresos acumulados" icon={Receipt} />
+                <StatsCard
+                  title="Saldo Neto"
+                  value={`${netBalance.toFixed(2)} Bs`}
+                  subtitle={netBalance >= 0 ? "A favor (utilidad - gastos)" : "En contra (utilidad - gastos)"}
+                  icon={TrendingUp}
+                />
               </div>
             </div>
           </div>
@@ -179,7 +198,7 @@ export default function Dashboard() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <StatsCard title="Productos Vendidos" value={totalProducts.toString()} subtitle="Unidades" icon={Package} />
             <StatsCard title="Costo Total" value={`${totalCost.toFixed(2)} Bs`} subtitle="Costo acumulado" icon={DollarSign} />
-            <StatsCard title="Margen" value={totalSales > 0 ? `${((totalProfit / totalSales) * 100).toFixed(1)}%` : "0%"} subtitle="Rentabilidad" icon={TrendingUp} />
+            <StatsCard title="Utilidad Neta Hoy" value={`${dailyNetUtility.toFixed(2)} Bs`} subtitle="Ventas - costos - gastos del dia" icon={TrendingUp} />
           </div>
         </>
       )}

@@ -15,6 +15,7 @@ import Dashboard from "@/pages/Dashboard";
 import Products from "@/pages/Products";
 import Sales from "@/pages/Sales";
 import Reports from "@/pages/Reports";
+import FinancialStatus from "@/pages/FinancialStatus";
 import CapitalIncrease from "@/pages/CapitalIncrease";
 import GrossCapitalReport from "@/pages/GrossCapitalReport";
 import SellerReport from "@/pages/SellerReport";
@@ -34,6 +35,7 @@ const pageTitles: Record<string, string> = {
   "/productos": "Productos",
   "/ventas": "Ventas",
   "/reportes": "Reportes",
+  "/estado-financiero": "Estado Financiero",
   "/reporte-ventas": "Reporte de Ventas",
   "/aumento-capital": "Aumento de Capital",
   "/capital-bruto": "Capital Bruto",
@@ -155,6 +157,7 @@ function AuthenticatedLayout() {
                   <Route path="/productos" component={() => <ProtectedRoute component={Products} />} />
                   <Route path="/ventas" component={() => <ProtectedRoute component={Sales} />} />
                   <Route path="/reportes" component={() => <ProtectedRoute component={Reports} />} />
+                  <Route path="/estado-financiero" component={() => <ProtectedRoute component={FinancialStatus} />} />
                   <Route path="/reporte-ventas" component={() => <ProtectedRoute component={SalesReport} />} />
                   <Route path="/aumento-capital" component={() => <ProtectedRoute component={CapitalIncrease} />} />
                   <Route path="/capital-bruto" component={() => <ProtectedRoute component={GrossCapitalReport} />} />
@@ -197,6 +200,7 @@ function Router() {
       <Route path="/productos" component={AuthenticatedLayout} />
       <Route path="/ventas" component={AuthenticatedLayout} />
       <Route path="/reportes" component={AuthenticatedLayout} />
+      <Route path="/estado-financiero" component={AuthenticatedLayout} />
       <Route path="/reporte-ventas" component={AuthenticatedLayout} />
       <Route path="/aumento-capital" component={AuthenticatedLayout} />
       <Route path="/capital-bruto" component={AuthenticatedLayout} />

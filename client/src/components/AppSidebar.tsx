@@ -34,6 +34,7 @@ const allMenuItems = [
   { title: "Productos", icon: Package, path: "/productos" },
   { title: "Ventas", icon: ShoppingCart, path: "/ventas" },
   { title: "Reportes", icon: FileText, path: "/reportes" },
+  { title: "Estado Financiero", icon: BarChart3, path: "/estado-financiero" },
   { title: "Reporte Ventas", icon: BarChart3, path: "/reporte-ventas" },
   { title: "Aumento Capital", icon: TrendingUp, path: "/aumento-capital" },
   { title: "Capital Bruto", icon: FileText, path: "/capital-bruto" },

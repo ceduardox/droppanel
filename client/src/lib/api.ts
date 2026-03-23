@@ -570,9 +570,10 @@ export function useDeliveryAssignmentsReport(startDate: string, endDate: string)
 }
 
 // Capital Movements
-export function useCapitalMovements() {
+export function useCapitalMovements(enabled = true) {
   return useQuery({
     queryKey: ["/api/capital-movements"],
+    enabled,
   });
 }
 
@@ -596,9 +597,10 @@ export function useCreateCapitalMovement() {
 }
 
 // Gross Capital Movements (retiros de capital bruto)
-export function useGrossCapitalMovements() {
+export function useGrossCapitalMovements(enabled = true) {
   return useQuery({
     queryKey: ["/api/gross-capital-movements"],
+    enabled,
   });
 }
 

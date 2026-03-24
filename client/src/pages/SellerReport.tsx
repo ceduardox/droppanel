@@ -124,6 +124,8 @@ export default function SellerReport() {
   const [expenseDescription, setExpenseDescription] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
   const [showUtilityFallback, setShowUtilityFallback] = useState(true);
+  const [includeExpensesInText, setIncludeExpensesInText] = useState(true);
+  const [includeUtilityInText, setIncludeUtilityInText] = useState(true);
   
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
   const [editProductId, setEditProductId] = useState("");
@@ -486,6 +488,7 @@ export default function SellerReport() {
   const totalDirectorExpenses = filteredDirectorExpenses.reduce((sum, expense) => sum + parseAmount(expense.amount), 0);
   const utilityTotal = grandTotal - totalDirectorExpenses;
   const totalLabel = filterMode === "range" ? "TOTAL DEL PERIODO" : "TOTAL DEL DIA";
+  const showUtilityInText = showUtilityInReport && includeUtilityInText;
 
   const getDirectorName = (directorId?: string | null) => {
     if (!directorId) return "Sin director";
@@ -539,18 +542,22 @@ export default function SellerReport() {
 
     text += `===================\n`;
     text += `${totalLabel}: ${grandTotal.toFixed(2)} Bs\n`;
-    text += `GASTOS:\n`;
 
-    if (filteredDirectorExpenses.length === 0) {
-      text += `  - Sin gastos registrados\n`;
-    } else {
-      filteredDirectorExpenses.forEach((expense) => {
-        text += `  - ${formatDateString(expense.expenseDate)} | ${getDirectorName(expense.directorId)} | ${expense.description}: ${parseAmount(expense.amount).toFixed(2)} Bs\n`;
-      });
+    if (includeExpensesInText) {
+      text += `GASTOS:\n`;
+
+      if (filteredDirectorExpenses.length === 0) {
+        text += `  - Sin gastos registrados\n`;
+      } else {
+        filteredDirectorExpenses.forEach((expense) => {
+          text += `  - ${formatDateString(expense.expenseDate)} | ${getDirectorName(expense.directorId)} | ${expense.description}: ${parseAmount(expense.amount).toFixed(2)} Bs\n`;
+        });
+      }
+
+      text += `TOTAL GASTOS: ${totalDirectorExpenses.toFixed(2)} Bs\n`;
     }
 
-    text += `TOTAL GASTOS: ${totalDirectorExpenses.toFixed(2)} Bs\n`;
-    if (showUtilityInReport) {
+    if (showUtilityInText) {
       text += `TOTAL UTILIDAD: ${utilityTotal.toFixed(2)} Bs`;
     }
 
@@ -1035,7 +1042,7 @@ export default function SellerReport() {
           <div className="rounded-lg border bg-muted/20 p-3">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold">Mostrar utilidad en reporte</p>
+                <p className="text-sm font-semibold">Permitir utilidad en reporte</p>
                 <p className="text-xs text-muted-foreground">
                   {selectedDirector
                     ? `Se guarda para ${selectedDirector.name}`
@@ -1049,6 +1056,32 @@ export default function SellerReport() {
                 data-testid="checkbox-show-utility"
               />
             </div>
+          </div>
+
+          <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
+            <p className="text-sm font-semibold">Filtros del texto del reporte</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">Incluir gastos</p>
+              <Checkbox
+                checked={includeExpensesInText}
+                onCheckedChange={(checked) => setIncludeExpensesInText(checked === true)}
+                data-testid="checkbox-include-expenses-text"
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">Incluir utilidad</p>
+              <Checkbox
+                checked={showUtilityInText}
+                onCheckedChange={(checked) => setIncludeUtilityInText(checked === true)}
+                disabled={!showUtilityInReport}
+                data-testid="checkbox-include-utility-text"
+              />
+            </div>
+            {!showUtilityInReport && (
+              <p className="text-xs text-muted-foreground">
+                La utilidad esta deshabilitada para este director/filtro.
+              </p>
+            )}
           </div>
 
           <div className="rounded-lg border p-3 space-y-3">

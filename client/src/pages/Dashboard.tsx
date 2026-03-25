@@ -1,6 +1,10 @@
+import { useState } from "react";
 import StatsCard from "@/components/StatsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Calendar, DollarSign, Package, Receipt, TrendingUp } from "lucide-react";
 import { useExpenses, useGrossCapitalMovements, useReports } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -33,12 +37,24 @@ function getTodayIsoLocal(): string {
   return `${year}-${month}-${day}`;
 }
 
+function formatIsoDate(value: string): string {
+  if (!value) return "-";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+}
+
 export default function Dashboard() {
   const { data: salesWithProducts = [], isLoading: reportsLoading } = useReports();
   const { data: expenses = [], isLoading: expensesLoading } = useExpenses();
   const { user } = useAuth();
   const isAccountant = user?.role?.trim().toLowerCase() === "contador";
   const { data: grossCapitalMovements = [], isLoading: grossLoading } = useGrossCapitalMovements(!isAccountant);
+  const [accountantFilterMode, setAccountantFilterMode] = useState<"day" | "range">("day");
+  const [accountantDay, setAccountantDay] = useState<string>(() => getTodayIsoLocal());
+  const [accountantStartDate, setAccountantStartDate] = useState<string>(() => getTodayIsoLocal());
+  const [accountantEndDate, setAccountantEndDate] = useState<string>(() => getTodayIsoLocal());
+  const todayIso = getTodayIsoLocal();
 
   const isLoading = reportsLoading || expensesLoading || (!isAccountant && grossLoading);
 
@@ -72,7 +88,58 @@ export default function Dashboard() {
   const realNetProfit = totalProfit - totalExpenses - totalGrossWithdrawals;
   const partnerShare = realNetProfit / 2;
 
-  const recentSales = (salesWithProducts as any[])
+  const normalizedRangeStart =
+    accountantStartDate && accountantEndDate
+      ? accountantStartDate <= accountantEndDate
+        ? accountantStartDate
+        : accountantEndDate
+      : accountantStartDate || accountantEndDate || todayIso;
+  const normalizedRangeEnd =
+    accountantStartDate && accountantEndDate
+      ? accountantStartDate <= accountantEndDate
+        ? accountantEndDate
+        : accountantStartDate
+      : accountantEndDate || accountantStartDate || todayIso;
+
+  const matchesAccountantPeriod = (value: unknown): boolean => {
+    const isoDate = toIsoDate(value);
+    if (!isoDate) return false;
+    if (accountantFilterMode === "day") {
+      return isoDate === (accountantDay || todayIso);
+    }
+    return isoDate >= normalizedRangeStart && isoDate <= normalizedRangeEnd;
+  };
+
+  const accountantSalesForPeriod = (salesWithProducts as any[]).filter((item: any) =>
+    matchesAccountantPeriod(item.saleDate)
+  );
+  const accountantExpensesForPeriod = (expenses as any[]).filter((item: any) =>
+    matchesAccountantPeriod(item.expenseDate)
+  );
+
+  const accountantSalesTotal = accountantSalesForPeriod.reduce((sum: number, item: any) => {
+    return sum + getSaleUnitPrice(item) * item.quantity;
+  }, 0);
+
+  const accountantExpensesTotal = accountantExpensesForPeriod.reduce((sum: number, item: any) => {
+    return sum + parseFloat(item.amount || 0);
+  }, 0);
+
+  const accountantUtility = accountantSalesTotal - accountantExpensesTotal;
+  const commissionRate =
+    typeof user?.commissionRate === "number" && Number.isFinite(user.commissionRate) && user.commissionRate > 0
+      ? user.commissionRate
+      : 0.1;
+  const commissionSeller = user?.commissionSeller?.trim() || "Jose Eduardo";
+  const accountantSellerShare = accountantUtility / 2;
+  const accountantCommission = accountantSellerShare * commissionRate;
+  const accountantPeriodLabel =
+    accountantFilterMode === "day"
+      ? `Dia ${formatIsoDate(accountantDay || todayIso)}`
+      : `${formatIsoDate(normalizedRangeStart)} - ${formatIsoDate(normalizedRangeEnd)}`;
+
+  const recentSalesSource = isAccountant ? accountantSalesForPeriod : (salesWithProducts as any[]);
+  const recentSales = recentSalesSource
     .filter((item: any) => item.product)
     .slice(0, 4)
     .map((item: any) => ({
@@ -83,7 +150,6 @@ export default function Dashboard() {
       date: item.saleDate,
     }));
 
-  const todayIso = getTodayIsoLocal();
   const todaySales = (salesWithProducts as any[]).reduce((sum: number, item: any) => {
     if (toIsoDate(item.saleDate) !== todayIso) return sum;
     const price = getSaleUnitPrice(item);
@@ -107,7 +173,6 @@ export default function Dashboard() {
         return sum + parseFloat(movement.amount || 0);
       }, 0);
 
-  const dailyUtility = todaySales - todayExpenses;
   const dailyNetUtility = todaySales - todayCost - todayExpenses - todayGrossWithdrawals;
 
   return (
@@ -129,23 +194,107 @@ export default function Dashboard() {
 
       {isAccountant ? (
         <>
+          <Card className="border-[#b7c9e6] bg-white/90">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Filtro para utilidad del contador</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={accountantFilterMode === "day" ? "default" : "outline"}
+                  onClick={() => setAccountantFilterMode("day")}
+                  data-testid="button-accountant-filter-day"
+                >
+                  Por dia
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={accountantFilterMode === "range" ? "default" : "outline"}
+                  onClick={() => setAccountantFilterMode("range")}
+                  data-testid="button-accountant-filter-range"
+                >
+                  Por rango
+                </Button>
+              </div>
+
+              {accountantFilterMode === "day" ? (
+                <div className="max-w-sm space-y-2">
+                  <Label htmlFor="accountant-filter-day">Fecha</Label>
+                  <Input
+                    id="accountant-filter-day"
+                    type="date"
+                    value={accountantDay}
+                    onChange={(e) => setAccountantDay(e.target.value)}
+                    data-testid="input-accountant-filter-day"
+                  />
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="accountant-filter-start">Fecha inicial</Label>
+                    <Input
+                      id="accountant-filter-start"
+                      type="date"
+                      value={accountantStartDate}
+                      onChange={(e) => setAccountantStartDate(e.target.value)}
+                      data-testid="input-accountant-filter-start"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="accountant-filter-end">Fecha final</Label>
+                    <Input
+                      id="accountant-filter-end"
+                      type="date"
+                      value={accountantEndDate}
+                      onChange={(e) => setAccountantEndDate(e.target.value)}
+                      data-testid="input-accountant-filter-end"
+                    />
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <StatsCard title="Utilidad de Hoy" value={`${dailyUtility.toFixed(2)} Bs`} subtitle="Ventas hoy - gastos hoy" icon={TrendingUp} />
-            <StatsCard title="Ventas de Hoy" value={`${todaySales.toFixed(2)} Bs`} subtitle="Ingresos del dia" icon={DollarSign} />
-            <StatsCard title="Gastos de Hoy" value={`${todayExpenses.toFixed(2)} Bs`} subtitle="Egresos del dia" icon={Receipt} />
-            <StatsCard title="Ventas Registradas" value={`${totalSales.toFixed(2)} Bs`} subtitle="Desde tu fecha de acceso" icon={Package} />
+            <StatsCard
+              title="Utilidad del Periodo"
+              value={`${accountantUtility.toFixed(2)} Bs`}
+              subtitle={`${accountantPeriodLabel} (ventas - gastos)`}
+              icon={TrendingUp}
+            />
+            <StatsCard
+              title="Comision Contador"
+              value={`${accountantCommission.toFixed(2)} Bs`}
+              subtitle={`${(commissionRate * 100).toFixed(0)}% de 50% de ${commissionSeller}`}
+              icon={TrendingUp}
+            />
+            <StatsCard
+              title="Ventas del Periodo"
+              value={`${accountantSalesTotal.toFixed(2)} Bs`}
+              subtitle={accountantPeriodLabel}
+              icon={DollarSign}
+            />
+            <StatsCard
+              title="Gastos del Periodo"
+              value={`${accountantExpensesTotal.toFixed(2)} Bs`}
+              subtitle={accountantPeriodLabel}
+              icon={Receipt}
+            />
           </div>
 
           <Card className="border-[#b7c9e6] bg-white/90">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Calendar className="h-5 w-5 text-[#1e4e97]" />
-                Actividad reciente
+                Actividad reciente del periodo
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {recentSales.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aun no hay ventas registradas.</p>
+                <p className="text-sm text-muted-foreground">No hay ventas en el periodo seleccionado.</p>
               ) : (
                 recentSales.map((sale) => (
                   <div key={sale.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-white/90 p-3">

@@ -31,7 +31,9 @@ export default function Sales() {
     return <div className="flex items-center justify-center h-64">Cargando...</div>;
   }
 
-  const formattedProducts = (products as any[]).map((p: any) => ({
+  const activeProducts = (products as any[]).filter((p: any) => p.isActive !== false);
+
+  const formattedProducts = activeProducts.map((p: any) => ({
     id: p.id,
     name: p.name,
     price: parseFloat(p.price),

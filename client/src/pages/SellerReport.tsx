@@ -50,6 +50,7 @@ interface DirectorExpense {
 interface Product {
   id: string;
   name: string;
+  isActive?: boolean;
   price: string;
   cost: string;
   baseCost?: string | null;
@@ -143,6 +144,18 @@ export default function SellerReport() {
   const [saleDate, setSaleDate] = useState(today);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [saving, setSaving] = useState(false);
+  const activeProducts = useMemo(
+    () => (products as Product[]).filter((product) => product.isActive !== false),
+    [products]
+  );
+  const editableProducts = useMemo(() => {
+    const currentProduct =
+      editProductId !== "" ? (products as Product[]).find((product) => product.id === editProductId) || null : null;
+    if (!currentProduct || currentProduct.isActive !== false) {
+      return activeProducts;
+    }
+    return [currentProduct, ...activeProducts.filter((product) => product.id !== currentProduct.id)];
+  }, [products, activeProducts, editProductId]);
 
   useEffect(() => {
     if (!assignSellerId) return;
@@ -156,11 +169,11 @@ export default function SellerReport() {
       setUnitPrice("");
       return;
     }
-    const product = (products as Product[]).find((p) => p.id === selectedProduct);
+    const product = activeProducts.find((p) => p.id === selectedProduct);
     if (product) {
       setUnitPrice(parseAmount(product.price).toFixed(2));
     }
-  }, [selectedProduct, products]);
+  }, [selectedProduct, activeProducts]);
 
   const handleAddSeller = async () => {
     if (!newSellerName.trim()) {
@@ -314,7 +327,7 @@ export default function SellerReport() {
       toast({ title: "Error", description: "Selecciona un producto", variant: "destructive" });
       return;
     }
-    const product = (products as Product[]).find(p => p.id === selectedProduct);
+    const product = activeProducts.find(p => p.id === selectedProduct);
     if (!product) return;
 
     const qty = parseInt(quantity, 10);
@@ -628,7 +641,7 @@ export default function SellerReport() {
 
   
   const selectedProductData = selectedProduct 
-    ? (products as Product[]).find(p => p.id === selectedProduct)
+    ? activeProducts.find(p => p.id === selectedProduct)
     : null;
   const selectedProductMinPrice = getMinUnitPrice(selectedProductData);
   const currentItemTotal =
@@ -789,7 +802,7 @@ export default function SellerReport() {
                       <SelectValue placeholder="Producto" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(products as Product[]).map((p) => (
+                      {activeProducts.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name} - {parseAmount(p.price).toFixed(2)} Bs</SelectItem>
                       ))}
                     </SelectContent>
@@ -1067,8 +1080,11 @@ export default function SellerReport() {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {(products as Product[]).map((p) => (
-                                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                  {editableProducts.map((p) => (
+                                    <SelectItem key={p.id} value={p.id}>
+                                      {p.name}
+                                      {p.isActive === false ? " (Inactivo actual)" : ""}
+                                    </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>

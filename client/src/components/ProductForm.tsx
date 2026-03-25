@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, ChevronDown, ChevronUp, Plus, Trash2, ImageIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDeleteProductImage } from "@/lib/api";
@@ -29,6 +30,7 @@ interface ProductFormProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: { 
     name: string; 
+    isActive: boolean;
     price: number; 
     baseCost: number; 
     capitalIncrease: number; 
@@ -38,6 +40,7 @@ interface ProductFormProps {
   }) => void;
   initialData?: {
     name: string;
+    isActive: boolean;
     price: number;
     baseCost?: number;
     capitalIncrease?: number;
@@ -99,6 +102,7 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData,
   const { toast } = useToast();
   const deleteProductImage = useDeleteProductImage();
   const [name, setName] = useState("");
+  const [isActive, setIsActive] = useState(true);
   const [price, setPrice] = useState("");
   const [capitalIncrease, setCapitalIncrease] = useState("");
   const [imageFile, setImageFile] = useState<File | undefined>();
@@ -133,6 +137,7 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData,
     if (open) {
       if (initialData) {
         setName(initialData.name);
+        setIsActive(initialData.isActive !== false);
         setPrice(initialData.price.toString());
         setCapitalIncrease((initialData.capitalIncrease || 0).toString());
         
@@ -160,6 +165,7 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData,
         setSelectedImageUrl(initialData.imageUrl || "");
       } else {
         setName("");
+        setIsActive(true);
         setPrice("");
         setCapitalIncrease("");
         setCostProduct("");
@@ -185,6 +191,7 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData,
     
     onSubmit({
       name,
+      isActive,
       price: parseFloat(price),
       baseCost: baseCostTotal,
       capitalIncrease: parseFloat(capitalIncrease) || 0,
@@ -201,6 +208,7 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData,
       imageUrl: selectedImageUrl || undefined,
     });
     setName("");
+    setIsActive(true);
     setPrice("");
     setCapitalIncrease("");
     setCostProduct("");
@@ -280,6 +288,31 @@ export default function ProductForm({ open, onOpenChange, onSubmit, initialData,
                 onChange={(e) => setName(e.target.value)}
                 required
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Estado</Label>
+              <Select
+                value={isActive ? "active" : "inactive"}
+                onValueChange={(value) => setIsActive(value === "active")}
+              >
+                <SelectTrigger data-testid="select-product-status">
+                  <SelectValue placeholder="Selecciona estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">
+                    <span className="inline-flex items-center gap-2 text-green-700">
+                      <span className="h-2 w-2 rounded-full bg-green-500" />
+                      Activo
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="inactive">
+                    <span className="inline-flex items-center gap-2 text-red-700">
+                      <span className="h-2 w-2 rounded-full bg-red-500" />
+                      Inactivo
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="product-price">Precio de Venta (Bs)</Label>

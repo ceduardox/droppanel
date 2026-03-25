@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, numeric, timestamp, integer, date, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, numeric, timestamp, integer, date, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -70,6 +70,7 @@ export type BusinessSettings = typeof businessSettings.$inferSelect;
 export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
   price: numeric("price", { precision: 10, scale: 2 }).notNull(),
   cost: numeric("cost", { precision: 10, scale: 2 }).notNull(),
   baseCost: numeric("base_cost", { precision: 10, scale: 2 }),

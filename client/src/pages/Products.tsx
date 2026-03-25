@@ -27,9 +27,10 @@ export default function Products() {
       .sort((a, b) => b.usageCount - a.usageCount || a.imageUrl.localeCompare(b.imageUrl));
   }, [products]);
 
-  const handleSubmit = async (data: { name: string; price: number; baseCost: number; capitalIncrease: number; costBreakdown: any; image?: File; imageUrl?: string }) => {
+  const handleSubmit = async (data: { name: string; isActive: boolean; price: number; baseCost: number; capitalIncrease: number; costBreakdown: any; image?: File; imageUrl?: string }) => {
     const formData = new FormData();
     formData.append("name", data.name);
+    formData.append("isActive", data.isActive ? "true" : "false");
     formData.append("price", data.price.toString());
     formData.append("baseCost", data.baseCost.toString());
     formData.append("capitalIncrease", data.capitalIncrease.toString());
@@ -119,6 +120,7 @@ export default function Products() {
               key={product.id}
               id={product.id}
               name={product.name}
+              isActive={product.isActive !== false}
               price={parseFloat(product.price)}
               cost={parseFloat(product.cost)}
               baseCost={product.baseCost ? parseFloat(product.baseCost) : undefined}
@@ -141,6 +143,7 @@ export default function Products() {
         availableImages={availableImages}
         initialData={editingProduct ? {
           name: editingProduct.name,
+          isActive: editingProduct.isActive !== false,
           price: parseFloat(editingProduct.price),
           cost: parseFloat(editingProduct.cost),
           baseCost: editingProduct.baseCost ? parseFloat(editingProduct.baseCost) : undefined,

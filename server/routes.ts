@@ -216,6 +216,7 @@ const getAccessContext = async (req: any): Promise<AccessContext> => {
 const sanitizeProductForRestrictedRole = (product: any) => ({
   id: product.id,
   name: product.name,
+  isActive: product.isActive,
   price: product.price,
   imageUrl: product.imageUrl,
   userId: product.userId,
@@ -356,6 +357,17 @@ const getErrorMessage = (error: unknown): string => {
     return String((error as { message?: unknown }).message ?? "");
   }
   return String(error);
+};
+
+const parseOptionalBoolean = (value: unknown): boolean | undefined => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "boolean") return value;
+
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return undefined;
+  if (["true", "1", "yes", "on", "active", "activo"].includes(normalized)) return true;
+  if (["false", "0", "no", "off", "inactive", "inactivo"].includes(normalized)) return false;
+  return undefined;
 };
 
 const isReplitObjectStorageUnavailable = (error: unknown): boolean => {
@@ -677,6 +689,11 @@ async function ensureSystemTables() {
   await db.execute(sql`
     ALTER TABLE sales
     ADD COLUMN IF NOT EXISTS unit_transport numeric(10,2);
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE products
+    ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
   `);
 
   await db.execute(sql`
@@ -1253,7 +1270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "El rol contador no puede crear productos" });
       }
 
-      const { name, price, baseCost, capitalIncrease, costProduct, costTransport, costLabel, costShrink, costBag, costLabelRemover, costExtras, imageUrl: selectedImageUrl } = req.body;
+      const { name, price, baseCost, capitalIncrease, costProduct, costTransport, costLabel, costShrink, costBag, costLabelRemover, costExtras, imageUrl: selectedImageUrl, isActive } = req.body;
       
       // Calcular cost total
       const base = parseFloat(baseCost || '0');
@@ -1270,6 +1287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      const parsedIsActive = parseOptionalBoolean(isActive);
       let imageUrl: string | undefined;
       
       if (req.file) {
@@ -1284,6 +1302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const product = await storage.createProduct({
         name,
+        isActive: parsedIsActive ?? true,
         price,
         cost: cost.toString(),
         baseCost: baseCost || null,
@@ -1314,7 +1333,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { id } = req.params;
-      const { name, price, baseCost, capitalIncrease, costProduct, costTransport, costLabel, costShrink, costBag, costLabelRemover, costExtras, imageUrl: selectedImageUrl } = req.body;
+      const { name, price, baseCost, capitalIncrease, costProduct, costTransport, costLabel, costShrink, costBag, costLabelRemover, costExtras, imageUrl: selectedImageUrl, isActive } = req.body;
       
       const existingProduct = await storage.getProduct(id);
       if (!existingProduct || existingProduct.userId !== getEffectiveUserId(req)) {
@@ -1336,6 +1355,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      const parsedIsActive = parseOptionalBoolean(isActive);
       let imageUrl = existingProduct.imageUrl;
       
       if (req.file) {
@@ -1350,6 +1370,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const product = await storage.updateProduct(id, {
         name,
+        isActive: parsedIsActive ?? existingProduct.isActive,
         price,
         cost: cost.toString(),
         baseCost: baseCost || null,
@@ -1419,6 +1440,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!product || product.userId !== getEffectiveUserId(req)) {
         return res.status(404).json({ error: "Producto no encontrado" });
+      }
+      if (product.isActive === false) {
+        return res.status(400).json({ error: "El producto seleccionado esta inactivo" });
       }
 
       const parsedQuantity = parseInt(String(quantity), 10);
@@ -2488,6 +2512,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!product || product.userId !== userId) {
         return res.status(404).json({ error: "Producto no encontrado" });
       }
+      if (product.isActive === false) {
+        return res.status(400).json({ error: "El producto seleccionado esta inactivo" });
+      }
 
       const parsedQuantity = parseInt(String(req.body.quantity), 10);
       if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
@@ -2547,6 +2574,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const product = await storage.getProduct(targetProductId);
       if (!product || product.userId !== userId) {
         return res.status(404).json({ error: "Producto no encontrado" });
+      }
+      const isChangingProduct = productId !== undefined && productId !== null && productId !== "";
+      if (isChangingProduct && product.isActive === false) {
+        return res.status(400).json({ error: "El producto seleccionado esta inactivo" });
       }
 
       const parsedQuantity =

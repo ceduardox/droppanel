@@ -7,6 +7,7 @@ import { Edit, Trash2, ImageIcon } from "lucide-react";
 interface ProductCardProps {
   id: string;
   name: string;
+  isActive?: boolean;
   price: number;
   cost: number;
   baseCost?: number;
@@ -31,6 +32,7 @@ function getImageUrl(imageUrl?: string): string | undefined {
 export default function ProductCard({
   id,
   name,
+  isActive = true,
   price,
   cost,
   baseCost,
@@ -70,6 +72,18 @@ export default function ProductCard({
             <h3 className="text-lg font-semibold leading-tight text-[#1a2a43]" data-testid={`text-product-name-${id}`}>
               {name}
             </h3>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span
+                className={`h-2 w-2 rounded-full ${isActive ? "bg-green-500" : "bg-red-500"}`}
+                aria-hidden="true"
+              />
+              <span
+                className={`text-xs font-medium ${isActive ? "text-green-700" : "text-red-700"}`}
+                data-testid={`text-status-${id}`}
+              >
+                {isActive ? "Activo" : "Inactivo"}
+              </span>
+            </div>
             <div className="mt-2 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-muted-foreground">Precio:</span>

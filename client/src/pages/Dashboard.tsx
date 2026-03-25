@@ -130,7 +130,6 @@ export default function Dashboard() {
     typeof user?.commissionRate === "number" && Number.isFinite(user.commissionRate) && user.commissionRate > 0
       ? user.commissionRate
       : 0.1;
-  const commissionSeller = user?.commissionSeller?.trim() || "Jose Eduardo";
   const accountantSellerShare = accountantUtility / 2;
   const accountantCommission = accountantSellerShare * commissionRate;
   const accountantPeriodLabel =
@@ -262,7 +261,7 @@ export default function Dashboard() {
             <StatsCard
               title="Comision Contador"
               value={`${accountantCommission.toFixed(2)} Bs`}
-              subtitle={`${(commissionRate * 100).toFixed(0)}% de 50% de ${commissionSeller}`}
+              subtitle="Utilidad Bernardo"
               icon={TrendingUp}
             />
             <StatsCard

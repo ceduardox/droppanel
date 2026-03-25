@@ -45,6 +45,7 @@ const permissionKeys = [
   "products",
   "sales",
   "reports",
+  "financialStatus",
   "salesReport",
   "capitalIncrease",
   "grossCapital",
@@ -69,6 +70,7 @@ const permissionSchema = z.object({
   products: z.boolean(),
   sales: z.boolean(),
   reports: z.boolean(),
+  financialStatus: z.boolean(),
   salesReport: z.boolean(),
   capitalIncrease: z.boolean(),
   grossCapital: z.boolean(),
@@ -129,10 +131,18 @@ const requireAdmin = (req: any, res: any, next: any) => {
 const mergePermissions = (
   stored: Partial<AppPermissions> | null | undefined,
   defaultValue: boolean
-): AppPermissions => ({
-  ...getPermissionsTemplate(defaultValue),
-  ...(stored || {}),
-});
+): AppPermissions => {
+  const merged: AppPermissions = {
+    ...getPermissionsTemplate(defaultValue),
+    ...(stored || {}),
+  };
+
+  if (stored?.financialStatus === undefined) {
+    merged.financialStatus = stored?.reports ?? defaultValue;
+  }
+
+  return merged;
+};
 
 const normalizeRoleKey = (value: string | null | undefined) => (value || "").trim().toLowerCase();
 const isAccountantRole = (value: string | null | undefined) => normalizeRoleKey(value) === "contador";

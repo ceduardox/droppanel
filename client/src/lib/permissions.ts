@@ -3,6 +3,7 @@ export const appPermissionKeys = [
   "products",
   "sales",
   "reports",
+  "financialStatus",
   "salesReport",
   "capitalIncrease",
   "grossCapital",
@@ -22,6 +23,7 @@ export const permissionLabels: Record<AppPermissionKey, string> = {
   products: "Productos",
   sales: "Ventas",
   reports: "Reportes",
+  financialStatus: "Estado Financiero",
   salesReport: "Reporte Ventas",
   capitalIncrease: "Aumento Capital",
   grossCapital: "Capital Bruto",
@@ -38,7 +40,7 @@ export const routePermissionMap: Record<string, AppPermissionKey> = {
   "/productos": "products",
   "/ventas": "sales",
   "/reportes": "reports",
-  "/estado-financiero": "reports",
+  "/estado-financiero": "financialStatus",
   "/reporte-ventas": "salesReport",
   "/aumento-capital": "capitalIncrease",
   "/capital-bruto": "grossCapital",
@@ -61,10 +63,18 @@ export const getPermissionsTemplate = (value: boolean): AppPermissions =>
 export const normalizePermissions = (
   input?: Partial<AppPermissions> | null,
   fallbackValue = true
-): AppPermissions => ({
-  ...getPermissionsTemplate(fallbackValue),
-  ...(input || {}),
-});
+): AppPermissions => {
+  const merged: AppPermissions = {
+    ...getPermissionsTemplate(fallbackValue),
+    ...(input || {}),
+  };
+
+  if (input?.financialStatus === undefined) {
+    merged.financialStatus = input?.reports ?? fallbackValue;
+  }
+
+  return merged;
+};
 
 export const hasPermission = (
   permissions: Partial<AppPermissions> | null | undefined,
@@ -85,6 +95,7 @@ export const getRolePresetPermissions = (role: string): AppPermissions | null =>
     products: false,
     sales: true,
     reports: true,
+    financialStatus: true,
     salesReport: true,
     capitalIncrease: false,
     grossCapital: false,

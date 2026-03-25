@@ -22,6 +22,7 @@ export type AppPermissions = {
   products: boolean;
   sales: boolean;
   reports: boolean;
+  financialStatus: boolean;
   salesReport: boolean;
   capitalIncrease: boolean;
   grossCapital: boolean;

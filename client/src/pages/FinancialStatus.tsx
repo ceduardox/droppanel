@@ -401,7 +401,7 @@ export default function FinancialStatus() {
         id: `sale-base-${sale.id}`,
         date: sale.date,
         module: "Costo bruto",
-        detail: `${sale.productName} reposicion`,
+        detail: `${sale.productName} reposicion (${sale.quantity} u)`,
         signedAmount: -sale.baseCostAmount,
         order: 11,
       });
@@ -409,7 +409,7 @@ export default function FinancialStatus() {
         id: `sale-reserve-${sale.id}`,
         date: sale.date,
         module: "Aumento capital",
-        detail: `${sale.productName} reserva`,
+        detail: `${sale.productName} reserva (${sale.quantity} u)`,
         signedAmount: -sale.reserveAmount,
         order: 12,
       });

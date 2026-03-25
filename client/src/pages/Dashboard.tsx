@@ -259,7 +259,7 @@ export default function Dashboard() {
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <StatsCard
-              title="Comision Contador"
+              title="UTILIDAD"
               value={`${accountantCommission.toFixed(2)} Bs`}
               subtitle="Utilidad Bernardo"
               icon={TrendingUp}

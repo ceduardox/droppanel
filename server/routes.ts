@@ -1391,6 +1391,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/products/:id/status", requireAuth, async (req, res) => {
+    try {
+      const access = await getAccessContext(req);
+      if (access.isAccountant) {
+        return res.status(403).json({ error: "El rol contador no puede editar productos" });
+      }
+
+      const { id } = req.params;
+      const product = await storage.getProduct(id);
+      if (!product || product.userId !== getEffectiveUserId(req)) {
+        return res.status(404).json({ error: "Producto no encontrado" });
+      }
+
+      const parsedIsActive = parseOptionalBoolean(req.body?.isActive);
+      if (parsedIsActive === undefined) {
+        return res.status(400).json({ error: "isActive es requerido" });
+      }
+
+      const updated = await storage.updateProduct(id, { isActive: parsedIsActive });
+      if (!updated) {
+        return res.status(404).json({ error: "Producto no encontrado" });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Error al actualizar estado del producto" });
+    }
+  });
+
   app.delete("/api/products/:id", requireAuth, async (req, res) => {
     try {
       const access = await getAccessContext(req);

@@ -224,6 +224,20 @@ export function useDeleteProduct() {
   });
 }
 
+export function useToggleProductStatus() {
+  return useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      return apiRequest(`/api/products/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+    },
+  });
+}
+
 // Sales
 export function useSales() {
   return useQuery({

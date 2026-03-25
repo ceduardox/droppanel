@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Edit, Trash2, ImageIcon } from "lucide-react";
 
 interface ProductCardProps {
@@ -15,6 +16,8 @@ interface ProductCardProps {
   image?: string;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onToggleActive?: (id: string, nextActive: boolean) => void;
+  isToggling?: boolean;
 }
 
 function getImageUrl(imageUrl?: string): string | undefined {
@@ -40,6 +43,8 @@ export default function ProductCard({
   image,
   onEdit,
   onDelete,
+  onToggleActive,
+  isToggling,
 }: ProductCardProps) {
   const [imageFailed, setImageFailed] = useState(false);
   const profit = price - cost;
@@ -72,17 +77,29 @@ export default function ProductCard({
             <h3 className="text-lg font-semibold leading-tight text-[#1a2a43]" data-testid={`text-product-name-${id}`}>
               {name}
             </h3>
-            <div className="mt-1 flex items-center gap-1.5">
-              <span
-                className={`h-2 w-2 rounded-full ${isActive ? "bg-green-500" : "bg-red-500"}`}
-                aria-hidden="true"
-              />
-              <span
-                className={`text-xs font-medium ${isActive ? "text-green-700" : "text-red-700"}`}
-                data-testid={`text-status-${id}`}
-              >
-                {isActive ? "Activo" : "Inactivo"}
-              </span>
+            <div className="mt-1 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`h-2 w-2 rounded-full ${isActive ? "bg-green-500" : "bg-red-500"}`}
+                  aria-hidden="true"
+                />
+                <span
+                  className={`text-xs font-medium ${isActive ? "text-green-700" : "text-red-700"}`}
+                  data-testid={`text-status-${id}`}
+                >
+                  {isActive ? "Activo" : "Inactivo"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">Estado</span>
+                <Switch
+                  checked={isActive}
+                  disabled={isToggling}
+                  onCheckedChange={(checked) => onToggleActive?.(id, checked === true)}
+                  aria-label={`Cambiar estado de ${name}`}
+                  data-testid={`switch-product-status-${id}`}
+                />
+              </div>
             </div>
             <div className="mt-2 space-y-1.5">
               <div className="flex items-center justify-between gap-2">

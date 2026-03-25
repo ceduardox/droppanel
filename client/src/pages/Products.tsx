@@ -3,7 +3,7 @@ import ProductCard from "@/components/ProductCard";
 import ProductForm from "@/components/ProductForm";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from "@/lib/api";
+import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, useToggleProductStatus } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Products() {
@@ -13,6 +13,8 @@ export default function Products() {
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
+  const toggleProductStatus = useToggleProductStatus();
+  const [togglingProductId, setTogglingProductId] = useState<string | null>(null);
   const { toast } = useToast();
   const availableImages = useMemo(() => {
     const usageMap = new Map<string, number>();
@@ -84,6 +86,21 @@ export default function Products() {
     }
   };
 
+  const handleToggleActive = async (id: string, nextActive: boolean) => {
+    try {
+      setTogglingProductId(id);
+      await toggleProductStatus.mutateAsync({ id, isActive: nextActive });
+      toast({
+        title: "Estado actualizado",
+        description: `Producto ${nextActive ? "activado" : "inactivado"} correctamente`,
+      });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setTogglingProductId(null);
+    }
+  };
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-64">Cargando...</div>;
   }
@@ -128,6 +145,8 @@ export default function Products() {
               image={product.imageUrl}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onToggleActive={handleToggleActive}
+              isToggling={togglingProductId === product.id}
             />
           ))}
         </div>

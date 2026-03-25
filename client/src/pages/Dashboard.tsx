@@ -258,13 +258,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <StatsCard
-              title="Utilidad del Periodo"
-              value={`${accountantUtility.toFixed(2)} Bs`}
-              subtitle={`${accountantPeriodLabel} (ventas - gastos)`}
-              icon={TrendingUp}
-            />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <StatsCard
               title="Comision Contador"
               value={`${accountantCommission.toFixed(2)} Bs`}

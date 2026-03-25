@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useSellers,
   useCreateSeller,
@@ -126,6 +126,10 @@ export default function SellerReport() {
   const [showUtilityFallback, setShowUtilityFallback] = useState(true);
   const [includeExpensesInText, setIncludeExpensesInText] = useState(true);
   const [includeUtilityInText, setIncludeUtilityInText] = useState(true);
+  const [expenseSelectionById, setExpenseSelectionById] = useState<Record<string, boolean>>({});
+  const [editingSellerDirectorId, setEditingSellerDirectorId] = useState<string | null>(null);
+  const [reportAssignDirectorId, setReportAssignDirectorId] = useState("none");
+  const [reportAssignEffectiveFrom, setReportAssignEffectiveFrom] = useState(today);
   
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
   const [editProductId, setEditProductId] = useState("");
@@ -216,6 +220,49 @@ export default function SellerReport() {
         title: "Exito",
         description: `${sellerName} => ${directorName}. Ventas actualizadas desde ${formatDateString(assignEffectiveFrom)}: ${response.affectedSales}`,
       });
+    } catch {
+      toast({ title: "Error", description: "No se pudo asignar director", variant: "destructive" });
+    }
+  };
+
+  const handleOpenReportDirectorEditor = (sellerId: string) => {
+    if (editingSellerDirectorId === sellerId) {
+      setEditingSellerDirectorId(null);
+      return;
+    }
+
+    const seller = (sellers as Seller[]).find((item) => item.id === sellerId);
+    setReportAssignDirectorId(seller?.directorId || "none");
+    setReportAssignEffectiveFrom(filterMode === "day" ? filterDate : filterDateFrom || today);
+    setEditingSellerDirectorId(sellerId);
+  };
+
+  const handleAssignDirectorFromReport = async (sellerId: string) => {
+    if (!reportAssignEffectiveFrom) {
+      toast({ title: "Error", description: "Selecciona fecha de vigencia", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const response = await assignSellerDirector.mutateAsync({
+        sellerId,
+        data: {
+          directorId: reportAssignDirectorId === "none" ? null : reportAssignDirectorId,
+          effectiveFrom: reportAssignEffectiveFrom,
+        },
+      });
+
+      const sellerName = (sellers as Seller[]).find((s) => s.id === sellerId)?.name || "Vendedor";
+      const directorName =
+        reportAssignDirectorId === "none"
+          ? "Sin director"
+          : (directors as Director[]).find((d) => d.id === reportAssignDirectorId)?.name || "Director";
+
+      toast({
+        title: "Exito",
+        description: `${sellerName} => ${directorName}. Ventas actualizadas desde ${formatDateString(reportAssignEffectiveFrom)}: ${response.affectedSales}`,
+      });
+      setEditingSellerDirectorId(null);
     } catch {
       toast({ title: "Error", description: "No se pudo asignar director", variant: "destructive" });
     }
@@ -438,10 +485,10 @@ export default function SellerReport() {
         ? (directors as Director[]).find((director) => director.id === sale.directorId)?.name || "Director"
         : "Sin director";
 
-    if (!acc[seller.name]) {
-      acc[seller.name] = { sales: [], total: 0, totalProducts: 0, directorName };
+    if (!acc[seller.id]) {
+      acc[seller.id] = { sellerId: seller.id, sellerName: seller.name, sales: [], total: 0, totalProducts: 0, directorName };
     }
-    acc[seller.name].sales.push({ 
+    acc[seller.id].sales.push({ 
       id: sale.id, 
       productId: sale.productId,
       product: product.name, 
@@ -449,10 +496,10 @@ export default function SellerReport() {
       unitPrice: sale.unitPrice, 
       total 
     });
-    acc[seller.name].total += total;
-    acc[seller.name].totalProducts += sale.quantity;
+    acc[seller.id].total += total;
+    acc[seller.id].totalProducts += sale.quantity;
     return acc;
-  }, {} as Record<string, { sales: { id: string; productId: string; product: string; quantity: number; unitPrice: string; total: number }[]; total: number; totalProducts: number; directorName: string }>);
+  }, {} as Record<string, { sellerId: string; sellerName: string; sales: { id: string; productId: string; product: string; quantity: number; unitPrice: string; total: number }[]; total: number; totalProducts: number; directorName: string }>);
 
   const grandTotal = Object.values(salesByDay).reduce((sum, s) => sum + s.total, 0);
   const grandTotalProducts = Object.values(salesByDay).reduce((sum, s) => sum + s.totalProducts, 0);
@@ -472,20 +519,35 @@ export default function SellerReport() {
     ? (selectedDirector.showProfitInReport ?? 1) === 1
     : showUtilityFallback;
 
-  const filteredDirectorExpenses = [...(directorExpenses as DirectorExpense[])]
-    .filter((expense) => {
-    const dateMatches =
-      filterMode === "day"
-        ? expense.expenseDate === filterDate
-        : expense.expenseDate >= filterDateFrom && expense.expenseDate <= filterDateTo;
-    if (!dateMatches) return false;
-    if (filterDirector === "all") return true;
-    if (filterDirector === "none") return !expense.directorId;
-    return expense.directorId === filterDirector;
-    })
-    .sort((a, b) => a.expenseDate.localeCompare(b.expenseDate));
+  const filteredDirectorExpenses = useMemo(
+    () =>
+      [...(directorExpenses as DirectorExpense[])]
+        .filter((expense) => {
+          const dateMatches =
+            filterMode === "day"
+              ? expense.expenseDate === filterDate
+              : expense.expenseDate >= filterDateFrom && expense.expenseDate <= filterDateTo;
+          if (!dateMatches) return false;
+          if (filterDirector === "all") return true;
+          if (filterDirector === "none") return !expense.directorId;
+          return expense.directorId === filterDirector;
+        })
+        .sort((a, b) => a.expenseDate.localeCompare(b.expenseDate)),
+    [directorExpenses, filterMode, filterDate, filterDateFrom, filterDateTo, filterDirector],
+  );
 
-  const totalDirectorExpenses = filteredDirectorExpenses.reduce((sum, expense) => sum + parseAmount(expense.amount), 0);
+  useEffect(() => {
+    setExpenseSelectionById((current) => {
+      const next: Record<string, boolean> = {};
+      filteredDirectorExpenses.forEach((expense) => {
+        next[expense.id] = current[expense.id] ?? true;
+      });
+      return next;
+    });
+  }, [filteredDirectorExpenses]);
+
+  const selectedDirectorExpenses = filteredDirectorExpenses.filter((expense) => expenseSelectionById[expense.id] !== false);
+  const totalDirectorExpenses = selectedDirectorExpenses.reduce((sum, expense) => sum + parseAmount(expense.amount), 0);
   const utilityTotal = grandTotal - totalDirectorExpenses;
   const totalLabel = filterMode === "range" ? "TOTAL DEL PERIODO" : "TOTAL DEL DIA";
   const showUtilityInText = showUtilityInReport && includeUtilityInText;
@@ -531,8 +593,8 @@ export default function SellerReport() {
     if (Object.keys(salesByDay).length === 0) {
       text += `Sin ventas en el periodo.\n\n`;
     } else {
-      Object.entries(salesByDay).forEach(([sellerName, data]) => {
-        text += `${sellerName} (${data.directorName})\n`;
+      Object.values(salesByDay).forEach((data) => {
+        text += `${data.sellerName} (${data.directorName})\n`;
         data.sales.forEach((sale) => {
           text += `  - ${sale.product} x${sale.quantity} = ${sale.total.toFixed(2)} Bs\n`;
         });
@@ -546,10 +608,10 @@ export default function SellerReport() {
     if (includeExpensesInText) {
       text += `GASTOS:\n`;
 
-      if (filteredDirectorExpenses.length === 0) {
+      if (selectedDirectorExpenses.length === 0) {
         text += `  - Sin gastos registrados\n`;
       } else {
-        filteredDirectorExpenses.forEach((expense) => {
+        selectedDirectorExpenses.forEach((expense) => {
           text += `  - ${formatDateString(expense.expenseDate)} | ${getDirectorName(expense.directorId)} | ${expense.description}: ${parseAmount(expense.amount).toFixed(2)} Bs\n`;
         });
       }
@@ -925,12 +987,12 @@ export default function SellerReport() {
             <p className="py-4 text-center text-muted-foreground">No hay ventas para este filtro</p>
           ) : (
             <div className="space-y-4">
-              {Object.entries(salesByDay).map(([sellerName, data]) => (
-                <Collapsible key={sellerName} className="border rounded-lg" data-testid={`card-seller-sales-${sellerName}`}>
+              {Object.values(salesByDay).map((data) => (
+                <Collapsible key={data.sellerId} className="border rounded-lg" data-testid={`card-seller-sales-${data.sellerId}`}>
                   <CollapsibleTrigger className="group w-full rounded-lg p-3 sm:p-4 flex flex-wrap justify-between items-center gap-2 hover-elevate">
                     <div className="min-w-0 flex items-center gap-2 sm:gap-3">
                       <div className="min-w-0">
-                        <h3 className="truncate text-base font-bold sm:text-lg">{sellerName}</h3>
+                        <h3 className="truncate text-base font-bold sm:text-lg">{data.sellerName}</h3>
                         <p className="text-xs text-muted-foreground">{data.directorName}</p>
                       </div>
                       <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground sm:text-sm">{data.totalProducts} productos</span>
@@ -941,7 +1003,52 @@ export default function SellerReport() {
                     </div>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="px-4 pb-4">
-                    <div className="space-y-2 pt-2 border-t">
+                    <div className="space-y-3 pt-2 border-t">
+                      <div className="rounded-md border bg-muted/20 p-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs text-muted-foreground">
+                            Director actual: <span className="font-medium text-foreground">{data.directorName}</span>
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7"
+                            onClick={() => handleOpenReportDirectorEditor(data.sellerId)}
+                            data-testid={`button-open-director-editor-${data.sellerId}`}
+                          >
+                            {editingSellerDirectorId === data.sellerId ? "Cancelar" : "Editar director por fecha"}
+                          </Button>
+                        </div>
+                        {editingSellerDirectorId === data.sellerId && (
+                          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_auto]">
+                            <Select value={reportAssignDirectorId} onValueChange={setReportAssignDirectorId}>
+                              <SelectTrigger data-testid={`select-inline-director-${data.sellerId}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Sin director</SelectItem>
+                                {(directors as Director[]).map((d) => (
+                                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="date"
+                              value={reportAssignEffectiveFrom}
+                              onChange={(e) => setReportAssignEffectiveFrom(e.target.value)}
+                              data-testid={`input-inline-effective-from-${data.sellerId}`}
+                            />
+                            <Button
+                              onClick={() => handleAssignDirectorFromReport(data.sellerId)}
+                              disabled={assignSellerDirector.isPending}
+                              data-testid={`button-inline-save-director-${data.sellerId}`}
+                            >
+                              {assignSellerDirector.isPending ? "Guardando..." : "Guardar"}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-2">
                       {data.sales.map((sale) => (
                         <div key={sale.id} className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between" data-testid={`row-sale-${sale.id}`}>
                           {editingSaleId === sale.id ? (
@@ -1024,6 +1131,7 @@ export default function SellerReport() {
                           )}
                         </div>
                       ))}
+                      </div>
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
@@ -1088,6 +1196,9 @@ export default function SellerReport() {
             <p className="text-sm font-semibold">
               Gastos del {filterMode === "range" ? "periodo" : "dia"} ({selectedDirectorLabel})
             </p>
+            <p className="text-xs text-muted-foreground">
+              Seleccionados para reporte: {selectedDirectorExpenses.length} de {filteredDirectorExpenses.length}
+            </p>
             {filteredDirectorExpenses.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sin gastos registrados para este filtro</p>
             ) : (
@@ -1105,6 +1216,16 @@ export default function SellerReport() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={expenseSelectionById[expense.id] !== false}
+                        onCheckedChange={(checked) =>
+                          setExpenseSelectionById((current) => ({
+                            ...current,
+                            [expense.id]: checked === true,
+                          }))
+                        }
+                        data-testid={`checkbox-director-expense-${expense.id}`}
+                      />
                       <span className="text-sm font-semibold text-red-600">
                         -{parseAmount(expense.amount).toFixed(2)} Bs
                       </span>
@@ -1125,7 +1246,7 @@ export default function SellerReport() {
 
             <div className="space-y-2 border-t pt-3">
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">Total gastos</span>
+                <span className="font-medium">Total gastos seleccionados</span>
                 <span className="font-semibold text-red-600" data-testid="text-total-director-expenses">
                   -{totalDirectorExpenses.toFixed(2)} Bs
                 </span>

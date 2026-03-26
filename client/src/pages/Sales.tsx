@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import DropshipperDeliveriesModal from "@/components/DropshipperDeliveriesModal";
 import WhatsAppReport from "@/components/WhatsAppReport";
 
 function getTodayIsoLocal(): string {
@@ -102,6 +103,7 @@ export default function Sales() {
   const [textIncludeDirector, setTextIncludeDirector] = useState(true);
   const [textIncludeDelivery, setTextIncludeDelivery] = useState(true);
   const [textIncludeSummary, setTextIncludeSummary] = useState(true);
+  const [isDropshipperModalOpen, setIsDropshipperModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<SaleEditDraft | null>(null);
@@ -671,9 +673,19 @@ export default function Sales() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Registrar Venta</h1>
-        <p className="text-muted-foreground mt-1">Ingresa los detalles de la nueva venta</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Registrar Venta</h1>
+          <p className="text-muted-foreground mt-1">Ingresa los detalles de la nueva venta</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setIsDropshipperModalOpen(true)}
+          data-testid="button-open-dropshipper-deliveries"
+        >
+          Ver entregas
+        </Button>
       </div>
 
       {formattedProducts.length === 0 ? (
@@ -1330,6 +1342,11 @@ export default function Sales() {
           )}
         </DialogContent>
       </Dialog>
+
+      <DropshipperDeliveriesModal
+        open={isDropshipperModalOpen}
+        onOpenChange={setIsDropshipperModalOpen}
+      />
     </div>
   );
 }

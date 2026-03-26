@@ -135,7 +135,7 @@ export default function DropshipperDeliveriesModal({
     if (typeof window === "undefined") return true;
     return window.innerWidth >= 1024;
   });
-  const [position, setPosition] = useState({ x: 52, y: 64 });
+  const [position, setPosition] = useState({ x: 48, y: 28 });
   const [isDragging, setIsDragging] = useState(false);
 
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -157,8 +157,8 @@ export default function DropshipperDeliveriesModal({
       const desktop = window.innerWidth >= 1024;
       setIsDesktop(desktop);
       if (!desktop) return;
-      const panelWidth = panelRef.current?.offsetWidth ?? 1080;
-      const panelHeight = panelRef.current?.offsetHeight ?? 700;
+      const panelWidth = panelRef.current?.offsetWidth ?? 860;
+      const panelHeight = panelRef.current?.offsetHeight ?? 820;
       const maxX = Math.max(window.innerWidth - panelWidth - 12, 12);
       const maxY = Math.max(window.innerHeight - panelHeight - 12, 12);
       setPosition((prev) => ({
@@ -176,8 +176,8 @@ export default function DropshipperDeliveriesModal({
     if (!open || !isDesktop || !isDragging) return;
 
     const handleMouseMove = (event: MouseEvent) => {
-      const panelWidth = panelRef.current?.offsetWidth ?? 1080;
-      const panelHeight = panelRef.current?.offsetHeight ?? 700;
+      const panelWidth = panelRef.current?.offsetWidth ?? 860;
+      const panelHeight = panelRef.current?.offsetHeight ?? 820;
       const maxX = Math.max(window.innerWidth - panelWidth - 12, 12);
       const maxY = Math.max(window.innerHeight - panelHeight - 12, 12);
       const nextX = clamp(event.clientX - dragOffsetRef.current.x, 12, maxX);
@@ -284,7 +284,7 @@ export default function DropshipperDeliveriesModal({
   };
 
   const handleResetPosition = () => {
-    setPosition({ x: 52, y: 64 });
+    setPosition({ x: 48, y: 28 });
   };
 
   const summary = reportData?.summary || {};
@@ -317,7 +317,7 @@ export default function DropshipperDeliveriesModal({
         ref={panelRef}
         className={
           isDesktop
-            ? "pointer-events-auto fixed z-[91] h-[min(84vh,760px)] w-[min(1200px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#b7c9e6] bg-white shadow-2xl"
+            ? "pointer-events-auto fixed z-[91] h-[min(90vh,860px)] w-[min(860px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#b7c9e6] bg-white shadow-2xl"
             : "pointer-events-auto fixed inset-2 z-[91] overflow-hidden rounded-2xl border border-[#b7c9e6] bg-white shadow-2xl"
         }
         style={isDesktop ? { left: position.x, top: position.y } : undefined}
@@ -373,7 +373,7 @@ export default function DropshipperDeliveriesModal({
               </Button>
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
               {mode === "day" ? (
                 <div className="space-y-2">
                   <Label htmlFor="dropshipper-date">Fecha</Label>
@@ -462,7 +462,7 @@ export default function DropshipperDeliveriesModal({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
               <p className="text-xs text-muted-foreground">Vendedores</p>
               <p className="text-lg font-semibold text-[#1a2a43]">{toInteger(summary.dropshippers)}</p>
@@ -503,11 +503,11 @@ export default function DropshipperDeliveriesModal({
                     Sin datos de vendedores para el filtro seleccionado.
                   </p>
                 ) : (
-                  <div className="max-h-44 overflow-y-auto divide-y">
+                  <div className="max-h-48 overflow-y-auto divide-y">
                     {dropshippers.map((seller, index) => (
                       <div
                         key={`${seller.id || seller.name || "seller"}-${index}`}
-                        className="grid gap-2 px-4 py-3 text-sm lg:grid-cols-5"
+                        className="grid gap-2 px-4 py-3 text-sm md:grid-cols-2"
                       >
                         <div>
                           <p className="font-medium text-[#1a2a43]">{seller.name || "Vendedor"}</p>
@@ -535,7 +535,7 @@ export default function DropshipperDeliveriesModal({
                     No hay entregas registradas en este filtro.
                   </p>
                 ) : (
-                  <div className="max-h-[360px] overflow-auto">
+                  <div className="max-h-[460px] overflow-auto">
                     <table className="min-w-full text-sm">
                       <thead className="sticky top-0 bg-[#f7fbff]">
                         <tr className="border-b border-[#d1dff2] text-xs uppercase tracking-wide text-muted-foreground">
@@ -579,4 +579,3 @@ export default function DropshipperDeliveriesModal({
     </div>
   );
 }
-

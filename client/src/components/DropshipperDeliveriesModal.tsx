@@ -576,40 +576,52 @@ export default function DropshipperDeliveriesModal({
                     No hay entregas registradas en este filtro.
                   </p>
                 ) : (
-                  <div className="max-h-[460px] overflow-auto">
-                    <table className="min-w-full text-sm">
-                      <thead className="sticky top-0 bg-[#f7fbff]">
-                        <tr className="border-b border-[#d1dff2] text-xs uppercase tracking-wide text-muted-foreground">
-                          <th className="px-3 py-2 text-left">Fecha</th>
-                          <th className="px-3 py-2 text-left">Delivery</th>
-                          <th className="px-3 py-2 text-left">Vendedor</th>
-                          <th className="px-3 py-2 text-left">Ciudad</th>
-                          <th className="px-3 py-2 text-left">Producto</th>
-                          <th className="px-3 py-2 text-right">Cantidad</th>
-                          <th className="px-3 py-2 text-right">P. Unit</th>
-                          <th className="px-3 py-2 text-right">Total</th>
-                          <th className="px-3 py-2 text-right">Comision</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {deliveryItems.map((item, index) => (
-                          <tr
-                            key={`${item.deliveryId || "delivery"}-${item.productId || "product"}-${index}`}
-                            className="border-b border-[#edf2fa] last:border-b-0"
-                          >
-                            <td className="px-3 py-2">{formatDate(item.reportDate || item.deliveredAt)}</td>
-                            <td className="px-3 py-2">{item.deliveryUserName || "-"}</td>
-                            <td className="px-3 py-2">{item.dropshipperName || "-"}</td>
-                            <td className="px-3 py-2">{item.dropshipperCity || item.deliveryUserCity || "-"}</td>
-                            <td className="px-3 py-2">{item.productName || "-"}</td>
-                            <td className="px-3 py-2 text-right">{toInteger(item.quantity)}</td>
-                            <td className="px-3 py-2 text-right">{formatBs(item.unitPriceBs)}</td>
-                            <td className="px-3 py-2 text-right font-semibold">{formatBs(item.totalPriceBs)}</td>
-                            <td className="px-3 py-2 text-right text-[#b94141]">{formatBs(item.totalCommissionBs)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="space-y-2 p-3">
+                    {deliveryItems.map((item, index) => (
+                      <div
+                        key={`${item.deliveryId || "delivery"}-${item.productId || "product"}-${index}`}
+                        className="rounded-lg border border-[#e6eefb] bg-[#fcfdff] p-3"
+                      >
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          <p className="text-sm">
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">Fecha:</span>{" "}
+                            <span className="font-medium">{formatDate(item.reportDate || item.deliveredAt)}</span>
+                          </p>
+                          <p className="text-sm">
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">Delivery:</span>{" "}
+                            <span className="font-medium">{item.deliveryUserName || "-"}</span>
+                          </p>
+                          <p className="text-sm">
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">Vendedor:</span>{" "}
+                            <span className="font-medium">{item.dropshipperName || "-"}</span>
+                          </p>
+                          <p className="text-sm">
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">Ciudad:</span>{" "}
+                            <span className="font-medium">{item.dropshipperCity || item.deliveryUserCity || "-"}</span>
+                          </p>
+                          <p className="text-sm">
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">Producto:</span>{" "}
+                            <span className="font-medium">{item.productName || "-"}</span>
+                          </p>
+                          <p className="text-sm">
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">Cantidad:</span>{" "}
+                            <span className="font-medium">{toInteger(item.quantity)}</span>
+                          </p>
+                          <p className="text-sm">
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">P. Unit:</span>{" "}
+                            <span className="font-medium">{formatBs(item.unitPriceBs)}</span>
+                          </p>
+                          <p className="text-sm">
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">Total:</span>{" "}
+                            <span className="font-semibold">{formatBs(item.totalPriceBs)}</span>
+                          </p>
+                          <p className="text-sm">
+                            <span className="text-xs uppercase tracking-wide text-muted-foreground">Comision:</span>{" "}
+                            <span className="font-semibold text-[#b94141]">{formatBs(item.totalCommissionBs)}</span>
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

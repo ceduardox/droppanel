@@ -16,7 +16,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import WhatsAppReport from "@/components/WhatsAppReport";
 
 function getTodayIsoLocal(): string {
   const now = new Date();
@@ -37,6 +39,15 @@ function toSelectValue(value: unknown): string {
   if (value === null || value === undefined) return "none";
   const text = String(value).trim();
   return text.length > 0 ? text : "none";
+}
+
+function formatDateShort(dateStr: string): string {
+  if (!dateStr) return "";
+  const [year, month, day] = dateStr.split("-");
+  const monthNames = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  const monthIndex = Number.parseInt(month || "1", 10) - 1;
+  const safeMonth = monthNames[monthIndex] || month;
+  return `${Number.parseInt(day || "1", 10)} ${safeMonth} ${year}`;
 }
 
 type SaleEditDraft = {
@@ -63,6 +74,20 @@ export default function Sales() {
   const [reportDate, setReportDate] = useState(todayIso);
   const [reportStartDate, setReportStartDate] = useState(todayIso);
   const [reportEndDate, setReportEndDate] = useState(todayIso);
+  const [textReportMode, setTextReportMode] = useState<"day" | "range">("day");
+  const [textReportDate, setTextReportDate] = useState(todayIso);
+  const [textReportStartDate, setTextReportStartDate] = useState(todayIso);
+  const [textReportEndDate, setTextReportEndDate] = useState(todayIso);
+  const [textFilterDirector, setTextFilterDirector] = useState("all");
+  const [textFilterSeller, setTextFilterSeller] = useState("all");
+  const [textIncludeSaleDate, setTextIncludeSaleDate] = useState(true);
+  const [textIncludeProduct, setTextIncludeProduct] = useState(true);
+  const [textIncludeQuantity, setTextIncludeQuantity] = useState(true);
+  const [textIncludeUnitPrice, setTextIncludeUnitPrice] = useState(true);
+  const [textIncludeLineTotal, setTextIncludeLineTotal] = useState(true);
+  const [textIncludeSeller, setTextIncludeSeller] = useState(true);
+  const [textIncludeDirector, setTextIncludeDirector] = useState(true);
+  const [textIncludeSummary, setTextIncludeSummary] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<SaleEditDraft | null>(null);
@@ -137,6 +162,10 @@ export default function Sales() {
     reportStartDate <= reportEndDate ? reportStartDate : reportEndDate;
   const normalizedEndDate =
     reportStartDate <= reportEndDate ? reportEndDate : reportStartDate;
+  const normalizedTextStartDate =
+    textReportStartDate <= textReportEndDate ? textReportStartDate : textReportEndDate;
+  const normalizedTextEndDate =
+    textReportStartDate <= textReportEndDate ? textReportEndDate : textReportStartDate;
 
   const productMap = new Map(
     allProducts.map((product: any) => [product.id, product])
@@ -424,6 +453,111 @@ export default function Sales() {
       total: safeQty * safeUnitPrice,
     };
   };
+  const selectedTextDirectorLabel =
+    textFilterDirector === "all"
+      ? "Todos"
+      : textFilterDirector === "none"
+        ? "Sin director"
+        : directorMap.get(textFilterDirector) || "Director";
+  const selectedTextSellerLabel =
+    textFilterSeller === "all"
+      ? "Todos"
+      : textFilterSeller === "none"
+        ? "Sin vendedor"
+        : sellerMap.get(textFilterSeller) || "Vendedor";
+
+  const textSalesFiltered = allSales
+    .filter((sale: any) => {
+      const saleDate = toIsoDate(sale.saleDate);
+      if (!saleDate) return false;
+
+      const matchDate =
+        textReportMode === "day"
+          ? saleDate === textReportDate
+          : saleDate >= normalizedTextStartDate && saleDate <= normalizedTextEndDate;
+
+      const matchDirector =
+        textFilterDirector === "all"
+          ? true
+          : textFilterDirector === "none"
+            ? !sale.directorId
+            : sale.directorId === textFilterDirector;
+
+      const matchSeller =
+        textFilterSeller === "all"
+          ? true
+          : textFilterSeller === "none"
+            ? !sale.sellerId
+            : sale.sellerId === textFilterSeller;
+
+      return matchDate && matchDirector && matchSeller;
+    })
+    .sort((a: any, b: any) => toIsoDate(a.saleDate).localeCompare(toIsoDate(b.saleDate)));
+
+  const textReportRows = textSalesFiltered.map((sale: any) => ({
+    id: sale.id,
+    ...buildSaleRow(sale),
+  }));
+  const textReportUnits = textReportRows.reduce((sum, row) => sum + row.safeQty, 0);
+  const textReportTotal = textReportRows.reduce((sum, row) => sum + row.total, 0);
+  const textReportPeriodLabel =
+    textReportMode === "day"
+      ? formatDateShort(textReportDate)
+      : `${formatDateShort(normalizedTextStartDate)} a ${formatDateShort(normalizedTextEndDate)}`;
+
+  const textSellerOptionsBase = allSellers.filter((seller: any) => {
+    if (textFilterDirector === "all") return true;
+    if (textFilterDirector === "none") return !seller.directorId;
+    return seller.directorId === textFilterDirector;
+  });
+  const textSellerOptions = [...textSellerOptionsBase];
+  if (
+    textFilterSeller !== "all" &&
+    textFilterSeller !== "none" &&
+    !textSellerOptions.some((seller: any) => seller.id === textFilterSeller)
+  ) {
+    const selectedSeller = allSellers.find((seller: any) => seller.id === textFilterSeller);
+    if (selectedSeller) {
+      textSellerOptions.push(selectedSeller);
+    }
+  }
+
+  const buildSalesTextReport = () => {
+    const lines: string[] = [];
+    lines.push("REPORTE DE VENTAS");
+    lines.push(`Periodo: ${textReportPeriodLabel}`);
+    lines.push(`Director: ${selectedTextDirectorLabel}`);
+    lines.push(`Vendedor: ${selectedTextSellerLabel}`);
+    lines.push("");
+
+    if (textReportRows.length === 0) {
+      lines.push("Sin ventas en el filtro seleccionado.");
+      return lines.join("\n");
+    }
+
+    textReportRows.forEach((row, index) => {
+      lines.push(`VENTA ${index + 1}`);
+      if (textIncludeSaleDate) lines.push(`Fecha: ${row.saleDate}`);
+      if (textIncludeProduct) lines.push(`Producto: ${row.productName}`);
+      if (textIncludeQuantity) lines.push(`Cantidad: ${row.safeQty}`);
+      if (textIncludeUnitPrice) lines.push(`P. Unit: ${row.safeUnitPrice.toFixed(2)} Bs`);
+      if (textIncludeLineTotal) lines.push(`Total: ${row.total.toFixed(2)} Bs`);
+      if (textIncludeSeller) lines.push(`Vendedor: ${row.sellerName}`);
+      if (textIncludeDirector) lines.push(`Director: ${row.directorName}`);
+      lines.push("");
+    });
+
+    if (textIncludeSummary) {
+      lines.push("RESUMEN");
+      lines.push(`Ventas registradas: ${textReportRows.length}`);
+      if (textIncludeQuantity) lines.push(`Unidades totales: ${textReportUnits}`);
+      if (textIncludeLineTotal) lines.push(`Total ventas: ${textReportTotal.toFixed(2)} Bs`);
+    }
+
+    return lines.join("\n");
+  };
+
+  const salesTextReport = buildSalesTextReport();
 
   return (
     <div className="space-y-6">
@@ -657,6 +791,203 @@ export default function Sales() {
           )}
         </CardContent>
       </Card>
+
+      <Card className="rounded-2xl border-[#b7c9e6] bg-white/90 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-xl text-[#102544]">Filtros del reporte de texto</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={textReportMode === "day" ? "default" : "outline"}
+              onClick={() => setTextReportMode("day")}
+              data-testid="button-sales-text-report-mode-day"
+            >
+              Por fecha
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={textReportMode === "range" ? "default" : "outline"}
+              onClick={() => setTextReportMode("range")}
+              data-testid="button-sales-text-report-mode-range"
+            >
+              Por rango
+            </Button>
+          </div>
+
+          {textReportMode === "day" ? (
+            <div className="max-w-sm space-y-2">
+              <Label htmlFor="sales-text-report-date">Fecha</Label>
+              <Input
+                id="sales-text-report-date"
+                type="date"
+                value={textReportDate}
+                onChange={(e) => setTextReportDate(e.target.value)}
+                data-testid="input-sales-text-report-date"
+              />
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="sales-text-report-start">Fecha inicial</Label>
+                <Input
+                  id="sales-text-report-start"
+                  type="date"
+                  value={textReportStartDate}
+                  onChange={(e) => setTextReportStartDate(e.target.value)}
+                  data-testid="input-sales-text-report-start-date"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sales-text-report-end">Fecha final</Label>
+                <Input
+                  id="sales-text-report-end"
+                  type="date"
+                  value={textReportEndDate}
+                  onChange={(e) => setTextReportEndDate(e.target.value)}
+                  data-testid="input-sales-text-report-end-date"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Director</Label>
+              <Select
+                value={textFilterDirector}
+                onValueChange={(value) => {
+                  setTextFilterDirector(value);
+                  setTextFilterSeller("all");
+                }}
+              >
+                <SelectTrigger data-testid="select-sales-text-filter-director">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos directores</SelectItem>
+                  <SelectItem value="none">Sin director</SelectItem>
+                  {allDirectors.map((director: any) => (
+                    <SelectItem key={director.id} value={director.id}>
+                      {director.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Vendedor</Label>
+              <Select value={textFilterSeller} onValueChange={setTextFilterSeller}>
+                <SelectTrigger data-testid="select-sales-text-filter-seller">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos vendedores</SelectItem>
+                  <SelectItem value="none">Sin vendedor</SelectItem>
+                  {textSellerOptions.map((seller: any) => (
+                    <SelectItem key={seller.id} value={seller.id}>
+                      {seller.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
+            <p className="mb-3 text-sm font-semibold text-[#1a2a43]">Campos a mostrar en el texto</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm">
+                Fecha de venta
+                <Checkbox
+                  checked={textIncludeSaleDate}
+                  onCheckedChange={(checked) => setTextIncludeSaleDate(checked === true)}
+                  data-testid="checkbox-sales-text-include-sale-date"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm">
+                Producto
+                <Checkbox
+                  checked={textIncludeProduct}
+                  onCheckedChange={(checked) => setTextIncludeProduct(checked === true)}
+                  data-testid="checkbox-sales-text-include-product"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm">
+                Cantidad
+                <Checkbox
+                  checked={textIncludeQuantity}
+                  onCheckedChange={(checked) => setTextIncludeQuantity(checked === true)}
+                  data-testid="checkbox-sales-text-include-quantity"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm">
+                Precio unitario
+                <Checkbox
+                  checked={textIncludeUnitPrice}
+                  onCheckedChange={(checked) => setTextIncludeUnitPrice(checked === true)}
+                  data-testid="checkbox-sales-text-include-unit-price"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm">
+                Total por venta
+                <Checkbox
+                  checked={textIncludeLineTotal}
+                  onCheckedChange={(checked) => setTextIncludeLineTotal(checked === true)}
+                  data-testid="checkbox-sales-text-include-line-total"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm">
+                Vendedor
+                <Checkbox
+                  checked={textIncludeSeller}
+                  onCheckedChange={(checked) => setTextIncludeSeller(checked === true)}
+                  data-testid="checkbox-sales-text-include-seller"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm">
+                Director
+                <Checkbox
+                  checked={textIncludeDirector}
+                  onCheckedChange={(checked) => setTextIncludeDirector(checked === true)}
+                  data-testid="checkbox-sales-text-include-director"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm">
+                Resumen final
+                <Checkbox
+                  checked={textIncludeSummary}
+                  onCheckedChange={(checked) => setTextIncludeSummary(checked === true)}
+                  data-testid="checkbox-sales-text-include-summary"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
+              <p className="text-xs text-muted-foreground">Periodo texto</p>
+              <p className="text-sm font-semibold text-[#1a2a43]">{textReportPeriodLabel}</p>
+            </div>
+            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
+              <p className="text-xs text-muted-foreground">Ventas filtradas</p>
+              <p className="text-sm font-semibold text-[#1a2a43]">{textReportRows.length}</p>
+            </div>
+            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
+              <p className="text-xs text-muted-foreground">Monto filtrado</p>
+              <p className="text-sm font-semibold text-[#1a2a43]">
+                {textReportTotal.toFixed(2)} Bs ({textReportUnits} und)
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <WhatsAppReport reportText={salesTextReport} />
 
       <Dialog
         open={isEditModalOpen}

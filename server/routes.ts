@@ -118,6 +118,10 @@ const directorReportVisibilitySchema = z.object({
   showProfitInReport: z.boolean(),
 });
 
+const entityStatusSchema = z.object({
+  isActive: z.boolean(),
+});
+
 const requireAdmin = (req: any, res: any, next: any) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "No autenticado" });
@@ -710,6 +714,7 @@ async function ensureSystemTables() {
     CREATE TABLE IF NOT EXISTS directors (
       id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
       name text NOT NULL,
+      is_active boolean NOT NULL DEFAULT true,
       show_profit_in_report integer NOT NULL DEFAULT 1,
       user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       created_at timestamp NOT NULL DEFAULT now()
@@ -718,7 +723,17 @@ async function ensureSystemTables() {
 
   await db.execute(sql`
     ALTER TABLE directors
+    ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE directors
     ADD COLUMN IF NOT EXISTS show_profit_in_report integer NOT NULL DEFAULT 1;
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE sellers
+    ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
   `);
 
   await db.execute(sql`
@@ -2343,6 +2358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertDirectorSchema.parse({
         name: req.body.name,
+        isActive: req.body.isActive ?? true,
         userId: getEffectiveUserId(req),
       });
       const director = await storage.createDirector(data);
@@ -2352,6 +2368,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Error al crear director" });
+    }
+  });
+
+  app.patch("/api/directors/:id/status", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = getEffectiveUserId(req);
+      const parsed = entityStatusSchema.parse(req.body);
+      const updated = await storage.updateDirectorStatus(id, userId, parsed.isActive);
+      if (!updated) {
+        return res.status(404).json({ error: "Director no encontrado" });
+      }
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al actualizar estado de director" });
     }
   });
 
@@ -2456,6 +2490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertSellerSchema.parse({
         name: req.body.name,
+        isActive: req.body.isActive ?? true,
         userId: getEffectiveUserId(req),
       });
       const seller = await storage.createSeller(data);
@@ -2465,6 +2500,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Error al crear vendedor" });
+    }
+  });
+
+  app.patch("/api/sellers/:id/status", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = getEffectiveUserId(req);
+      const parsed = entityStatusSchema.parse(req.body);
+      const updated = await storage.updateSellerStatus(id, userId, parsed.isActive);
+      if (!updated) {
+        return res.status(404).json({ error: "Vendedor no encontrado" });
+      }
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al actualizar estado de vendedor" });
     }
   });
 
@@ -2489,6 +2542,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const director = await storage.getDirector(parsed.directorId);
         if (!director || director.userId !== userId) {
           return res.status(404).json({ error: "Director no encontrado" });
+        }
+        if (director.isActive === false) {
+          return res.status(400).json({ error: "No se puede asignar un director inactivo" });
         }
       }
 
@@ -2545,6 +2601,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const seller = await storage.getSeller(req.body.sellerId);
       if (!seller || seller.userId !== userId) {
         return res.status(404).json({ error: "Vendedor no encontrado" });
+      }
+      if (seller.isActive === false) {
+        return res.status(400).json({ error: "El vendedor seleccionado esta inactivo" });
       }
 
       const product = await storage.getProduct(req.body.productId);

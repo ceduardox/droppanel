@@ -39,6 +39,7 @@ const allMenuItems = [
   { title: "Aumento Capital", icon: TrendingUp, path: "/aumento-capital" },
   { title: "Capital Bruto", icon: FileText, path: "/capital-bruto" },
   { title: "Reporte Vendedores", icon: Users, path: "/reporte-vendedores" },
+  { title: "Equipo Comercial", icon: Users, path: "/equipo-comercial" },
   { title: "Analitica Vendedores", icon: BarChart3, path: "/analitica-vendedores" },
   { title: "Gastos", icon: Receipt, path: "/gastos" },
   { title: "Reporte Gastos", icon: FileText, path: "/reporte-gastos" },

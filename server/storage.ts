@@ -173,6 +173,7 @@ export interface IStorage {
   getDirector(id: string): Promise<Director | undefined>;
   getDirectors(userId: string): Promise<Director[]>;
   createDirector(director: InsertDirector): Promise<Director>;
+  updateDirectorStatus(id: string, userId: string, isActive: boolean): Promise<Director | undefined>;
   updateDirectorReportVisibility(id: string, userId: string, showProfitInReport: number): Promise<Director | undefined>;
 
   // Director Expenses
@@ -185,6 +186,7 @@ export interface IStorage {
   getSeller(id: string): Promise<Seller | undefined>;
   getSellers(userId: string): Promise<Seller[]>;
   createSeller(seller: InsertSeller): Promise<Seller>;
+  updateSellerStatus(sellerId: string, userId: string, isActive: boolean): Promise<Seller | undefined>;
   updateSellerDirector(
     sellerId: string,
     userId: string,
@@ -660,6 +662,15 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
+  async updateDirectorStatus(id: string, userId: string, isActive: boolean): Promise<Director | undefined> {
+    const result = await db
+      .update(directors)
+      .set({ isActive })
+      .where(and(eq(directors.id, id), eq(directors.userId, userId)))
+      .returning();
+    return result[0];
+  }
+
   async updateDirectorReportVisibility(id: string, userId: string, showProfitInReport: number): Promise<Director | undefined> {
     const result = await db
       .update(directors)
@@ -704,6 +715,15 @@ export class DbStorage implements IStorage {
 
   async createSeller(seller: InsertSeller): Promise<Seller> {
     const result = await db.insert(sellers).values(seller).returning();
+    return result[0];
+  }
+
+  async updateSellerStatus(sellerId: string, userId: string, isActive: boolean): Promise<Seller | undefined> {
+    const result = await db
+      .update(sellers)
+      .set({ isActive })
+      .where(and(eq(sellers.id, sellerId), eq(sellers.userId, userId)))
+      .returning();
     return result[0];
   }
 

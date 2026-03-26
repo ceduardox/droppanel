@@ -691,6 +691,21 @@ export function useCreateDirector() {
   });
 }
 
+export function useUpdateDirectorStatus() {
+  return useMutation({
+    mutationFn: async ({ directorId, isActive }: { directorId: string; isActive: boolean }) => {
+      return apiRequest(`/api/directors/${directorId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/directors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sellers"] });
+    },
+  });
+}
+
 export function useUpdateDirectorReportVisibility() {
   return useMutation({
     mutationFn: async ({
@@ -754,6 +769,21 @@ export function useCreateSeller() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/sellers"] });
+    },
+  });
+}
+
+export function useUpdateSellerStatus() {
+  return useMutation({
+    mutationFn: async ({ sellerId, isActive }: { sellerId: string; isActive: boolean }) => {
+      return apiRequest(`/api/sellers/${sellerId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sellers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/seller-sales"] });
     },
   });
 }

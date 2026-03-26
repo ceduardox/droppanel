@@ -292,6 +292,7 @@ export type GrossCapitalMovement = typeof grossCapitalMovements.$inferSelect;
 export const directors = pgTable("directors", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
   showProfitInReport: integer("show_profit_in_report").notNull().default(1),
   userId: varchar("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -328,6 +329,7 @@ export type DirectorExpense = typeof directorExpenses.$inferSelect;
 export const sellers = pgTable("sellers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
   directorId: varchar("director_id").references(() => directors.id),
   directorAssignedFrom: date("director_assigned_from"),
   userId: varchar("user_id").notNull().references(() => users.id),

@@ -20,6 +20,7 @@ import CapitalIncrease from "@/pages/CapitalIncrease";
 import GrossCapitalReport from "@/pages/GrossCapitalReport";
 import SellerReport from "@/pages/SellerReport";
 import SellerSalesAnalytics from "@/pages/SellerSalesAnalytics";
+import CommercialTeam from "@/pages/CommercialTeam";
 import Expenses from "@/pages/Expenses";
 import Delivery from "@/pages/Delivery";
 import DeliveryHistory from "@/pages/DeliveryHistory";
@@ -40,6 +41,7 @@ const pageTitles: Record<string, string> = {
   "/aumento-capital": "Aumento de Capital",
   "/capital-bruto": "Capital Bruto",
   "/reporte-vendedores": "Reporte de Vendedores",
+  "/equipo-comercial": "Equipo Comercial",
   "/analitica-vendedores": "Analitica Vendedores",
   "/gastos": "Gastos",
   "/delivery": "Inventario",
@@ -162,6 +164,7 @@ function AuthenticatedLayout() {
                   <Route path="/aumento-capital" component={() => <ProtectedRoute component={CapitalIncrease} />} />
                   <Route path="/capital-bruto" component={() => <ProtectedRoute component={GrossCapitalReport} />} />
                   <Route path="/reporte-vendedores" component={() => <ProtectedRoute component={SellerReport} />} />
+                  <Route path="/equipo-comercial" component={() => <ProtectedRoute component={CommercialTeam} />} />
                   <Route path="/analitica-vendedores" component={() => <ProtectedRoute component={SellerSalesAnalytics} />} />
                   <Route path="/gastos" component={() => <ProtectedRoute component={Expenses} />} />
                   <Route path="/delivery" component={() => <ProtectedRoute component={Delivery} />} />
@@ -205,6 +208,7 @@ function Router() {
       <Route path="/aumento-capital" component={AuthenticatedLayout} />
       <Route path="/capital-bruto" component={AuthenticatedLayout} />
       <Route path="/reporte-vendedores" component={AuthenticatedLayout} />
+      <Route path="/equipo-comercial" component={AuthenticatedLayout} />
       <Route path="/analitica-vendedores" component={AuthenticatedLayout} />
       <Route path="/gastos" component={AuthenticatedLayout} />
       <Route path="/delivery" component={AuthenticatedLayout} />

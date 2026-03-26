@@ -1779,14 +1779,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/sales/:id", requireAuth, async (req, res) => {
     try {
       const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede editar ventas directas" });
-      }
       const { id } = req.params;
       const userId = getEffectiveUserId(req);
       const currentSale = await storage.getSale(id);
       if (!currentSale || currentSale.userId !== userId) {
         return res.status(404).json({ error: "Venta no encontrada" });
+      }
+      if (access.isAccountant && access.visibleFrom && !isOnOrAfterDate(currentSale.saleDate, access.visibleFrom)) {
+        return res.status(403).json({ error: `Solo puedes editar ventas desde ${access.visibleFrom}` });
       }
 
       const hasSellerId = Object.prototype.hasOwnProperty.call(req.body, "sellerId");
@@ -1920,6 +1920,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.body.saleDate !== undefined && req.body.saleDate !== null && String(req.body.saleDate).trim() !== ""
           ? String(req.body.saleDate)
           : String(currentSale.saleDate);
+      if (access.isAccountant && access.visibleFrom && saleDate < access.visibleFrom) {
+        return res.status(400).json({ error: `Solo puedes editar ventas desde ${access.visibleFrom}` });
+      }
 
       const sale = await storage.updateSale(id, {
         productId: nextProductId,

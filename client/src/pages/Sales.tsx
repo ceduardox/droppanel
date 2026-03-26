@@ -675,10 +675,10 @@ export default function Sales() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">{isAccountant ? "Ventas (solo lectura)" : "Registrar Venta"}</h1>
+          <h1 className="text-3xl font-bold">{isAccountant ? "Ventas (contador)" : "Registrar Venta"}</h1>
           <p className="text-muted-foreground mt-1">
             {isAccountant
-              ? "Vista contador: puedes revisar reportes, filtros y detalle de ventas."
+              ? "Vista contador: puedes revisar reportes y editar ventas visibles."
               : "Ingresa los detalles de la nueva venta"}
           </p>
         </div>
@@ -695,7 +695,7 @@ export default function Sales() {
       {isAccountant ? (
         <Card className="rounded-2xl border-[#b7c9e6] bg-white/90 shadow-sm">
           <CardContent className="py-4 text-sm text-muted-foreground">
-            El rol contador no puede registrar o editar ventas directas desde este formulario.
+            El rol contador no puede registrar ni eliminar ventas desde este formulario.
           </CardContent>
         </Card>
       ) : formattedProducts.length === 0 ? (
@@ -827,7 +827,18 @@ export default function Sales() {
                           <td className="p-3 text-right text-sm font-semibold">{row.total.toFixed(2)} Bs</td>
                           <td className="p-3 text-right text-sm">
                             {isAccountant ? (
-                              <span className="text-muted-foreground">Sin permiso</span>
+                              <div className="flex justify-end">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => startEdit(sale)}
+                                  disabled={isEditModalOpen || updateSale.isPending}
+                                  data-testid={`button-sale-edit-${sale.id}`}
+                                >
+                                  Editar
+                                </Button>
+                              </div>
                             ) : (
                               <div className="flex justify-end gap-2">
                                 <Button
@@ -893,7 +904,17 @@ export default function Sales() {
 
                       <div className="mt-3 flex gap-2">
                         {isAccountant ? (
-                          <span className="text-xs text-muted-foreground">Sin permiso</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="flex-1"
+                            onClick={() => startEdit(sale)}
+                            disabled={isEditModalOpen || updateSale.isPending}
+                            data-testid={`button-sale-edit-mobile-${sale.id}`}
+                          >
+                            Editar
+                          </Button>
                         ) : (
                           <>
                             <Button

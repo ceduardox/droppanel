@@ -155,7 +155,6 @@ export default function DropshipperDeliveriesModal({
   };
 
   const clampPanelWidth = (value: number) => clamp(value, DESKTOP_MIN_WIDTH, getMaxPanelWidth());
-  const isNarrowPanel = isDesktop && panelWidth <= 760;
 
   useEffect(() => {
     if (!open) return;
@@ -624,28 +623,24 @@ export default function DropshipperDeliveriesModal({
                     Sin datos de vendedores para el filtro seleccionado.
                   </p>
                 ) : (
-                  <div className="max-h-56 overflow-auto">
-                    <div className={isNarrowPanel ? "min-w-[780px] divide-y" : "divide-y"}>
-                      {dropshippers.map((seller, index) => (
-                        <div
-                          key={`${seller.id || seller.name || "seller"}-${index}`}
-                          className={
-                            isNarrowPanel
-                              ? "grid grid-cols-[minmax(180px,2fr)_repeat(4,minmax(120px,1fr))] gap-2 px-4 py-3 text-sm"
-                              : "grid gap-2 px-4 py-3 text-sm md:grid-cols-2"
-                          }
-                        >
-                          <div>
-                            <p className="font-medium text-[#1a2a43]">{seller.name || "Vendedor"}</p>
-                            <p className="text-xs text-muted-foreground">{seller.city || "-"}</p>
-                          </div>
+                  <div className="divide-y">
+                    {dropshippers.map((seller, index) => (
+                      <div
+                        key={`${seller.id || seller.name || "seller"}-${index}`}
+                        className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[minmax(180px,1fr)_2fr]"
+                      >
+                        <div>
+                          <p className="font-medium text-[#1a2a43]">{seller.name || "Vendedor"}</p>
+                          <p className="text-xs text-muted-foreground">{seller.city || "-"}</p>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
                           <p>Entregas: {toInteger(seller.deliveries)}</p>
                           <p>Productos: {toInteger(seller.productsSold)}</p>
                           <p>Ventas: {formatBs(seller.totalSalesBs)}</p>
                           <p>Comision: {formatBs(seller.totalCommissionBs)}</p>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

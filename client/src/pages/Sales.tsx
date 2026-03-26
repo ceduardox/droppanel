@@ -125,8 +125,8 @@ export default function Sales() {
       });
       if (data.quantity > available) {
         toast({
-          title: "Stock insuficiente en delivery",
-          description: `Disponible: ${available} und`,
+          title: "Ese delivery no tiene stock",
+          description: `Ese delivery no tiene stock para esta venta. Disponible: ${available} und`,
           variant: "destructive",
         });
         return;
@@ -371,8 +371,8 @@ export default function Sales() {
       });
       if (parsedQuantity > available) {
         toast({
-          title: "Stock insuficiente en delivery",
-          description: `Disponible: ${available} und`,
+          title: "Ese delivery no tiene stock",
+          description: `Ese delivery no tiene stock para esta venta. Disponible: ${available} und`,
           variant: "destructive",
         });
         return;

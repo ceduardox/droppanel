@@ -1654,7 +1654,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (parsedQuantity > availability.available) {
           return res.status(400).json({
-            error: `Stock insuficiente en delivery. Disponible: ${availability.available} und`,
+            error: `Ese delivery no tiene stock para esta venta. Disponible: ${availability.available} und`,
           });
         }
       }
@@ -1911,7 +1911,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (parsedQuantity > availability.available) {
           return res.status(400).json({
-            error: `Stock insuficiente en delivery. Disponible: ${availability.available} und`,
+            error: `Ese delivery no tiene stock para esta venta. Disponible: ${availability.available} und`,
           });
         }
       }

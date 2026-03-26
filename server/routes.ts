@@ -1717,19 +1717,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "El rol contador no puede editar ventas directas" });
       }
       const { id } = req.params;
-      const { saleDate } = req.body;
-      
-      if (!saleDate) {
-        return res.status(400).json({ error: "Se requiere la fecha" });
+      const userId = getEffectiveUserId(req);
+      const currentSale = await storage.getSale(id);
+      if (!currentSale || currentSale.userId !== userId) {
+        return res.status(404).json({ error: "Venta no encontrada" });
       }
 
-      const sale = await storage.updateSaleDate(id, saleDate);
+      const hasSellerId = Object.prototype.hasOwnProperty.call(req.body, "sellerId");
+      const hasDirectorId = Object.prototype.hasOwnProperty.call(req.body, "directorId");
+
+      const nextProductId =
+        req.body.productId !== undefined && req.body.productId !== null && String(req.body.productId).trim() !== ""
+          ? String(req.body.productId).trim()
+          : currentSale.productId;
+
+      const product = await storage.getProduct(nextProductId);
+      if (!product || product.userId !== userId) {
+        return res.status(404).json({ error: "Producto no encontrado" });
+      }
+      if (product.isActive === false && nextProductId !== currentSale.productId) {
+        return res.status(400).json({ error: "El producto seleccionado esta inactivo" });
+      }
+
+      const parsedQuantity =
+        req.body.quantity !== undefined && req.body.quantity !== null && String(req.body.quantity).trim() !== ""
+          ? parseInt(String(req.body.quantity), 10)
+          : Number(currentSale.quantity);
+      if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+        return res.status(400).json({ error: "Cantidad invalida" });
+      }
+
+      const parsedBaseCost = parseFloat(String(product.baseCost ?? ""));
+      const parsedCost = parseFloat(String(product.cost ?? 0));
+      const parsedProductTransport = parseFloat(String(product.costTransport ?? 0));
+      const safeProductTransport =
+        Number.isFinite(parsedProductTransport) && parsedProductTransport >= 0
+          ? parsedProductTransport
+          : 0;
+      const rawReferenceBaseCost =
+        Number.isFinite(parsedBaseCost) && parsedBaseCost > 0 ? parsedBaseCost : parsedCost;
+      const referenceBaseCost = Number.isFinite(rawReferenceBaseCost) ? rawReferenceBaseCost : 0;
+
+      const parsedUnitTransport =
+        req.body.unitTransport !== undefined && req.body.unitTransport !== null && String(req.body.unitTransport).trim() !== ""
+          ? parseFloat(String(req.body.unitTransport))
+          : parseFloat(String(currentSale.unitTransport ?? safeProductTransport));
+      if (!Number.isFinite(parsedUnitTransport) || parsedUnitTransport < 0) {
+        return res.status(400).json({ error: "Transporte unitario invalido" });
+      }
+
+      const minimumUnitPrice = Math.max(
+        referenceBaseCost - safeProductTransport + parsedUnitTransport,
+        0
+      );
+
+      const parsedUnitPrice =
+        req.body.unitPrice !== undefined && req.body.unitPrice !== null && String(req.body.unitPrice).trim() !== ""
+          ? parseFloat(String(req.body.unitPrice))
+          : parseFloat(String(currentSale.unitPrice ?? product.price ?? 0));
+      if (!Number.isFinite(parsedUnitPrice) || parsedUnitPrice <= 0) {
+        return res.status(400).json({ error: "Precio unitario invalido" });
+      }
+      if (Number.isFinite(minimumUnitPrice) && parsedUnitPrice < minimumUnitPrice) {
+        return res.status(400).json({
+          error: `El precio unitario no puede ser menor al capital bruto (${minimumUnitPrice.toFixed(2)} Bs)`,
+        });
+      }
+
+      const normalizedSellerIdInput =
+        req.body.sellerId === undefined || req.body.sellerId === null || String(req.body.sellerId).trim() === ""
+          ? null
+          : String(req.body.sellerId).trim();
+      const normalizedDirectorIdInput =
+        req.body.directorId === undefined || req.body.directorId === null || String(req.body.directorId).trim() === ""
+          ? null
+          : String(req.body.directorId).trim();
+
+      let finalSellerId: string | null = hasSellerId
+        ? normalizedSellerIdInput
+        : (currentSale.sellerId as string | null) ?? null;
+      let finalDirectorId: string | null = hasDirectorId
+        ? normalizedDirectorIdInput
+        : (currentSale.directorId as string | null) ?? null;
+      const currentSellerId = (currentSale.sellerId as string | null) ?? null;
+      const currentDirectorId = (currentSale.directorId as string | null) ?? null;
+
+      let seller: Awaited<ReturnType<typeof storage.getSeller>> | null = null;
+      if (finalSellerId) {
+        seller = await storage.getSeller(finalSellerId);
+        if (!seller || seller.userId !== userId) {
+          return res.status(404).json({ error: "Vendedor no encontrado" });
+        }
+        if (seller.isActive === false && finalSellerId !== currentSellerId) {
+          return res.status(400).json({ error: "El vendedor seleccionado esta inactivo" });
+        }
+      }
+
+      if (seller?.directorId && !hasDirectorId) {
+        finalDirectorId = seller.directorId;
+      }
+      if (seller?.directorId && finalDirectorId && seller.directorId !== finalDirectorId) {
+        return res.status(400).json({ error: "El vendedor no pertenece al director seleccionado" });
+      }
+
+      if (finalDirectorId) {
+        const director = await storage.getDirector(finalDirectorId);
+        if (!director || director.userId !== userId) {
+          return res.status(404).json({ error: "Director no encontrado" });
+        }
+        if (director.isActive === false && finalDirectorId !== currentDirectorId) {
+          return res.status(400).json({ error: "El director seleccionado esta inactivo" });
+        }
+      }
+
+      const saleDate =
+        req.body.saleDate !== undefined && req.body.saleDate !== null && String(req.body.saleDate).trim() !== ""
+          ? String(req.body.saleDate)
+          : String(currentSale.saleDate);
+
+      const sale = await storage.updateSale(id, {
+        productId: nextProductId,
+        quantity: parsedQuantity,
+        unitPrice: parsedUnitPrice.toFixed(2),
+        unitTransport: parsedUnitTransport.toFixed(2),
+        saleDate,
+        sellerId: finalSellerId,
+        directorId: finalDirectorId,
+      });
       if (!sale) {
         return res.status(404).json({ error: "Venta no encontrada" });
       }
       res.json(sale);
     } catch (error) {
-      res.status(500).json({ error: "Error al actualizar la fecha" });
+      res.status(500).json({ error: "Error al actualizar la venta" });
     }
   });
 

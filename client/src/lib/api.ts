@@ -283,6 +283,35 @@ export function useUpdateSaleDate() {
   });
 }
 
+export function useUpdateSale() {
+  return useMutation({
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: {
+        productId?: string;
+        quantity?: number;
+        saleDate?: string;
+        unitPrice?: string;
+        unitTransport?: string;
+        sellerId?: string | null;
+        directorId?: string | null;
+      };
+    }) => {
+      return apiRequest(`/api/sales/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sales"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reports"] });
+    },
+  });
+}
+
 export function useDeleteSale() {
   return useMutation({
     mutationFn: async (id: string) => {

@@ -107,6 +107,18 @@ export interface IStorage {
   getSales(userId: string): Promise<Sale[]>;
   getSale(id: string): Promise<Sale | undefined>;
   createSale(sale: InsertSale): Promise<Sale>;
+  updateSale(
+    id: string,
+    data: {
+      productId?: string;
+      quantity?: number;
+      unitPrice?: string;
+      unitTransport?: string;
+      saleDate?: string;
+      sellerId?: string | null;
+      directorId?: string | null;
+    }
+  ): Promise<Sale | undefined>;
   updateSaleDate(id: string, saleDate: string): Promise<Sale | undefined>;
   deleteSale(id: string): Promise<boolean>;
 
@@ -405,13 +417,28 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async updateSaleDate(id: string, saleDate: string): Promise<Sale | undefined> {
+  async updateSale(
+    id: string,
+    data: {
+      productId?: string;
+      quantity?: number;
+      unitPrice?: string;
+      unitTransport?: string;
+      saleDate?: string;
+      sellerId?: string | null;
+      directorId?: string | null;
+    }
+  ): Promise<Sale | undefined> {
     const result = await db
       .update(sales)
-      .set({ saleDate })
+      .set(data)
       .where(eq(sales.id, id))
       .returning();
     return result[0];
+  }
+
+  async updateSaleDate(id: string, saleDate: string): Promise<Sale | undefined> {
+    return this.updateSale(id, { saleDate });
   }
 
   async deleteSale(id: string): Promise<boolean> {

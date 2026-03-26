@@ -1,11 +1,21 @@
 import { useState } from "react";
 import SalesForm from "@/components/SalesForm";
-import { useCreateSale, useDirectors, useProducts, useSales, useSellers } from "@/lib/api";
+import {
+  useCreateSale,
+  useDeleteSale,
+  useDirectors,
+  useProducts,
+  useSales,
+  useSellers,
+  useUpdateSale,
+} from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function getTodayIsoLocal(): string {
   const now = new Date();
@@ -22,18 +32,39 @@ function toIsoDate(value: unknown): string {
   return text.includes("T") ? text.split("T")[0] : text.slice(0, 10);
 }
 
+function toSelectValue(value: unknown): string {
+  if (value === null || value === undefined) return "none";
+  const text = String(value).trim();
+  return text.length > 0 ? text : "none";
+}
+
+type SaleEditDraft = {
+  productId: string;
+  sellerId: string;
+  directorId: string;
+  quantity: string;
+  unitPrice: string;
+  saleDate: string;
+};
+
 export default function Sales() {
+  const { user } = useAuth();
   const todayIso = getTodayIsoLocal();
   const { data: products = [], isLoading } = useProducts();
   const { data: directors = [], isLoading: loadingDirectors } = useDirectors();
   const { data: sellers = [], isLoading: loadingSellers } = useSellers();
   const { data: sales = [], isLoading: loadingSales } = useSales();
   const createSale = useCreateSale();
+  const updateSale = useUpdateSale();
+  const deleteSale = useDeleteSale();
   const { toast } = useToast();
   const [reportMode, setReportMode] = useState<"day" | "range">("day");
   const [reportDate, setReportDate] = useState(todayIso);
   const [reportStartDate, setReportStartDate] = useState(todayIso);
   const [reportEndDate, setReportEndDate] = useState(todayIso);
+  const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<SaleEditDraft | null>(null);
+  const isAccountant = user?.role?.trim().toLowerCase() === "contador";
 
   const handleSubmit = async (data: {
     productId: string;
@@ -113,6 +144,189 @@ export default function Sales() {
   const sellerMap = new Map(
     allSellers.map((seller: any) => [seller.id, seller.name])
   );
+
+  const startEdit = (sale: any) => {
+    const product = productMap.get(sale.productId);
+    const unitPrice = Number.parseFloat(String(sale.unitPrice ?? product?.price ?? 0));
+    const quantity = Number.parseInt(String(sale.quantity || 1), 10);
+
+    setEditingSaleId(sale.id);
+    setEditDraft({
+      productId: String(sale.productId || ""),
+      sellerId: toSelectValue(sale.sellerId),
+      directorId: toSelectValue(sale.directorId),
+      quantity: String(Number.isFinite(quantity) && quantity > 0 ? quantity : 1),
+      unitPrice: Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice.toFixed(2) : "0.00",
+      saleDate: toIsoDate(sale.saleDate) || todayIso,
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingSaleId(null);
+    setEditDraft(null);
+  };
+
+  const handleEditProductChange = (nextProductId: string) => {
+    setEditDraft((prev) => {
+      if (!prev) return prev;
+      const nextProduct = allProducts.find((product: any) => product.id === nextProductId);
+      const nextPrice = Number.parseFloat(String(nextProduct?.price ?? prev.unitPrice));
+      return {
+        ...prev,
+        productId: nextProductId,
+        unitPrice: Number.isFinite(nextPrice) && nextPrice > 0 ? nextPrice.toFixed(2) : prev.unitPrice,
+      };
+    });
+  };
+
+  const handleEditDirectorChange = (nextDirectorId: string) => {
+    setEditDraft((prev) => {
+      if (!prev) return prev;
+
+      let nextSellerId = prev.sellerId;
+      if (nextSellerId !== "none") {
+        const seller = allSellers.find((candidate: any) => candidate.id === nextSellerId);
+        const sellerDirectorId = toSelectValue(seller?.directorId);
+        if (sellerDirectorId !== nextDirectorId) {
+          nextSellerId = "none";
+        }
+      }
+
+      return {
+        ...prev,
+        directorId: nextDirectorId,
+        sellerId: nextSellerId,
+      };
+    });
+  };
+
+  const handleEditSellerChange = (nextSellerId: string) => {
+    setEditDraft((prev) => {
+      if (!prev) return prev;
+      if (nextSellerId === "none") {
+        return {
+          ...prev,
+          sellerId: "none",
+        };
+      }
+
+      const seller = allSellers.find((candidate: any) => candidate.id === nextSellerId);
+      const sellerDirectorId = toSelectValue(seller?.directorId);
+      return {
+        ...prev,
+        sellerId: nextSellerId,
+        directorId: sellerDirectorId,
+      };
+    });
+  };
+
+  const handleSaveEdit = async (sale: any) => {
+    if (!editDraft || editingSaleId !== sale.id) return;
+
+    const parsedQuantity = Number.parseInt(editDraft.quantity || "0", 10);
+    const parsedUnitPrice = Number.parseFloat(editDraft.unitPrice || "0");
+
+    if (!editDraft.productId) {
+      toast({
+        title: "Error",
+        description: "Selecciona un producto",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      toast({
+        title: "Error",
+        description: "Cantidad invalida",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!Number.isFinite(parsedUnitPrice) || parsedUnitPrice <= 0) {
+      toast({
+        title: "Error",
+        description: "Precio unitario invalido",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!editDraft.saleDate) {
+      toast({
+        title: "Error",
+        description: "Fecha invalida",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const selectedProduct = allProducts.find((product: any) => product.id === editDraft.productId);
+    if (!selectedProduct) {
+      toast({
+        title: "Error",
+        description: "Producto no encontrado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const parsedUnitTransport = Number.parseFloat(String(selectedProduct.costTransport ?? 0));
+    const safeUnitTransport =
+      Number.isFinite(parsedUnitTransport) && parsedUnitTransport >= 0
+        ? parsedUnitTransport
+        : 0;
+
+    try {
+      await updateSale.mutateAsync({
+        id: sale.id,
+        data: {
+          productId: editDraft.productId,
+          quantity: parsedQuantity,
+          unitPrice: parsedUnitPrice.toFixed(2),
+          unitTransport: safeUnitTransport.toFixed(2),
+          saleDate: editDraft.saleDate,
+          sellerId: editDraft.sellerId === "none" ? null : editDraft.sellerId,
+          directorId: editDraft.directorId === "none" ? null : editDraft.directorId,
+        },
+      });
+      toast({
+        title: "Venta actualizada",
+        description: "Los datos de la venta se guardaron correctamente",
+      });
+      cancelEdit();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.message || "No se pudo actualizar la venta",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteSale = async (saleId: string) => {
+    if (!window.confirm("Esta accion eliminara la venta. Deseas continuar?")) {
+      return;
+    }
+
+    try {
+      await deleteSale.mutateAsync(saleId);
+      if (editingSaleId === saleId) {
+        cancelEdit();
+      }
+      toast({
+        title: "Venta eliminada",
+        description: "La venta se elimino correctamente",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.message || "No se pudo eliminar la venta",
+        variant: "destructive",
+      });
+    }
+  };
 
   const filteredSales = (sales as any[])
     .filter((sale: any) => {
@@ -247,7 +461,7 @@ export default function Sales() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[780px]">
+              <table className="w-full min-w-[1120px]">
                 <thead className="border-b bg-muted/50">
                   <tr>
                     <th className="p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fecha</th>
@@ -257,6 +471,7 @@ export default function Sales() {
                     <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cantidad</th>
                     <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">P. Unit</th>
                     <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total</th>
+                    <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -270,17 +485,237 @@ export default function Sales() {
                     const safeQty = Number.isFinite(qty) ? qty : 0;
                     const unitPrice = Number.parseFloat(String(sale.unitPrice ?? product?.price ?? 0));
                     const safeUnitPrice = Number.isFinite(unitPrice) ? unitPrice : 0;
-                    const total = safeQty * safeUnitPrice;
+                    const isEditing = editingSaleId === sale.id && !!editDraft;
+
+                    let quantityForTotal = safeQty;
+                    let unitPriceForTotal = safeUnitPrice;
+
+                    if (isEditing && editDraft) {
+                      const draftQty = Number.parseInt(editDraft.quantity || "0", 10);
+                      const draftUnitPrice = Number.parseFloat(editDraft.unitPrice || "0");
+                      quantityForTotal = Number.isFinite(draftQty) && draftQty > 0 ? draftQty : 0;
+                      unitPriceForTotal = Number.isFinite(draftUnitPrice) && draftUnitPrice > 0 ? draftUnitPrice : 0;
+                    }
+
+                    const total = quantityForTotal * unitPriceForTotal;
+
+                    const saleProductId = String(sale.productId || "");
+                    const saleSellerId = toSelectValue(sale.sellerId);
+                    const saleDirectorId = toSelectValue(sale.directorId);
+
+                    const productOptions = [...activeProducts];
+                    if (!productOptions.some((candidate: any) => candidate.id === saleProductId)) {
+                      const currentProduct = allProducts.find((candidate: any) => candidate.id === saleProductId);
+                      if (currentProduct) {
+                        productOptions.push(currentProduct);
+                      }
+                    }
+
+                    const draftDirectorId = isEditing && editDraft ? editDraft.directorId : saleDirectorId;
+                    const directorOptions = [...activeDirectors];
+                    if (draftDirectorId !== "none" && !directorOptions.some((candidate: any) => candidate.id === draftDirectorId)) {
+                      const currentDirector = allDirectors.find((candidate: any) => candidate.id === draftDirectorId);
+                      if (currentDirector) {
+                        directorOptions.push(currentDirector);
+                      }
+                    }
+
+                    const selectedDirectorForSellerFilter =
+                      draftDirectorId === "none" ? null : draftDirectorId;
+                    const sellerOptionsBase = activeSellers.filter((candidate: any) =>
+                      !selectedDirectorForSellerFilter || candidate.directorId === selectedDirectorForSellerFilter
+                    );
+                    const draftSellerId = isEditing && editDraft ? editDraft.sellerId : saleSellerId;
+                    const sellerOptions = [...sellerOptionsBase];
+                    if (draftSellerId !== "none" && !sellerOptions.some((candidate: any) => candidate.id === draftSellerId)) {
+                      const currentSeller = allSellers.find((candidate: any) => candidate.id === draftSellerId);
+                      if (currentSeller) {
+                        sellerOptions.push(currentSeller);
+                      }
+                    }
 
                     return (
                       <tr key={sale.id} className="border-b last:border-b-0">
-                        <td className="p-3 text-sm">{saleDate}</td>
-                        <td className="p-3 text-sm font-medium">{productName}</td>
-                        <td className="p-3 text-sm">{sellerName}</td>
-                        <td className="p-3 text-sm">{directorName}</td>
-                        <td className="p-3 text-right text-sm">{safeQty}</td>
-                        <td className="p-3 text-right text-sm">{safeUnitPrice.toFixed(2)} Bs</td>
+                        <td className="p-3 text-sm">
+                          {isEditing && editDraft ? (
+                            <Input
+                              type="date"
+                              value={editDraft.saleDate}
+                              onChange={(e) =>
+                                setEditDraft((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        saleDate: e.target.value,
+                                      }
+                                    : prev
+                                )
+                              }
+                              className="h-8 min-w-[145px]"
+                              data-testid={`input-sale-date-${sale.id}`}
+                            />
+                          ) : (
+                            saleDate
+                          )}
+                        </td>
+                        <td className="p-3 text-sm font-medium">
+                          {isEditing && editDraft ? (
+                            <Select value={editDraft.productId} onValueChange={handleEditProductChange}>
+                              <SelectTrigger className="h-8 min-w-[220px]" data-testid={`select-sale-product-${sale.id}`}>
+                                <SelectValue placeholder="Selecciona producto" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {productOptions.map((candidate: any) => (
+                                  <SelectItem key={candidate.id} value={candidate.id}>
+                                    {candidate.name}
+                                    {candidate.isActive === false ? " (Inactivo)" : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            productName
+                          )}
+                        </td>
+                        <td className="p-3 text-sm">
+                          {isEditing && editDraft ? (
+                            <Select value={editDraft.sellerId} onValueChange={handleEditSellerChange}>
+                              <SelectTrigger className="h-8 min-w-[180px]" data-testid={`select-sale-seller-row-${sale.id}`}>
+                                <SelectValue placeholder="Sin vendedor" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Sin vendedor</SelectItem>
+                                {sellerOptions.map((candidate: any) => (
+                                  <SelectItem key={candidate.id} value={candidate.id}>
+                                    {candidate.name}
+                                    {candidate.isActive === false ? " (Inactivo)" : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            sellerName
+                          )}
+                        </td>
+                        <td className="p-3 text-sm">
+                          {isEditing && editDraft ? (
+                            <Select value={editDraft.directorId} onValueChange={handleEditDirectorChange}>
+                              <SelectTrigger className="h-8 min-w-[180px]" data-testid={`select-sale-director-row-${sale.id}`}>
+                                <SelectValue placeholder="Sin director" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Sin director</SelectItem>
+                                {directorOptions.map((candidate: any) => (
+                                  <SelectItem key={candidate.id} value={candidate.id}>
+                                    {candidate.name}
+                                    {candidate.isActive === false ? " (Inactivo)" : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            directorName
+                          )}
+                        </td>
+                        <td className="p-3 text-right text-sm">
+                          {isEditing && editDraft ? (
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={editDraft.quantity}
+                              onChange={(e) =>
+                                setEditDraft((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        quantity: e.target.value,
+                                      }
+                                    : prev
+                                )
+                              }
+                              className="ml-auto h-8 w-24 text-right"
+                              data-testid={`input-sale-quantity-${sale.id}`}
+                            />
+                          ) : (
+                            safeQty
+                          )}
+                        </td>
+                        <td className="p-3 text-right text-sm">
+                          {isEditing && editDraft ? (
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              value={editDraft.unitPrice}
+                              onChange={(e) =>
+                                setEditDraft((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        unitPrice: e.target.value,
+                                      }
+                                    : prev
+                                )
+                              }
+                              className="ml-auto h-8 w-28 text-right"
+                              data-testid={`input-sale-unit-price-${sale.id}`}
+                            />
+                          ) : (
+                            `${safeUnitPrice.toFixed(2)} Bs`
+                          )}
+                        </td>
                         <td className="p-3 text-right text-sm font-semibold">{total.toFixed(2)} Bs</td>
+                        <td className="p-3 text-right text-sm">
+                          {isAccountant ? (
+                            <span className="text-muted-foreground">Sin permiso</span>
+                          ) : isEditing ? (
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => handleSaveEdit(sale)}
+                                disabled={updateSale.isPending}
+                                data-testid={`button-sale-save-${sale.id}`}
+                              >
+                                Guardar
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={cancelEdit}
+                                disabled={updateSale.isPending}
+                                data-testid={`button-sale-cancel-${sale.id}`}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => startEdit(sale)}
+                                disabled={!!editingSaleId || deleteSale.isPending}
+                                data-testid={`button-sale-edit-${sale.id}`}
+                              >
+                                Editar
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleDeleteSale(sale.id)}
+                                disabled={deleteSale.isPending}
+                                data-testid={`button-sale-delete-${sale.id}`}
+                              >
+                                Eliminar
+                              </Button>
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}

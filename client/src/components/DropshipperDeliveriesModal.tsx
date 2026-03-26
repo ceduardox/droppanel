@@ -70,6 +70,9 @@ interface DropshipperDeliveriesModalProps {
 }
 
 const API_BASE_URL = "https://delivery.ryztor.store";
+const DESKTOP_DEFAULT_WIDTH = 860;
+const DESKTOP_MIN_WIDTH = 620;
+const DESKTOP_MAX_WIDTH = 1200;
 
 function getTodayIsoLocal() {
   const now = new Date();
@@ -136,10 +139,23 @@ export default function DropshipperDeliveriesModal({
     return window.innerWidth >= 1024;
   });
   const [position, setPosition] = useState({ x: 48, y: 28 });
+  const [panelWidth, setPanelWidth] = useState(DESKTOP_DEFAULT_WIDTH);
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
 
   const panelRef = useRef<HTMLDivElement | null>(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const resizeStartRef = useRef({ width: DESKTOP_DEFAULT_WIDTH, x: 0 });
+
+  const getMaxPanelWidth = () => {
+    if (typeof window === "undefined") {
+      return DESKTOP_DEFAULT_WIDTH;
+    }
+    return Math.max(DESKTOP_MIN_WIDTH, Math.min(DESKTOP_MAX_WIDTH, window.innerWidth - 24));
+  };
+
+  const clampPanelWidth = (value: number) => clamp(value, DESKTOP_MIN_WIDTH, getMaxPanelWidth());
+  const isNarrowPanel = isDesktop && panelWidth <= 760;
 
   useEffect(() => {
     if (!open) return;
@@ -157,26 +173,29 @@ export default function DropshipperDeliveriesModal({
       const desktop = window.innerWidth >= 1024;
       setIsDesktop(desktop);
       if (!desktop) return;
-      const panelWidth = panelRef.current?.offsetWidth ?? 860;
+
+      const safeWidth = clampPanelWidth(panelRef.current?.offsetWidth ?? panelWidth);
+      setPanelWidth((prev) => clampPanelWidth(prev));
+
       const panelHeight = panelRef.current?.offsetHeight ?? 820;
-      const maxX = Math.max(window.innerWidth - panelWidth - 12, 12);
+      const maxX = Math.max(window.innerWidth - safeWidth - 12, 12);
       const maxY = Math.max(window.innerHeight - panelHeight - 12, 12);
       setPosition((prev) => ({
         x: clamp(prev.x, 12, maxX),
         y: clamp(prev.y, 12, maxY),
       }));
     };
+    handleResize();
     window.addEventListener("resize", handleResize);
     return () => {
       window.removeEventListener("resize", handleResize);
     };
-  }, []);
+  }, [panelWidth]);
 
   useEffect(() => {
-    if (!open || !isDesktop || !isDragging) return;
+    if (!open || !isDesktop || !isDragging || isResizing) return;
 
     const handleMouseMove = (event: MouseEvent) => {
-      const panelWidth = panelRef.current?.offsetWidth ?? 860;
       const panelHeight = panelRef.current?.offsetHeight ?? 820;
       const maxX = Math.max(window.innerWidth - panelWidth - 12, 12);
       const maxY = Math.max(window.innerHeight - panelHeight - 12, 12);
@@ -202,7 +221,43 @@ export default function DropshipperDeliveriesModal({
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
     };
-  }, [open, isDesktop, isDragging]);
+  }, [open, isDesktop, isDragging, isResizing, panelWidth]);
+
+  useEffect(() => {
+    if (!open || !isDesktop || !isResizing) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const deltaX = event.clientX - resizeStartRef.current.x;
+      const nextWidth = clampPanelWidth(resizeStartRef.current.width + deltaX);
+      setPanelWidth(nextWidth);
+
+      const panelHeight = panelRef.current?.offsetHeight ?? 820;
+      const maxX = Math.max(window.innerWidth - nextWidth - 12, 12);
+      const maxY = Math.max(window.innerHeight - panelHeight - 12, 12);
+      setPosition((prev) => ({
+        x: clamp(prev.x, 12, maxX),
+        y: clamp(prev.y, 12, maxY),
+      }));
+    };
+
+    const stopResizing = () => {
+      setIsResizing(false);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", stopResizing);
+    window.addEventListener("blur", stopResizing);
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "ew-resize";
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", stopResizing);
+      window.removeEventListener("blur", stopResizing);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, [open, isDesktop, isResizing]);
 
   useEffect(() => {
     if (!open) return;
@@ -273,6 +328,7 @@ export default function DropshipperDeliveriesModal({
 
   const handleStartDrag = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!isDesktop) return;
+    if (isResizing) return;
     const panelRect = panelRef.current?.getBoundingClientRect();
     if (!panelRect) return;
     dragOffsetRef.current = {
@@ -283,8 +339,21 @@ export default function DropshipperDeliveriesModal({
     event.preventDefault();
   };
 
+  const handleStartResize = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDesktop) return;
+    setIsDragging(false);
+    resizeStartRef.current = {
+      width: panelWidth,
+      x: event.clientX,
+    };
+    setIsResizing(true);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   const handleResetPosition = () => {
     setPosition({ x: 48, y: 28 });
+    setPanelWidth(clampPanelWidth(DESKTOP_DEFAULT_WIDTH));
   };
 
   const summary = reportData?.summary || {};
@@ -317,10 +386,10 @@ export default function DropshipperDeliveriesModal({
         ref={panelRef}
         className={
           isDesktop
-            ? "pointer-events-auto fixed z-[91] h-[min(90vh,860px)] w-[min(860px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#b7c9e6] bg-white shadow-2xl"
+            ? "pointer-events-auto fixed z-[91] relative h-[min(90vh,860px)] overflow-hidden rounded-2xl border border-[#b7c9e6] bg-white shadow-2xl"
             : "pointer-events-auto fixed inset-2 z-[91] overflow-hidden rounded-2xl border border-[#b7c9e6] bg-white shadow-2xl"
         }
-        style={isDesktop ? { left: position.x, top: position.y } : undefined}
+        style={isDesktop ? { left: position.x, top: position.y, width: `${panelWidth}px` } : undefined}
       >
         <div className="flex items-center justify-between border-b border-[#d1dff2] bg-[#f7fbff] px-4 py-3">
           <div
@@ -330,7 +399,9 @@ export default function DropshipperDeliveriesModal({
             <Move className="h-4 w-4 text-[#1f4e96]" />
             <div>
               <p className="text-sm font-semibold text-[#102544]">Reporte de entregas externas</p>
-              <p className="text-xs text-muted-foreground">Fuente: delivery.ryztor.store</p>
+              <p className="text-xs text-muted-foreground">
+                Fuente: delivery.ryztor.store {isDesktop ? "| Arrastra borde derecho para ajustar ancho" : ""}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -462,24 +533,24 @@ export default function DropshipperDeliveriesModal({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
+          <div className={isNarrowPanel ? "flex gap-3 overflow-x-auto pb-1" : "grid gap-3 sm:grid-cols-2"}>
+            <div className={`rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3 ${isNarrowPanel ? "min-w-[170px] shrink-0" : ""}`}>
               <p className="text-xs text-muted-foreground">Vendedores</p>
               <p className="text-lg font-semibold text-[#1a2a43]">{toInteger(summary.dropshippers)}</p>
             </div>
-            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
+            <div className={`rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3 ${isNarrowPanel ? "min-w-[170px] shrink-0" : ""}`}>
               <p className="text-xs text-muted-foreground">Entregas</p>
               <p className="text-lg font-semibold text-[#1a2a43]">{toInteger(summary.deliveries)}</p>
             </div>
-            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
+            <div className={`rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3 ${isNarrowPanel ? "min-w-[170px] shrink-0" : ""}`}>
               <p className="text-xs text-muted-foreground">Productos vendidos</p>
               <p className="text-lg font-semibold text-[#1a2a43]">{toInteger(summary.productsSold)}</p>
             </div>
-            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
+            <div className={`rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3 ${isNarrowPanel ? "min-w-[190px] shrink-0" : ""}`}>
               <p className="text-xs text-muted-foreground">Total ventas</p>
               <p className="text-lg font-semibold text-[#1a2a43]">{formatBs(summary.totalSalesBs)}</p>
             </div>
-            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
+            <div className={`rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3 ${isNarrowPanel ? "min-w-[210px] shrink-0" : ""}`}>
               <p className="text-xs text-muted-foreground">Total comisiones</p>
               <p className="text-lg font-semibold text-[#1a2a43]">{formatBs(summary.totalCommissionBs)}</p>
             </div>
@@ -503,22 +574,28 @@ export default function DropshipperDeliveriesModal({
                     Sin datos de vendedores para el filtro seleccionado.
                   </p>
                 ) : (
-                  <div className="max-h-48 overflow-y-auto divide-y">
-                    {dropshippers.map((seller, index) => (
-                      <div
-                        key={`${seller.id || seller.name || "seller"}-${index}`}
-                        className="grid gap-2 px-4 py-3 text-sm md:grid-cols-2"
-                      >
-                        <div>
-                          <p className="font-medium text-[#1a2a43]">{seller.name || "Vendedor"}</p>
-                          <p className="text-xs text-muted-foreground">{seller.city || "-"}</p>
+                  <div className="max-h-56 overflow-auto">
+                    <div className={isNarrowPanel ? "min-w-[780px] divide-y" : "divide-y"}>
+                      {dropshippers.map((seller, index) => (
+                        <div
+                          key={`${seller.id || seller.name || "seller"}-${index}`}
+                          className={
+                            isNarrowPanel
+                              ? "grid grid-cols-[minmax(180px,2fr)_repeat(4,minmax(120px,1fr))] gap-2 px-4 py-3 text-sm"
+                              : "grid gap-2 px-4 py-3 text-sm md:grid-cols-2"
+                          }
+                        >
+                          <div>
+                            <p className="font-medium text-[#1a2a43]">{seller.name || "Vendedor"}</p>
+                            <p className="text-xs text-muted-foreground">{seller.city || "-"}</p>
+                          </div>
+                          <p>Entregas: {toInteger(seller.deliveries)}</p>
+                          <p>Productos: {toInteger(seller.productsSold)}</p>
+                          <p>Ventas: {formatBs(seller.totalSalesBs)}</p>
+                          <p>Comision: {formatBs(seller.totalCommissionBs)}</p>
                         </div>
-                        <p>Entregas: {toInteger(seller.deliveries)}</p>
-                        <p>Productos: {toInteger(seller.productsSold)}</p>
-                        <p>Ventas: {formatBs(seller.totalSalesBs)}</p>
-                        <p>Comision: {formatBs(seller.totalCommissionBs)}</p>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -575,6 +652,16 @@ export default function DropshipperDeliveriesModal({
             </>
           )}
         </div>
+
+        {isDesktop && (
+          <div
+            className="absolute inset-y-0 right-0 z-[92] w-2 cursor-ew-resize bg-transparent hover:bg-[#d6e4f9]"
+            onMouseDown={handleStartResize}
+            data-testid="dropshipper-modal-resize-handle"
+            aria-label="Ajustar ancho"
+            role="separator"
+          />
+        )}
       </div>
     </div>
   );

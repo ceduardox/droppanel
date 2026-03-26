@@ -795,7 +795,7 @@ export default function Sales() {
             </div>
           ) : (
             <>
-              <div className="hidden rounded-lg border md:block">
+              <div className="hidden rounded-lg border lg:block">
                 <table className="w-full">
                   <thead className="border-b bg-muted/50">
                     <tr>
@@ -871,7 +871,7 @@ export default function Sales() {
                 </table>
               </div>
 
-              <div className="space-y-3 md:hidden">
+              <div className="space-y-3 lg:hidden">
                 {filteredSales.map((sale: any) => {
                   const row = buildSaleRow(sale);
                   return (

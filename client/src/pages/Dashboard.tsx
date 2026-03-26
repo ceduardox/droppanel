@@ -261,7 +261,7 @@ export default function Dashboard() {
             <StatsCard
               title="UTILIDAD"
               value={`${accountantCommission.toFixed(2)} Bs`}
-              subtitle="Utilidad Bernardo"
+              subtitle="Utilidad"
               icon={TrendingUp}
             />
             <StatsCard

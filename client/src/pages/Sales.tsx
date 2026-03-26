@@ -3,6 +3,7 @@ import SalesForm from "@/components/SalesForm";
 import {
   useCreateSale,
   useDeleteSale,
+  useDeliveryAssignments,
   useDeliveries,
   useDirectors,
   useProducts,
@@ -42,6 +43,13 @@ function toSelectValue(value: unknown): string {
   return text.length > 0 ? text : "none";
 }
 
+function toOptionalId(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (!text || text.toLowerCase() === "none") return null;
+  return text;
+}
+
 function formatDateShort(dateStr: string): string {
   if (!dateStr) return "";
   const [year, month, day] = dateStr.split("-");
@@ -68,6 +76,7 @@ export default function Sales() {
   const { data: directors = [], isLoading: loadingDirectors } = useDirectors();
   const { data: sellers = [], isLoading: loadingSellers } = useSellers();
   const { data: deliveries = [], isLoading: loadingDeliveries } = useDeliveries();
+  const { data: deliveryAssignments = [], isLoading: loadingAssignments } = useDeliveryAssignments();
   const { data: sales = [], isLoading: loadingSales } = useSales();
   const createSale = useCreateSale();
   const updateSale = useUpdateSale();
@@ -108,6 +117,22 @@ export default function Sales() {
     directorId?: string | null;
     deliveryId?: string | null;
   }) => {
+    const deliveryId = toOptionalId(data.deliveryId);
+    if (deliveryId) {
+      const available = getDeliveryAvailability({
+        deliveryId,
+        productId: data.productId,
+      });
+      if (data.quantity > available) {
+        toast({
+          title: "Stock insuficiente en delivery",
+          description: `Disponible: ${available} und`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     try {
       await createSale.mutateAsync(data);
       toast({ 
@@ -127,7 +152,7 @@ export default function Sales() {
     return <div className="flex items-center justify-center h-64">Cargando...</div>;
   }
 
-  if (loadingDirectors || loadingSellers || loadingDeliveries) {
+  if (loadingDirectors || loadingSellers || loadingDeliveries || loadingAssignments) {
     return <div className="flex items-center justify-center h-64">Cargando equipo comercial...</div>;
   }
 
@@ -139,6 +164,7 @@ export default function Sales() {
   const allDirectors = directors as any[];
   const allSellers = sellers as any[];
   const allDeliveries = deliveries as any[];
+  const allAssignments = deliveryAssignments as any[];
   const allSales = sales as any[];
 
   const activeProducts = (products as any[]).filter((p: any) => p.isActive !== false);
@@ -191,6 +217,30 @@ export default function Sales() {
   const deliveryMap = new Map(
     allDeliveries.map((delivery: any) => [delivery.id, delivery.name])
   );
+
+  const getDeliveryAvailability = (params: {
+    deliveryId: string;
+    productId: string;
+    excludeSaleId?: string;
+  }) => {
+    const { deliveryId, productId, excludeSaleId } = params;
+    const assignedTotal = allAssignments.reduce((sum: number, assignment: any) => {
+      if (String(assignment.deliveryId || "") !== deliveryId) return sum;
+      if (String(assignment.productId || "") !== productId) return sum;
+      const quantity = Number.parseInt(String(assignment.quantity || 0), 10);
+      return sum + (Number.isFinite(quantity) ? quantity : 0);
+    }, 0);
+
+    const sold = allSales.reduce((sum: number, sale: any) => {
+      if (excludeSaleId && String(sale.id || "") === excludeSaleId) return sum;
+      if (String(sale.deliveryId || "") !== deliveryId) return sum;
+      if (String(sale.productId || "") !== productId) return sum;
+      const quantity = Number.parseInt(String(sale.quantity || 0), 10);
+      return sum + (Number.isFinite(quantity) ? quantity : 0);
+    }, 0);
+
+    return assignedTotal - sold;
+  };
 
   const startEdit = (sale: any) => {
     const product = productMap.get(sale.productId);
@@ -310,6 +360,23 @@ export default function Sales() {
         variant: "destructive",
       });
       return;
+    }
+
+    const editDeliveryId = toOptionalId(editDraft.deliveryId);
+    if (editDeliveryId) {
+      const available = getDeliveryAvailability({
+        deliveryId: editDeliveryId,
+        productId: editDraft.productId,
+        excludeSaleId: editingSaleId,
+      });
+      if (parsedQuantity > available) {
+        toast({
+          title: "Stock insuficiente en delivery",
+          description: `Disponible: ${available} und`,
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     const selectedProduct = allProducts.find((product: any) => product.id === editDraft.productId);

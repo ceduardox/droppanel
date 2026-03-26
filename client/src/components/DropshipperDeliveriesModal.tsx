@@ -533,24 +533,24 @@ export default function DropshipperDeliveriesModal({
             </div>
           </div>
 
-          <div className={isNarrowPanel ? "flex gap-3 overflow-x-auto pb-1" : "grid gap-3 sm:grid-cols-2"}>
-            <div className={`rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3 ${isNarrowPanel ? "min-w-[170px] shrink-0" : ""}`}>
+          <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
+            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
               <p className="text-xs text-muted-foreground">Vendedores</p>
               <p className="text-lg font-semibold text-[#1a2a43]">{toInteger(summary.dropshippers)}</p>
             </div>
-            <div className={`rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3 ${isNarrowPanel ? "min-w-[170px] shrink-0" : ""}`}>
+            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
               <p className="text-xs text-muted-foreground">Entregas</p>
               <p className="text-lg font-semibold text-[#1a2a43]">{toInteger(summary.deliveries)}</p>
             </div>
-            <div className={`rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3 ${isNarrowPanel ? "min-w-[170px] shrink-0" : ""}`}>
+            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
               <p className="text-xs text-muted-foreground">Productos vendidos</p>
               <p className="text-lg font-semibold text-[#1a2a43]">{toInteger(summary.productsSold)}</p>
             </div>
-            <div className={`rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3 ${isNarrowPanel ? "min-w-[190px] shrink-0" : ""}`}>
+            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
               <p className="text-xs text-muted-foreground">Total ventas</p>
               <p className="text-lg font-semibold text-[#1a2a43]">{formatBs(summary.totalSalesBs)}</p>
             </div>
-            <div className={`rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3 ${isNarrowPanel ? "min-w-[210px] shrink-0" : ""}`}>
+            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
               <p className="text-xs text-muted-foreground">Total comisiones</p>
               <p className="text-lg font-semibold text-[#1a2a43]">{formatBs(summary.totalCommissionBs)}</p>
             </div>

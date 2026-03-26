@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 function getTodayIsoLocal(): string {
   const now = new Date();
@@ -62,6 +63,7 @@ export default function Sales() {
   const [reportDate, setReportDate] = useState(todayIso);
   const [reportStartDate, setReportStartDate] = useState(todayIso);
   const [reportEndDate, setReportEndDate] = useState(todayIso);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<SaleEditDraft | null>(null);
   const isAccountant = user?.role?.trim().toLowerCase() === "contador";
@@ -105,6 +107,7 @@ export default function Sales() {
   const allProducts = products as any[];
   const allDirectors = directors as any[];
   const allSellers = sellers as any[];
+  const allSales = sales as any[];
 
   const activeProducts = (products as any[]).filter((p: any) => p.isActive !== false);
   const activeDirectors = (directors as any[]).filter((d: any) => d.isActive !== false);
@@ -159,9 +162,11 @@ export default function Sales() {
       unitPrice: Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice.toFixed(2) : "0.00",
       saleDate: toIsoDate(sale.saleDate) || todayIso,
     });
+    setIsEditModalOpen(true);
   };
 
   const cancelEdit = () => {
+    setIsEditModalOpen(false);
     setEditingSaleId(null);
     setEditDraft(null);
   };
@@ -220,8 +225,8 @@ export default function Sales() {
     });
   };
 
-  const handleSaveEdit = async (sale: any) => {
-    if (!editDraft || editingSaleId !== sale.id) return;
+  const handleSaveEdit = async () => {
+    if (!editDraft || !editingSaleId) return;
 
     const parsedQuantity = Number.parseInt(editDraft.quantity || "0", 10);
     const parsedUnitPrice = Number.parseFloat(editDraft.unitPrice || "0");
@@ -280,7 +285,7 @@ export default function Sales() {
 
     try {
       await updateSale.mutateAsync({
-        id: sale.id,
+        id: editingSaleId,
         data: {
           productId: editDraft.productId,
           quantity: parsedQuantity,
@@ -328,7 +333,7 @@ export default function Sales() {
     }
   };
 
-  const filteredSales = (sales as any[])
+  const filteredSales = (allSales as any[])
     .filter((sale: any) => {
       const saleDate = toIsoDate(sale.saleDate);
       if (!saleDate) return false;
@@ -357,6 +362,68 @@ export default function Sales() {
     reportMode === "day"
       ? reportDate
       : `${normalizedStartDate} - ${normalizedEndDate}`;
+
+  const editingSale = editingSaleId ? allSales.find((sale: any) => sale.id === editingSaleId) : null;
+  const editingSaleProductId = editingSale ? String(editingSale.productId || "") : "";
+  const editingSaleSellerId = editingSale ? toSelectValue(editingSale.sellerId) : "none";
+  const editingSaleDirectorId = editingSale ? toSelectValue(editingSale.directorId) : "none";
+
+  const productOptions = [...activeProducts];
+  if (editingSaleProductId && !productOptions.some((candidate: any) => candidate.id === editingSaleProductId)) {
+    const currentProduct = allProducts.find((candidate: any) => candidate.id === editingSaleProductId);
+    if (currentProduct) {
+      productOptions.push(currentProduct);
+    }
+  }
+
+  const draftDirectorId = editDraft?.directorId ?? editingSaleDirectorId;
+  const directorOptions = [...activeDirectors];
+  if (draftDirectorId !== "none" && !directorOptions.some((candidate: any) => candidate.id === draftDirectorId)) {
+    const currentDirector = allDirectors.find((candidate: any) => candidate.id === draftDirectorId);
+    if (currentDirector) {
+      directorOptions.push(currentDirector);
+    }
+  }
+
+  const selectedDirectorForSellerFilter = draftDirectorId === "none" ? null : draftDirectorId;
+  const sellerOptionsBase = activeSellers.filter((candidate: any) =>
+    !selectedDirectorForSellerFilter || candidate.directorId === selectedDirectorForSellerFilter
+  );
+  const draftSellerId = editDraft?.sellerId ?? editingSaleSellerId;
+  const sellerOptions = [...sellerOptionsBase];
+  if (draftSellerId !== "none" && !sellerOptions.some((candidate: any) => candidate.id === draftSellerId)) {
+    const currentSeller = allSellers.find((candidate: any) => candidate.id === draftSellerId);
+    if (currentSeller) {
+      sellerOptions.push(currentSeller);
+    }
+  }
+
+  const modalQuantity = Number.parseInt(editDraft?.quantity || "0", 10);
+  const modalUnitPrice = Number.parseFloat(editDraft?.unitPrice || "0");
+  const modalTotal =
+    (Number.isFinite(modalQuantity) && modalQuantity > 0 ? modalQuantity : 0) *
+    (Number.isFinite(modalUnitPrice) && modalUnitPrice > 0 ? modalUnitPrice : 0);
+  const buildSaleRow = (sale: any) => {
+    const saleDate = toIsoDate(sale.saleDate);
+    const product = productMap.get(sale.productId);
+    const productName = product?.name || "Producto";
+    const sellerName = sale.sellerId ? sellerMap.get(sale.sellerId) || "Vendedor" : "-";
+    const directorName = sale.directorId ? directorMap.get(sale.directorId) || "Director" : "-";
+    const qty = Number.parseInt(String(sale.quantity || 0), 10);
+    const safeQty = Number.isFinite(qty) ? qty : 0;
+    const unitPrice = Number.parseFloat(String(sale.unitPrice ?? product?.price ?? 0));
+    const safeUnitPrice = Number.isFinite(unitPrice) ? unitPrice : 0;
+
+    return {
+      saleDate,
+      productName,
+      sellerName,
+      directorName,
+      safeQty,
+      safeUnitPrice,
+      total: safeQty * safeUnitPrice,
+    };
+  };
 
   return (
     <div className="space-y-6">
@@ -460,271 +527,307 @@ export default function Sales() {
               No hay ventas en el filtro seleccionado.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[1120px]">
-                <thead className="border-b bg-muted/50">
-                  <tr>
-                    <th className="p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fecha</th>
-                    <th className="p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Producto</th>
-                    <th className="p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vendedor</th>
-                    <th className="p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Director</th>
-                    <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cantidad</th>
-                    <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">P. Unit</th>
-                    <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total</th>
-                    <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSales.map((sale: any) => {
-                    const saleDate = toIsoDate(sale.saleDate);
-                    const product = productMap.get(sale.productId);
-                    const productName = product?.name || "Producto";
-                    const sellerName = sale.sellerId ? sellerMap.get(sale.sellerId) || "Vendedor" : "-";
-                    const directorName = sale.directorId ? directorMap.get(sale.directorId) || "Director" : "-";
-                    const qty = Number.parseInt(String(sale.quantity || 0), 10);
-                    const safeQty = Number.isFinite(qty) ? qty : 0;
-                    const unitPrice = Number.parseFloat(String(sale.unitPrice ?? product?.price ?? 0));
-                    const safeUnitPrice = Number.isFinite(unitPrice) ? unitPrice : 0;
-                    const isEditing = editingSaleId === sale.id && !!editDraft;
+            <>
+              <div className="hidden rounded-lg border md:block">
+                <table className="w-full">
+                  <thead className="border-b bg-muted/50">
+                    <tr>
+                      <th className="p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fecha</th>
+                      <th className="p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Producto</th>
+                      <th className="p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vendedor</th>
+                      <th className="p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Director</th>
+                      <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cantidad</th>
+                      <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">P. Unit</th>
+                      <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total</th>
+                      <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSales.map((sale: any) => {
+                      const row = buildSaleRow(sale);
+                      return (
+                        <tr key={sale.id} className="border-b last:border-b-0">
+                          <td className="p-3 text-sm">{row.saleDate}</td>
+                          <td className="p-3 text-sm font-medium">
+                            <span className="inline-block max-w-[260px] truncate align-bottom">{row.productName}</span>
+                          </td>
+                          <td className="p-3 text-sm">{row.sellerName}</td>
+                          <td className="p-3 text-sm">{row.directorName}</td>
+                          <td className="p-3 text-right text-sm">{row.safeQty}</td>
+                          <td className="p-3 text-right text-sm">{row.safeUnitPrice.toFixed(2)} Bs</td>
+                          <td className="p-3 text-right text-sm font-semibold">{row.total.toFixed(2)} Bs</td>
+                          <td className="p-3 text-right text-sm">
+                            {isAccountant ? (
+                              <span className="text-muted-foreground">Sin permiso</span>
+                            ) : (
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => startEdit(sale)}
+                                  disabled={isEditModalOpen || updateSale.isPending || deleteSale.isPending}
+                                  data-testid={`button-sale-edit-${sale.id}`}
+                                >
+                                  Editar
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleDeleteSale(sale.id)}
+                                  disabled={deleteSale.isPending || updateSale.isPending}
+                                  data-testid={`button-sale-delete-${sale.id}`}
+                                >
+                                  Eliminar
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-                    let quantityForTotal = safeQty;
-                    let unitPriceForTotal = safeUnitPrice;
+              <div className="space-y-3 md:hidden">
+                {filteredSales.map((sale: any) => {
+                  const row = buildSaleRow(sale);
+                  return (
+                    <div key={sale.id} className="rounded-lg border bg-white p-3 shadow-sm">
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                        <span className="text-xs text-muted-foreground">Fecha</span>
+                        <span className="text-right">{row.saleDate}</span>
 
-                    if (isEditing && editDraft) {
-                      const draftQty = Number.parseInt(editDraft.quantity || "0", 10);
-                      const draftUnitPrice = Number.parseFloat(editDraft.unitPrice || "0");
-                      quantityForTotal = Number.isFinite(draftQty) && draftQty > 0 ? draftQty : 0;
-                      unitPriceForTotal = Number.isFinite(draftUnitPrice) && draftUnitPrice > 0 ? draftUnitPrice : 0;
-                    }
+                        <span className="text-xs text-muted-foreground">Producto</span>
+                        <span className="text-right font-medium">{row.productName}</span>
 
-                    const total = quantityForTotal * unitPriceForTotal;
+                        <span className="text-xs text-muted-foreground">Vendedor</span>
+                        <span className="text-right">{row.sellerName}</span>
 
-                    const saleProductId = String(sale.productId || "");
-                    const saleSellerId = toSelectValue(sale.sellerId);
-                    const saleDirectorId = toSelectValue(sale.directorId);
+                        <span className="text-xs text-muted-foreground">Director</span>
+                        <span className="text-right">{row.directorName}</span>
 
-                    const productOptions = [...activeProducts];
-                    if (!productOptions.some((candidate: any) => candidate.id === saleProductId)) {
-                      const currentProduct = allProducts.find((candidate: any) => candidate.id === saleProductId);
-                      if (currentProduct) {
-                        productOptions.push(currentProduct);
-                      }
-                    }
+                        <span className="text-xs text-muted-foreground">Cantidad</span>
+                        <span className="text-right">{row.safeQty}</span>
 
-                    const draftDirectorId = isEditing && editDraft ? editDraft.directorId : saleDirectorId;
-                    const directorOptions = [...activeDirectors];
-                    if (draftDirectorId !== "none" && !directorOptions.some((candidate: any) => candidate.id === draftDirectorId)) {
-                      const currentDirector = allDirectors.find((candidate: any) => candidate.id === draftDirectorId);
-                      if (currentDirector) {
-                        directorOptions.push(currentDirector);
-                      }
-                    }
+                        <span className="text-xs text-muted-foreground">P. Unit</span>
+                        <span className="text-right">{row.safeUnitPrice.toFixed(2)} Bs</span>
 
-                    const selectedDirectorForSellerFilter =
-                      draftDirectorId === "none" ? null : draftDirectorId;
-                    const sellerOptionsBase = activeSellers.filter((candidate: any) =>
-                      !selectedDirectorForSellerFilter || candidate.directorId === selectedDirectorForSellerFilter
-                    );
-                    const draftSellerId = isEditing && editDraft ? editDraft.sellerId : saleSellerId;
-                    const sellerOptions = [...sellerOptionsBase];
-                    if (draftSellerId !== "none" && !sellerOptions.some((candidate: any) => candidate.id === draftSellerId)) {
-                      const currentSeller = allSellers.find((candidate: any) => candidate.id === draftSellerId);
-                      if (currentSeller) {
-                        sellerOptions.push(currentSeller);
-                      }
-                    }
+                        <span className="text-xs text-muted-foreground">Total</span>
+                        <span className="text-right font-semibold">{row.total.toFixed(2)} Bs</span>
+                      </div>
 
-                    return (
-                      <tr key={sale.id} className="border-b last:border-b-0">
-                        <td className="p-3 text-sm">
-                          {isEditing && editDraft ? (
-                            <Input
-                              type="date"
-                              value={editDraft.saleDate}
-                              onChange={(e) =>
-                                setEditDraft((prev) =>
-                                  prev
-                                    ? {
-                                        ...prev,
-                                        saleDate: e.target.value,
-                                      }
-                                    : prev
-                                )
-                              }
-                              className="h-8 min-w-[145px]"
-                              data-testid={`input-sale-date-${sale.id}`}
-                            />
-                          ) : (
-                            saleDate
-                          )}
-                        </td>
-                        <td className="p-3 text-sm font-medium">
-                          {isEditing && editDraft ? (
-                            <Select value={editDraft.productId} onValueChange={handleEditProductChange}>
-                              <SelectTrigger className="h-8 min-w-[220px]" data-testid={`select-sale-product-${sale.id}`}>
-                                <SelectValue placeholder="Selecciona producto" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {productOptions.map((candidate: any) => (
-                                  <SelectItem key={candidate.id} value={candidate.id}>
-                                    {candidate.name}
-                                    {candidate.isActive === false ? " (Inactivo)" : ""}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            productName
-                          )}
-                        </td>
-                        <td className="p-3 text-sm">
-                          {isEditing && editDraft ? (
-                            <Select value={editDraft.sellerId} onValueChange={handleEditSellerChange}>
-                              <SelectTrigger className="h-8 min-w-[180px]" data-testid={`select-sale-seller-row-${sale.id}`}>
-                                <SelectValue placeholder="Sin vendedor" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">Sin vendedor</SelectItem>
-                                {sellerOptions.map((candidate: any) => (
-                                  <SelectItem key={candidate.id} value={candidate.id}>
-                                    {candidate.name}
-                                    {candidate.isActive === false ? " (Inactivo)" : ""}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            sellerName
-                          )}
-                        </td>
-                        <td className="p-3 text-sm">
-                          {isEditing && editDraft ? (
-                            <Select value={editDraft.directorId} onValueChange={handleEditDirectorChange}>
-                              <SelectTrigger className="h-8 min-w-[180px]" data-testid={`select-sale-director-row-${sale.id}`}>
-                                <SelectValue placeholder="Sin director" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">Sin director</SelectItem>
-                                {directorOptions.map((candidate: any) => (
-                                  <SelectItem key={candidate.id} value={candidate.id}>
-                                    {candidate.name}
-                                    {candidate.isActive === false ? " (Inactivo)" : ""}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            directorName
-                          )}
-                        </td>
-                        <td className="p-3 text-right text-sm">
-                          {isEditing && editDraft ? (
-                            <Input
-                              type="number"
-                              min="1"
-                              step="1"
-                              value={editDraft.quantity}
-                              onChange={(e) =>
-                                setEditDraft((prev) =>
-                                  prev
-                                    ? {
-                                        ...prev,
-                                        quantity: e.target.value,
-                                      }
-                                    : prev
-                                )
-                              }
-                              className="ml-auto h-8 w-24 text-right"
-                              data-testid={`input-sale-quantity-${sale.id}`}
-                            />
-                          ) : (
-                            safeQty
-                          )}
-                        </td>
-                        <td className="p-3 text-right text-sm">
-                          {isEditing && editDraft ? (
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0.01"
-                              value={editDraft.unitPrice}
-                              onChange={(e) =>
-                                setEditDraft((prev) =>
-                                  prev
-                                    ? {
-                                        ...prev,
-                                        unitPrice: e.target.value,
-                                      }
-                                    : prev
-                                )
-                              }
-                              className="ml-auto h-8 w-28 text-right"
-                              data-testid={`input-sale-unit-price-${sale.id}`}
-                            />
-                          ) : (
-                            `${safeUnitPrice.toFixed(2)} Bs`
-                          )}
-                        </td>
-                        <td className="p-3 text-right text-sm font-semibold">{total.toFixed(2)} Bs</td>
-                        <td className="p-3 text-right text-sm">
-                          {isAccountant ? (
-                            <span className="text-muted-foreground">Sin permiso</span>
-                          ) : isEditing ? (
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={() => handleSaveEdit(sale)}
-                                disabled={updateSale.isPending}
-                                data-testid={`button-sale-save-${sale.id}`}
-                              >
-                                Guardar
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={cancelEdit}
-                                disabled={updateSale.isPending}
-                                data-testid={`button-sale-cancel-${sale.id}`}
-                              >
-                                Cancelar
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => startEdit(sale)}
-                                disabled={!!editingSaleId || deleteSale.isPending}
-                                data-testid={`button-sale-edit-${sale.id}`}
-                              >
-                                Editar
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleDeleteSale(sale.id)}
-                                disabled={deleteSale.isPending}
-                                data-testid={`button-sale-delete-${sale.id}`}
-                              >
-                                Eliminar
-                              </Button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                      <div className="mt-3 flex gap-2">
+                        {isAccountant ? (
+                          <span className="text-xs text-muted-foreground">Sin permiso</span>
+                        ) : (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="flex-1"
+                              onClick={() => startEdit(sale)}
+                              disabled={isEditModalOpen || updateSale.isPending || deleteSale.isPending}
+                              data-testid={`button-sale-edit-mobile-${sale.id}`}
+                            >
+                              Editar
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive"
+                              className="flex-1"
+                              onClick={() => handleDeleteSale(sale.id)}
+                              disabled={deleteSale.isPending || updateSale.isPending}
+                              data-testid={`button-sale-delete-mobile-${sale.id}`}
+                            >
+                              Eliminar
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={isEditModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            cancelEdit();
+          } else {
+            setIsEditModalOpen(true);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar venta</DialogTitle>
+            <DialogDescription>
+              Actualiza producto, vendedor, director, cantidad, monto y fecha sin salir de esta pagina.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editDraft && (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="sale-edit-date">Fecha</Label>
+                  <Input
+                    id="sale-edit-date"
+                    type="date"
+                    value={editDraft.saleDate}
+                    onChange={(e) =>
+                      setEditDraft((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              saleDate: e.target.value,
+                            }
+                          : prev
+                      )
+                    }
+                    data-testid="input-sale-edit-date"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sale-edit-quantity">Cantidad</Label>
+                  <Input
+                    id="sale-edit-quantity"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={editDraft.quantity}
+                    onChange={(e) =>
+                      setEditDraft((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              quantity: e.target.value,
+                            }
+                          : prev
+                      )
+                    }
+                    data-testid="input-sale-edit-quantity"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Producto</Label>
+                <Select value={editDraft.productId} onValueChange={handleEditProductChange}>
+                  <SelectTrigger data-testid="select-sale-edit-product">
+                    <SelectValue placeholder="Selecciona producto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {productOptions.map((candidate: any) => (
+                      <SelectItem key={candidate.id} value={candidate.id}>
+                        {candidate.name}
+                        {candidate.isActive === false ? " (Inactivo)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Director</Label>
+                  <Select value={editDraft.directorId} onValueChange={handleEditDirectorChange}>
+                    <SelectTrigger data-testid="select-sale-edit-director">
+                      <SelectValue placeholder="Sin director" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin director</SelectItem>
+                      {directorOptions.map((candidate: any) => (
+                        <SelectItem key={candidate.id} value={candidate.id}>
+                          {candidate.name}
+                          {candidate.isActive === false ? " (Inactivo)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Vendedor</Label>
+                  <Select value={editDraft.sellerId} onValueChange={handleEditSellerChange}>
+                    <SelectTrigger data-testid="select-sale-edit-seller">
+                      <SelectValue placeholder="Sin vendedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin vendedor</SelectItem>
+                      {sellerOptions.map((candidate: any) => (
+                        <SelectItem key={candidate.id} value={candidate.id}>
+                          {candidate.name}
+                          {candidate.isActive === false ? " (Inactivo)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="sale-edit-unit-price">Precio unitario (Bs)</Label>
+                <Input
+                  id="sale-edit-unit-price"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={editDraft.unitPrice}
+                  onChange={(e) =>
+                    setEditDraft((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            unitPrice: e.target.value,
+                          }
+                        : prev
+                    )
+                  }
+                  data-testid="input-sale-edit-unit-price"
+                />
+              </div>
+
+              <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
+                <p className="text-xs text-muted-foreground">Resumen rapido</p>
+                <p className="mt-1 text-sm text-[#1a2a43]">
+                  Total: <span className="font-semibold">{modalTotal.toFixed(2)} Bs</span>
+                </p>
+              </div>
+
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={cancelEdit}
+                  disabled={updateSale.isPending}
+                  data-testid="button-sale-edit-cancel"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={updateSale.isPending}
+                  data-testid="button-sale-edit-save"
+                >
+                  {updateSale.isPending ? "Guardando..." : "Guardar cambios"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

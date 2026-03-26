@@ -567,41 +567,6 @@ export default function DropshipperDeliveriesModal({
             <>
               <div className="rounded-xl border border-[#d1dff2] bg-white">
                 <div className="border-b border-[#d1dff2] px-4 py-3">
-                  <p className="text-sm font-semibold text-[#102544]">Resumen por vendedor</p>
-                </div>
-                {dropshippers.length === 0 ? (
-                  <p className="px-4 py-6 text-sm text-muted-foreground">
-                    Sin datos de vendedores para el filtro seleccionado.
-                  </p>
-                ) : (
-                  <div className="max-h-56 overflow-auto">
-                    <div className={isNarrowPanel ? "min-w-[780px] divide-y" : "divide-y"}>
-                      {dropshippers.map((seller, index) => (
-                        <div
-                          key={`${seller.id || seller.name || "seller"}-${index}`}
-                          className={
-                            isNarrowPanel
-                              ? "grid grid-cols-[minmax(180px,2fr)_repeat(4,minmax(120px,1fr))] gap-2 px-4 py-3 text-sm"
-                              : "grid gap-2 px-4 py-3 text-sm md:grid-cols-2"
-                          }
-                        >
-                          <div>
-                            <p className="font-medium text-[#1a2a43]">{seller.name || "Vendedor"}</p>
-                            <p className="text-xs text-muted-foreground">{seller.city || "-"}</p>
-                          </div>
-                          <p>Entregas: {toInteger(seller.deliveries)}</p>
-                          <p>Productos: {toInteger(seller.productsSold)}</p>
-                          <p>Ventas: {formatBs(seller.totalSalesBs)}</p>
-                          <p>Comision: {formatBs(seller.totalCommissionBs)}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-xl border border-[#d1dff2] bg-white">
-                <div className="border-b border-[#d1dff2] px-4 py-3">
                   <p className="text-sm font-semibold text-[#102544]">Detalle de entregas</p>
                   <p className="text-xs text-muted-foreground">
                     Se muestra desde deliveryItems para incluir producto, cantidades y comisiones.
@@ -646,6 +611,41 @@ export default function DropshipperDeliveriesModal({
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-[#d1dff2] bg-white">
+                <div className="border-b border-[#d1dff2] px-4 py-3">
+                  <p className="text-sm font-semibold text-[#102544]">Resumen por vendedor</p>
+                </div>
+                {dropshippers.length === 0 ? (
+                  <p className="px-4 py-6 text-sm text-muted-foreground">
+                    Sin datos de vendedores para el filtro seleccionado.
+                  </p>
+                ) : (
+                  <div className="max-h-56 overflow-auto">
+                    <div className={isNarrowPanel ? "min-w-[780px] divide-y" : "divide-y"}>
+                      {dropshippers.map((seller, index) => (
+                        <div
+                          key={`${seller.id || seller.name || "seller"}-${index}`}
+                          className={
+                            isNarrowPanel
+                              ? "grid grid-cols-[minmax(180px,2fr)_repeat(4,minmax(120px,1fr))] gap-2 px-4 py-3 text-sm"
+                              : "grid gap-2 px-4 py-3 text-sm md:grid-cols-2"
+                          }
+                        >
+                          <div>
+                            <p className="font-medium text-[#1a2a43]">{seller.name || "Vendedor"}</p>
+                            <p className="text-xs text-muted-foreground">{seller.city || "-"}</p>
+                          </div>
+                          <p>Entregas: {toInteger(seller.deliveries)}</p>
+                          <p>Productos: {toInteger(seller.productsSold)}</p>
+                          <p>Ventas: {formatBs(seller.totalSalesBs)}</p>
+                          <p>Comision: {formatBs(seller.totalCommissionBs)}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

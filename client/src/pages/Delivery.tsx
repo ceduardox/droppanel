@@ -81,6 +81,7 @@ export default function Delivery() {
   const { data: sales = [] } = useSales() as { data: any[] };
   const { data: report, isLoading: reportLoading } = useDeliveryAssignmentsReport(reportStartDate, reportEndDate);
   const { data: assignmentAudit = [] } = useDeliveryAssignmentAudit(reportStartDate, reportEndDate) as { data: any[] };
+  const activeProducts = products.filter((product: any) => product.isActive !== false);
 
   // Mutations
   const createDelivery = useCreateDelivery();
@@ -495,7 +496,7 @@ export default function Delivery() {
                       <SelectValue placeholder="Seleccionar producto" />
                     </SelectTrigger>
                     <SelectContent>
-                      {products.map((product: any) => (
+                      {activeProducts.map((product: any) => (
                         <SelectItem key={product.id} value={product.id}>
                           {product.name} - {parseFloat(product.price).toFixed(2)} Bs
                         </SelectItem>
@@ -503,6 +504,12 @@ export default function Delivery() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {activeProducts.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No hay productos activos para agregar stock.
+                  </p>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

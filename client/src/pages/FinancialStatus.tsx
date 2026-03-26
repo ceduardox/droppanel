@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCapitalMovements, useExpenses, useGrossCapitalMovements, useReports } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { getEffectiveUnitBaseCost, getEffectiveUnitCost, getSaleUnitPrice } from "@/lib/sales-pricing";
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, Scale } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, Info, Scale } from "lucide-react";
 
 type SaleBreakdown = {
   id: string;
@@ -147,9 +147,53 @@ function KpiCard({
 export default function FinancialStatus() {
   const { user } = useAuth();
   const isAccountant = user?.role?.trim().toLowerCase() === "contador";
+  const visibleFrom = user?.visibleFrom || null;
 
   const [startDate, setStartDate] = useState(getMonthStartIsoLocal());
   const [endDate, setEndDate] = useState(getTodayIsoLocal());
+
+  useEffect(() => {
+    if (!isAccountant || !visibleFrom) return;
+
+    let nextStart = startDate;
+    let nextEnd = endDate;
+
+    if (!nextStart || nextStart < visibleFrom) {
+      nextStart = visibleFrom;
+    }
+
+    if (!nextEnd || nextEnd < visibleFrom) {
+      nextEnd = visibleFrom;
+    }
+
+    if (nextEnd < nextStart) {
+      nextEnd = nextStart;
+    }
+
+    if (nextStart !== startDate) {
+      setStartDate(nextStart);
+    }
+
+    if (nextEnd !== endDate) {
+      setEndDate(nextEnd);
+    }
+  }, [isAccountant, visibleFrom, startDate, endDate]);
+
+  const effectiveStartDate = useMemo(() => {
+    if (isAccountant && visibleFrom && startDate < visibleFrom) return visibleFrom;
+    return startDate;
+  }, [isAccountant, visibleFrom, startDate]);
+
+  const effectiveEndDate = useMemo(() => {
+    let nextEnd = endDate;
+    if (isAccountant && visibleFrom && nextEnd < visibleFrom) {
+      nextEnd = visibleFrom;
+    }
+    if (nextEnd < effectiveStartDate) {
+      nextEnd = effectiveStartDate;
+    }
+    return nextEnd;
+  }, [isAccountant, visibleFrom, endDate, effectiveStartDate]);
 
   const salesQuery = useReports();
   const expensesQuery = useExpenses();
@@ -167,23 +211,29 @@ export default function FinancialStatus() {
   );
 
   const filteredSaleBreakdowns = useMemo(
-    () => allSaleBreakdowns.filter((sale) => inRange(sale.date, startDate, endDate)),
-    [allSaleBreakdowns, startDate, endDate]
+    () => allSaleBreakdowns.filter((sale) => inRange(sale.date, effectiveStartDate, effectiveEndDate)),
+    [allSaleBreakdowns, effectiveStartDate, effectiveEndDate]
   );
 
   const filteredExpenses = useMemo(
-    () => expenses.filter((item: any) => inRange(toIsoDate(item.expenseDate), startDate, endDate)),
-    [expenses, startDate, endDate]
+    () => expenses.filter((item: any) => inRange(toIsoDate(item.expenseDate), effectiveStartDate, effectiveEndDate)),
+    [expenses, effectiveStartDate, effectiveEndDate]
   );
 
   const filteredGrossCapitalMovements = useMemo(
-    () => grossCapitalMovements.filter((item: any) => inRange(toIsoDate(item.movementDate), startDate, endDate)),
-    [grossCapitalMovements, startDate, endDate]
+    () =>
+      grossCapitalMovements.filter((item: any) =>
+        inRange(toIsoDate(item.movementDate), effectiveStartDate, effectiveEndDate)
+      ),
+    [grossCapitalMovements, effectiveStartDate, effectiveEndDate]
   );
 
   const filteredCapitalMovements = useMemo(
-    () => capitalMovements.filter((item: any) => inRange(toIsoDate(item.movementDate), startDate, endDate)),
-    [capitalMovements, startDate, endDate]
+    () =>
+      capitalMovements.filter((item: any) =>
+        inRange(toIsoDate(item.movementDate), effectiveStartDate, effectiveEndDate)
+      ),
+    [capitalMovements, effectiveStartDate, effectiveEndDate]
   );
 
   const totalIncome = useMemo(
@@ -256,9 +306,9 @@ export default function FinancialStatus() {
   const openingReserveFromSales = useMemo(
     () =>
       allSaleBreakdowns
-        .filter((sale) => sale.date && sale.date < startDate)
+        .filter((sale) => sale.date && sale.date < effectiveStartDate)
         .reduce((sum, sale) => sum + sale.reserveAmount, 0),
-    [allSaleBreakdowns, startDate]
+    [allSaleBreakdowns, effectiveStartDate]
   );
 
   const periodReserveFromSales = useMemo(
@@ -271,10 +321,10 @@ export default function FinancialStatus() {
       (capitalMovements as any[])
         .filter((movement: any) => {
           const date = toIsoDate(movement.movementDate);
-          return date && date < startDate;
+          return date && date < effectiveStartDate;
         })
         .reduce((sum: number, movement: any) => sum + getCapitalMovementSignedAmount(movement), 0),
-    [capitalMovements, startDate]
+    [capitalMovements, effectiveStartDate]
   );
 
   const openingCapitalFund = openingReserveFromSales + openingManualCapital;
@@ -283,9 +333,9 @@ export default function FinancialStatus() {
   const openingBaseFromSales = useMemo(
     () =>
       allSaleBreakdowns
-        .filter((sale) => sale.date && sale.date < startDate)
+        .filter((sale) => sale.date && sale.date < effectiveStartDate)
         .reduce((sum, sale) => sum + sale.baseCostAmount, 0),
-    [allSaleBreakdowns, startDate]
+    [allSaleBreakdowns, effectiveStartDate]
   );
 
   const openingGrossWithdrawals = useMemo(
@@ -293,10 +343,10 @@ export default function FinancialStatus() {
       (grossCapitalMovements as any[])
         .filter((movement: any) => {
           const date = toIsoDate(movement.movementDate);
-          return date && date < startDate;
+          return date && date < effectiveStartDate;
         })
         .reduce((sum: number, movement: any) => sum + parseAmount(movement.amount), 0),
-    [grossCapitalMovements, startDate]
+    [grossCapitalMovements, effectiveStartDate]
   );
 
   const openingGrossFund = openingBaseFromSales - openingGrossWithdrawals;
@@ -503,6 +553,7 @@ export default function FinancialStatus() {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
+                min={isAccountant && visibleFrom ? visibleFrom : undefined}
                 data-testid="input-financial-start-date"
               />
             </div>
@@ -513,10 +564,17 @@ export default function FinancialStatus() {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
+                min={isAccountant && visibleFrom ? visibleFrom : undefined}
                 data-testid="input-financial-end-date"
               />
             </div>
           </div>
+          {isAccountant && visibleFrom && (
+            <div className="mt-3 inline-flex items-center gap-2 rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+              <Info className="h-4 w-4" />
+              <span>Vista contador: datos visibles desde {formatDate(visibleFrom)}. El rango se ajusta automaticamente.</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 

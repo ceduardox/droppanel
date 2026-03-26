@@ -1536,11 +1536,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/sales", requireAuth, async (req, res) => {
     try {
       const access = await getAccessContext(req);
-      if (access.isAccountant) {
-        return res.status(403).json({ error: "El rol contador no puede acceder al modulo de ventas" });
-      }
       const sales = await storage.getSales(getEffectiveUserId(req));
-      res.json(sales);
+      const visibleSales = access.isAccountant && access.visibleFrom
+        ? sales.filter((sale) => isOnOrAfterDate(sale.saleDate, access.visibleFrom))
+        : sales;
+      res.json(visibleSales);
     } catch (error) {
       res.status(500).json({ error: "Error al obtener ventas" });
     }

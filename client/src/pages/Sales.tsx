@@ -675,8 +675,12 @@ export default function Sales() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Registrar Venta</h1>
-          <p className="text-muted-foreground mt-1">Ingresa los detalles de la nueva venta</p>
+          <h1 className="text-3xl font-bold">{isAccountant ? "Ventas (solo lectura)" : "Registrar Venta"}</h1>
+          <p className="text-muted-foreground mt-1">
+            {isAccountant
+              ? "Vista contador: puedes revisar reportes, filtros y detalle de ventas."
+              : "Ingresa los detalles de la nueva venta"}
+          </p>
         </div>
         <Button
           type="button"
@@ -688,7 +692,13 @@ export default function Sales() {
         </Button>
       </div>
 
-      {formattedProducts.length === 0 ? (
+      {isAccountant ? (
+        <Card className="rounded-2xl border-[#b7c9e6] bg-white/90 shadow-sm">
+          <CardContent className="py-4 text-sm text-muted-foreground">
+            El rol contador no puede registrar o editar ventas directas desde este formulario.
+          </CardContent>
+        </Card>
+      ) : formattedProducts.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-muted-foreground">Primero debes agregar productos</p>
         </div>

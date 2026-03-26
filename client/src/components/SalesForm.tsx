@@ -18,15 +18,38 @@ interface Product {
   costTransport?: number | null;
 }
 
-interface SalesFormProps {
-  products: Product[];
-  onSubmit: (data: { productId: string; quantity: number; date: string; unitPrice: number; unitTransport: number }) => void;
+interface Director {
+  id: string;
+  name: string;
 }
 
-export default function SalesForm({ products, onSubmit }: SalesFormProps) {
+interface Seller {
+  id: string;
+  name: string;
+  directorId?: string | null;
+}
+
+interface SalesFormProps {
+  products: Product[];
+  directors: Director[];
+  sellers: Seller[];
+  onSubmit: (data: {
+    productId: string;
+    quantity: number;
+    date: string;
+    unitPrice: number;
+    unitTransport: number;
+    sellerId?: string | null;
+    directorId?: string | null;
+  }) => void;
+}
+
+export default function SalesForm({ products, directors, sellers, onSubmit }: SalesFormProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [productId, setProductId] = useState("");
+  const [directorId, setDirectorId] = useState("none");
+  const [sellerId, setSellerId] = useState("none");
   const [quantity, setQuantity] = useState("1");
   const [unitPrice, setUnitPrice] = useState("");
   const [unitTransport, setUnitTransport] = useState("");
@@ -35,6 +58,10 @@ export default function SalesForm({ products, onSubmit }: SalesFormProps) {
   const parsedQuantity = Number.parseInt(quantity || "0", 10);
   const safeQuantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity : 0;
   const selectedProduct = products.find((product) => product.id === productId);
+  const selectedSeller = sellers.find((seller) => seller.id === sellerId);
+  const selectedDirector = directors.find((director) => director.id === directorId);
+  const sellersForSelection =
+    directorId === "none" ? sellers : sellers.filter((seller) => seller.directorId === directorId);
   const parsedUnitPrice = Number.parseFloat(unitPrice || "0");
   const safeUnitPrice = Number.isFinite(parsedUnitPrice) && parsedUnitPrice > 0 ? parsedUnitPrice : 0;
   const parsedUnitTransport = Number.parseFloat(unitTransport || "0");
@@ -58,6 +85,35 @@ export default function SalesForm({ products, onSubmit }: SalesFormProps) {
       setUnitTransport((selectedProduct.costTransport ?? 0).toFixed(2));
     }
   }, [selectedProduct?.id]);
+
+  useEffect(() => {
+    if (sellerId === "none") return;
+    const seller = sellers.find((item) => item.id === sellerId);
+    if (!seller) {
+      setSellerId("none");
+      return;
+    }
+
+    const sellerDirector = seller.directorId || "none";
+    if (directorId !== sellerDirector) {
+      setDirectorId(sellerDirector);
+    }
+  }, [sellerId, sellers, directorId]);
+
+  useEffect(() => {
+    if (sellerId === "none") return;
+    if (directorId === "none") return;
+
+    const seller = sellers.find((item) => item.id === sellerId);
+    if (!seller) {
+      setSellerId("none");
+      return;
+    }
+
+    if ((seller.directorId || "none") !== directorId) {
+      setSellerId("none");
+    }
+  }, [directorId, sellerId, sellers]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,12 +142,21 @@ export default function SalesForm({ products, onSubmit }: SalesFormProps) {
       return;
     }
 
+    let finalDirectorId = directorId === "none" ? null : directorId;
+    const finalSellerId = sellerId === "none" ? null : sellerId;
+
+    if (finalSellerId && !finalDirectorId && selectedSeller?.directorId) {
+      finalDirectorId = selectedSeller.directorId;
+    }
+
     onSubmit({
       productId,
       quantity: safeQuantity,
       date,
       unitPrice: safeUnitPrice,
       unitTransport: safeUnitTransport,
+      sellerId: finalSellerId,
+      directorId: finalDirectorId,
     });
     setQuantity("1");
   };
@@ -120,6 +185,56 @@ export default function SalesForm({ products, onSubmit }: SalesFormProps) {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="director">Director (opcional)</Label>
+                <Select value={directorId} onValueChange={setDirectorId}>
+                  <SelectTrigger id="director" data-testid="select-sale-director">
+                    <SelectValue placeholder="Sin director" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin director</SelectItem>
+                    {directors.map((director) => (
+                      <SelectItem key={director.id} value={director.id}>
+                        {director.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="seller">Vendedor (opcional)</Label>
+                <Select value={sellerId} onValueChange={setSellerId}>
+                  <SelectTrigger id="seller" data-testid="select-sale-seller">
+                    <SelectValue placeholder="Sin vendedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin vendedor</SelectItem>
+                    {sellersForSelection.map((seller) => (
+                      <SelectItem key={seller.id} value={seller.id}>
+                        {seller.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {(selectedDirector || selectedSeller) && (
+              <div className="rounded-lg border border-[#d2def1] bg-[#f4f8ff] px-3 py-2 text-xs text-[#24406f]">
+                <span className="font-semibold">Venta atribuida:</span>{" "}
+                {selectedDirector ? selectedDirector.name : "Sin director"} /{" "}
+                {selectedSeller ? selectedSeller.name : "Sin vendedor"}
+              </div>
+            )}
+
+            {sellers.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No hay vendedores activos en Equipo Comercial.
+              </p>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="quantity">Cantidad</Label>
@@ -200,6 +315,15 @@ export default function SalesForm({ products, onSubmit }: SalesFormProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="rounded-lg border border-border/60 bg-white/80 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Responsable</p>
+            <p className="mt-1 text-sm">
+              {selectedSeller ? selectedSeller.name : "Sin vendedor"}{" "}
+              <span className="text-muted-foreground">|</span>{" "}
+              {selectedDirector ? selectedDirector.name : "Sin director"}
+            </p>
+          </div>
+
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Total Venta:</span>

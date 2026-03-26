@@ -706,6 +706,16 @@ async function ensureSystemTables() {
   `);
 
   await db.execute(sql`
+    ALTER TABLE sales
+    ADD COLUMN IF NOT EXISTS seller_id varchar;
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE sales
+    ADD COLUMN IF NOT EXISTS director_id varchar;
+  `);
+
+  await db.execute(sql`
     ALTER TABLE products
     ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
   `);
@@ -1488,11 +1498,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/sales", requireAuth, async (req, res) => {
     try {
-      const { productId, quantity, date, unitPrice, unitTransport } = req.body;
+      const { productId, quantity, date, unitPrice, unitTransport, sellerId, directorId } = req.body;
+      const userId = getEffectiveUserId(req);
       
       const product = await storage.getProduct(productId);
       
-      if (!product || product.userId !== getEffectiveUserId(req)) {
+      if (!product || product.userId !== userId) {
         return res.status(404).json({ error: "Producto no encontrado" });
       }
       if (product.isActive === false) {
@@ -1544,13 +1555,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      const normalizedSellerId =
+        sellerId === undefined || sellerId === null || String(sellerId).trim() === ""
+          ? null
+          : String(sellerId).trim();
+      const normalizedDirectorIdInput =
+        directorId === undefined || directorId === null || String(directorId).trim() === ""
+          ? null
+          : String(directorId).trim();
+
+      let seller: Awaited<ReturnType<typeof storage.getSeller>> | null = null;
+      if (normalizedSellerId) {
+        seller = await storage.getSeller(normalizedSellerId);
+        if (!seller || seller.userId !== userId) {
+          return res.status(404).json({ error: "Vendedor no encontrado" });
+        }
+        if (seller.isActive === false) {
+          return res.status(400).json({ error: "El vendedor seleccionado esta inactivo" });
+        }
+      }
+
+      let finalDirectorId: string | null = normalizedDirectorIdInput;
+      if (seller?.directorId && !finalDirectorId) {
+        finalDirectorId = seller.directorId;
+      }
+
+      if (seller?.directorId && finalDirectorId && seller.directorId !== finalDirectorId) {
+        return res.status(400).json({ error: "El vendedor no pertenece al director seleccionado" });
+      }
+
+      if (finalDirectorId) {
+        const director = await storage.getDirector(finalDirectorId);
+        if (!director || director.userId !== userId) {
+          return res.status(404).json({ error: "Director no encontrado" });
+        }
+        if (director.isActive === false) {
+          return res.status(400).json({ error: "El director seleccionado esta inactivo" });
+        }
+      }
+
       const sale = await storage.createSale({
         productId,
         quantity: parsedQuantity,
         unitPrice: parsedUnitPrice.toFixed(2),
         unitTransport: parsedUnitTransport.toFixed(2),
+        sellerId: normalizedSellerId,
+        directorId: finalDirectorId,
         saleDate: date,
-        userId: getEffectiveUserId(req),
+        userId,
       });
       
       res.json(sale);

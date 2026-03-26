@@ -102,6 +102,8 @@ export const sales = pgTable("sales", {
   quantity: integer("quantity").notNull(),
   unitPrice: numeric("unit_price", { precision: 10, scale: 2 }),
   unitTransport: numeric("unit_transport", { precision: 10, scale: 2 }),
+  sellerId: varchar("seller_id"),
+  directorId: varchar("director_id"),
   saleDate: date("sale_date").notNull(),
   userId: varchar("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),

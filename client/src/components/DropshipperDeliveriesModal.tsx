@@ -71,7 +71,7 @@ interface DropshipperDeliveriesModalProps {
 
 const API_BASE_URL = "https://delivery.ryztor.store";
 const DESKTOP_DEFAULT_WIDTH = 860;
-const DESKTOP_MIN_WIDTH = 620;
+const DESKTOP_MIN_WIDTH = 460;
 const DESKTOP_MAX_WIDTH = 1200;
 
 function getTodayIsoLocal() {
@@ -142,10 +142,16 @@ export default function DropshipperDeliveriesModal({
   const [panelWidth, setPanelWidth] = useState(DESKTOP_DEFAULT_WIDTH);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [resizeDirection, setResizeDirection] = useState<"left" | "right" | null>(null);
 
   const panelRef = useRef<HTMLDivElement | null>(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
-  const resizeStartRef = useRef({ width: DESKTOP_DEFAULT_WIDTH, x: 0 });
+  const resizeStartRef = useRef({
+    width: DESKTOP_DEFAULT_WIDTH,
+    x: 0,
+    left: 48,
+    right: 48 + DESKTOP_DEFAULT_WIDTH,
+  });
 
   const getMaxPanelWidth = () => {
     if (typeof window === "undefined") {
@@ -223,24 +229,39 @@ export default function DropshipperDeliveriesModal({
   }, [open, isDesktop, isDragging, isResizing, panelWidth]);
 
   useEffect(() => {
-    if (!open || !isDesktop || !isResizing) return;
+    if (!open || !isDesktop || !isResizing || !resizeDirection) return;
 
     const handleMouseMove = (event: MouseEvent) => {
       const deltaX = event.clientX - resizeStartRef.current.x;
-      const nextWidth = clampPanelWidth(resizeStartRef.current.width + deltaX);
-      setPanelWidth(nextWidth);
-
       const panelHeight = panelRef.current?.offsetHeight ?? 820;
+
+      if (resizeDirection === "right") {
+        const nextWidth = clampPanelWidth(resizeStartRef.current.width + deltaX);
+        const maxX = Math.max(window.innerWidth - nextWidth - 12, 12);
+        const maxY = Math.max(window.innerHeight - panelHeight - 12, 12);
+        setPanelWidth(nextWidth);
+        setPosition((prev) => ({
+          x: clamp(prev.x, 12, maxX),
+          y: clamp(prev.y, 12, maxY),
+        }));
+        return;
+      }
+
+      const nextWidth = clampPanelWidth(resizeStartRef.current.width - deltaX);
+      const candidateLeft = resizeStartRef.current.right - nextWidth;
       const maxX = Math.max(window.innerWidth - nextWidth - 12, 12);
+      const nextX = clamp(candidateLeft, 12, maxX);
       const maxY = Math.max(window.innerHeight - panelHeight - 12, 12);
+      setPanelWidth(nextWidth);
       setPosition((prev) => ({
-        x: clamp(prev.x, 12, maxX),
+        x: nextX,
         y: clamp(prev.y, 12, maxY),
       }));
     };
 
     const stopResizing = () => {
       setIsResizing(false);
+      setResizeDirection(null);
     };
 
     window.addEventListener("mousemove", handleMouseMove);
@@ -256,7 +277,7 @@ export default function DropshipperDeliveriesModal({
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
     };
-  }, [open, isDesktop, isResizing]);
+  }, [open, isDesktop, isResizing, resizeDirection]);
 
   useEffect(() => {
     if (!open) return;
@@ -338,13 +359,18 @@ export default function DropshipperDeliveriesModal({
     event.preventDefault();
   };
 
-  const handleStartResize = (event: React.MouseEvent<HTMLDivElement>) => {
+  const handleStartResize = (direction: "left" | "right") => (event: React.MouseEvent<HTMLDivElement>) => {
     if (!isDesktop) return;
+    const panelRect = panelRef.current?.getBoundingClientRect();
+    if (!panelRect) return;
     setIsDragging(false);
     resizeStartRef.current = {
       width: panelWidth,
       x: event.clientX,
+      left: panelRect.left,
+      right: panelRect.right,
     };
+    setResizeDirection(direction);
     setIsResizing(true);
     event.preventDefault();
     event.stopPropagation();
@@ -399,7 +425,7 @@ export default function DropshipperDeliveriesModal({
             <div>
               <p className="text-sm font-semibold text-[#102544]">Reporte de entregas externas</p>
               <p className="text-xs text-muted-foreground">
-                Fuente: delivery.ryztor.store {isDesktop ? "| Arrastra borde derecho para ajustar ancho" : ""}
+                Fuente: delivery.ryztor.store {isDesktop ? "| Arrastra los bordes laterales para ajustar ancho" : ""}
               </p>
             </div>
           </div>
@@ -661,13 +687,22 @@ export default function DropshipperDeliveriesModal({
         </div>
 
         {isDesktop && (
-          <div
-            className="absolute inset-y-0 right-0 z-[92] w-2 cursor-ew-resize bg-transparent hover:bg-[#d6e4f9]"
-            onMouseDown={handleStartResize}
-            data-testid="dropshipper-modal-resize-handle"
-            aria-label="Ajustar ancho"
-            role="separator"
-          />
+          <>
+            <div
+              className="absolute inset-y-0 left-0 z-[92] w-2 cursor-ew-resize bg-transparent hover:bg-[#d6e4f9]"
+              onMouseDown={handleStartResize("left")}
+              data-testid="dropshipper-modal-resize-handle-left"
+              aria-label="Ajustar ancho izquierda"
+              role="separator"
+            />
+            <div
+              className="absolute inset-y-0 right-0 z-[92] w-2 cursor-ew-resize bg-transparent hover:bg-[#d6e4f9]"
+              onMouseDown={handleStartResize("right")}
+              data-testid="dropshipper-modal-resize-handle-right"
+              aria-label="Ajustar ancho derecha"
+              role="separator"
+            />
+          </>
         )}
       </div>
     </div>

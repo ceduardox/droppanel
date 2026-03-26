@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import SalesForm from "@/components/SalesForm";
 import { useCreateSale, useDirectors, useProducts, useSales, useSellers } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -104,40 +104,26 @@ export default function Sales() {
   const normalizedEndDate =
     reportStartDate <= reportEndDate ? reportEndDate : reportStartDate;
 
-  const productMap = useMemo(
-    () =>
-      new Map(
-        allProducts.map((product: any) => [product.id, product])
-      ),
-    [allProducts]
+  const productMap = new Map(
+    allProducts.map((product: any) => [product.id, product])
   );
-  const directorMap = useMemo(
-    () =>
-      new Map(
-        allDirectors.map((director: any) => [director.id, director.name])
-      ),
-    [allDirectors]
+  const directorMap = new Map(
+    allDirectors.map((director: any) => [director.id, director.name])
   );
-  const sellerMap = useMemo(
-    () =>
-      new Map(
-        allSellers.map((seller: any) => [seller.id, seller.name])
-      ),
-    [allSellers]
+  const sellerMap = new Map(
+    allSellers.map((seller: any) => [seller.id, seller.name])
   );
 
-  const filteredSales = useMemo(() => {
-    return (sales as any[])
-      .filter((sale: any) => {
-        const saleDate = toIsoDate(sale.saleDate);
-        if (!saleDate) return false;
-        if (reportMode === "day") {
-          return saleDate === reportDate;
-        }
-        return saleDate >= normalizedStartDate && saleDate <= normalizedEndDate;
-      })
-      .sort((a: any, b: any) => toIsoDate(b.saleDate).localeCompare(toIsoDate(a.saleDate)));
-  }, [sales, reportMode, reportDate, normalizedStartDate, normalizedEndDate]);
+  const filteredSales = (sales as any[])
+    .filter((sale: any) => {
+      const saleDate = toIsoDate(sale.saleDate);
+      if (!saleDate) return false;
+      if (reportMode === "day") {
+        return saleDate === reportDate;
+      }
+      return saleDate >= normalizedStartDate && saleDate <= normalizedEndDate;
+    })
+    .sort((a: any, b: any) => toIsoDate(b.saleDate).localeCompare(toIsoDate(a.saleDate)));
 
   const totalUnits = filteredSales.reduce((sum: number, sale: any) => {
     const qty = Number.parseInt(String(sale.quantity || 0), 10);

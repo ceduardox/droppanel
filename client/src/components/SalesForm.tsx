@@ -284,20 +284,6 @@ export default function SalesForm({ products, directors, sellers, onSubmit }: Sa
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="unitTransport">Transporte por Venta (Bs)</Label>
-              <Input
-                id="unitTransport"
-                data-testid="input-unit-transport"
-                type="number"
-                step="0.01"
-                min="0"
-                value={unitTransport}
-                onChange={(e) => setUnitTransport(e.target.value)}
-                required
-              />
-            </div>
-
             <Button type="submit" className="w-full" data-testid="button-submit-sale">
               Registrar Venta
             </Button>

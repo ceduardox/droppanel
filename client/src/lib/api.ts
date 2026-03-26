@@ -255,6 +255,7 @@ export function useCreateSale() {
       unitTransport: number;
       sellerId?: string | null;
       directorId?: string | null;
+      deliveryId?: string | null;
     }) => {
       return apiRequest("/api/sales", {
         method: "POST",
@@ -298,6 +299,7 @@ export function useUpdateSale() {
         unitTransport?: string;
         sellerId?: string | null;
         directorId?: string | null;
+        deliveryId?: string | null;
       };
     }) => {
       return apiRequest(`/api/sales/${id}`, {

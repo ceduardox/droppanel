@@ -29,10 +29,16 @@ interface Seller {
   directorId?: string | null;
 }
 
+interface Delivery {
+  id: string;
+  name: string;
+}
+
 interface SalesFormProps {
   products: Product[];
   directors: Director[];
   sellers: Seller[];
+  deliveries: Delivery[];
   onSubmit: (data: {
     productId: string;
     quantity: number;
@@ -41,15 +47,17 @@ interface SalesFormProps {
     unitTransport: number;
     sellerId?: string | null;
     directorId?: string | null;
+    deliveryId?: string | null;
   }) => void;
 }
 
-export default function SalesForm({ products, directors, sellers, onSubmit }: SalesFormProps) {
+export default function SalesForm({ products, directors, sellers, deliveries, onSubmit }: SalesFormProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [productId, setProductId] = useState("");
   const [directorId, setDirectorId] = useState("none");
   const [sellerId, setSellerId] = useState("none");
+  const [deliveryId, setDeliveryId] = useState("none");
   const [quantity, setQuantity] = useState("1");
   const [unitPrice, setUnitPrice] = useState("");
   const [unitTransport, setUnitTransport] = useState("");
@@ -60,6 +68,7 @@ export default function SalesForm({ products, directors, sellers, onSubmit }: Sa
   const selectedProduct = products.find((product) => product.id === productId);
   const selectedSeller = sellers.find((seller) => seller.id === sellerId);
   const selectedDirector = directors.find((director) => director.id === directorId);
+  const selectedDelivery = deliveries.find((delivery) => delivery.id === deliveryId);
   const sellersForSelection =
     directorId === "none" ? sellers : sellers.filter((seller) => seller.directorId === directorId);
   const parsedUnitPrice = Number.parseFloat(unitPrice || "0");
@@ -144,6 +153,7 @@ export default function SalesForm({ products, directors, sellers, onSubmit }: Sa
 
     let finalDirectorId = directorId === "none" ? null : directorId;
     const finalSellerId = sellerId === "none" ? null : sellerId;
+    const finalDeliveryId = deliveryId === "none" ? null : deliveryId;
 
     if (finalSellerId && !finalDirectorId && selectedSeller?.directorId) {
       finalDirectorId = selectedSeller.directorId;
@@ -157,6 +167,7 @@ export default function SalesForm({ products, directors, sellers, onSubmit }: Sa
       unitTransport: safeUnitTransport,
       sellerId: finalSellerId,
       directorId: finalDirectorId,
+      deliveryId: finalDeliveryId,
     });
     setQuantity("1");
   };
@@ -186,7 +197,7 @@ export default function SalesForm({ products, directors, sellers, onSubmit }: Sa
               </Select>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="director">Director (opcional)</Label>
                 <Select value={directorId} onValueChange={setDirectorId}>
@@ -220,19 +231,43 @@ export default function SalesForm({ products, directors, sellers, onSubmit }: Sa
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="delivery">Delivery (opcional)</Label>
+                <Select value={deliveryId} onValueChange={setDeliveryId}>
+                  <SelectTrigger id="delivery" data-testid="select-sale-delivery">
+                    <SelectValue placeholder="Sin delivery" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin delivery</SelectItem>
+                    {deliveries.map((delivery) => (
+                      <SelectItem key={delivery.id} value={delivery.id}>
+                        {delivery.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            {(selectedDirector || selectedSeller) && (
+            {(selectedDirector || selectedSeller || selectedDelivery) && (
               <div className="rounded-lg border border-[#d2def1] bg-[#f4f8ff] px-3 py-2 text-xs text-[#24406f]">
                 <span className="font-semibold">Venta atribuida:</span>{" "}
                 {selectedDirector ? selectedDirector.name : "Sin director"} /{" "}
-                {selectedSeller ? selectedSeller.name : "Sin vendedor"}
+                {selectedSeller ? selectedSeller.name : "Sin vendedor"} /{" "}
+                {selectedDelivery ? selectedDelivery.name : "Sin delivery"}
               </div>
             )}
 
             {sellers.length === 0 && (
               <p className="text-xs text-muted-foreground">
                 No hay vendedores activos en Equipo Comercial.
+              </p>
+            )}
+
+            {deliveries.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No hay deliveries registrados en Gestion de Delivery.
               </p>
             )}
 
@@ -306,7 +341,9 @@ export default function SalesForm({ products, directors, sellers, onSubmit }: Sa
             <p className="mt-1 text-sm">
               {selectedSeller ? selectedSeller.name : "Sin vendedor"}{" "}
               <span className="text-muted-foreground">|</span>{" "}
-              {selectedDirector ? selectedDirector.name : "Sin director"}
+              {selectedDirector ? selectedDirector.name : "Sin director"}{" "}
+              <span className="text-muted-foreground">|</span>{" "}
+              {selectedDelivery ? selectedDelivery.name : "Sin delivery"}
             </p>
           </div>
 

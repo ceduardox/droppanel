@@ -15,6 +15,11 @@ const mockSellers = [
   { id: "s2", name: "Vendedor B", directorId: "d2" },
 ];
 
+const mockDeliveries = [
+  { id: "del1", name: "Delivery Centro" },
+  { id: "del2", name: "Delivery Norte" },
+];
+
 export default function SalesFormExample() {
   return (
     <div className="p-6 bg-background">
@@ -22,6 +27,7 @@ export default function SalesFormExample() {
         products={mockProducts}
         directors={mockDirectors}
         sellers={mockSellers}
+        deliveries={mockDeliveries}
         onSubmit={(data) => console.log("Sale submitted:", data)}
       />
     </div>

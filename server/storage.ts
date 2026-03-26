@@ -117,6 +117,7 @@ export interface IStorage {
       saleDate?: string;
       sellerId?: string | null;
       directorId?: string | null;
+      deliveryId?: string | null;
     }
   ): Promise<Sale | undefined>;
   updateSaleDate(id: string, saleDate: string): Promise<Sale | undefined>;
@@ -427,6 +428,7 @@ export class DbStorage implements IStorage {
       saleDate?: string;
       sellerId?: string | null;
       directorId?: string | null;
+      deliveryId?: string | null;
     }
   ): Promise<Sale | undefined> {
     const result = await db

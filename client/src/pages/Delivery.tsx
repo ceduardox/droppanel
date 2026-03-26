@@ -29,6 +29,7 @@ import {
   useDeleteDeliveryStockEntry,
   useCreateDeliveryAssignment,
   useDeliveryAssignments,
+  useSales,
   useDeliveryAssignmentAudit,
   useUpdateDeliveryAssignment,
   useDeleteDeliveryAssignment,
@@ -77,6 +78,7 @@ export default function Delivery() {
   const { data: products = [], isLoading: productsLoading } = useProducts() as { data: any[], isLoading: boolean };
   const { data: stockEntries = [] } = useDeliveryStockEntries() as { data: any[] };
   const { data: deliveryAssignments = [] } = useDeliveryAssignments() as { data: any[] };
+  const { data: sales = [] } = useSales() as { data: any[] };
   const { data: report, isLoading: reportLoading } = useDeliveryAssignmentsReport(reportStartDate, reportEndDate);
   const { data: assignmentAudit = [] } = useDeliveryAssignmentAudit(reportStartDate, reportEndDate) as { data: any[] };
 
@@ -328,9 +330,15 @@ export default function Delivery() {
 
   const deliveryAvailableBalance = new Map<string, number>();
   deliveryAssignments.forEach((assignment: any) => {
-    if (assignment.isPaid === 1) return;
     const current = deliveryAvailableBalance.get(assignment.deliveryId) || 0;
     deliveryAvailableBalance.set(assignment.deliveryId, current + assignment.quantity);
+  });
+  sales.forEach((sale: any) => {
+    if (!sale.deliveryId) return;
+    const soldQty = Number.parseInt(String(sale.quantity ?? 0), 10);
+    if (!Number.isFinite(soldQty) || soldQty <= 0) return;
+    const current = deliveryAvailableBalance.get(sale.deliveryId) || 0;
+    deliveryAvailableBalance.set(sale.deliveryId, current - soldQty);
   });
 
   const bentoCardClass =

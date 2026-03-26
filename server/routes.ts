@@ -189,6 +189,51 @@ const clampStartDate = (startDate: string, minDate?: string | null): string => {
   return startDate < minDate ? minDate : startDate;
 };
 
+const normalizeOptionalId = (value: unknown): string | null => {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+  if (normalized.toLowerCase() === "none") return null;
+  return normalized;
+};
+
+const parseSafeInteger = (value: unknown): number => {
+  const parsed = Number.parseInt(String(value ?? 0), 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getDeliveryProductAvailability = async (params: {
+  userId: string;
+  deliveryId: string;
+  productId: string;
+  excludeSaleId?: string;
+}) => {
+  const { userId, deliveryId, productId, excludeSaleId } = params;
+  const [assignments, sales] = await Promise.all([
+    storage.getDeliveryAssignments(userId),
+    storage.getSales(userId),
+  ]);
+
+  const assignedTotal = assignments.reduce((sum, assignment) => {
+    if (assignment.deliveryId !== deliveryId) return sum;
+    if (assignment.productId !== productId) return sum;
+    return sum + parseSafeInteger(assignment.quantity);
+  }, 0);
+
+  const sold = sales.reduce((sum, sale) => {
+    if (excludeSaleId && sale.id === excludeSaleId) return sum;
+    if (sale.deliveryId !== deliveryId) return sum;
+    if (sale.productId !== productId) return sum;
+    return sum + parseSafeInteger(sale.quantity);
+  }, 0);
+
+  return {
+    assignedTotal,
+    sold,
+    available: assignedTotal - sold,
+  };
+};
+
 type AccessContext = {
   role: string;
   isAccountant: boolean;
@@ -713,6 +758,11 @@ async function ensureSystemTables() {
   await db.execute(sql`
     ALTER TABLE sales
     ADD COLUMN IF NOT EXISTS director_id varchar;
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE sales
+    ADD COLUMN IF NOT EXISTS delivery_id varchar;
   `);
 
   await db.execute(sql`
@@ -1498,7 +1548,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/sales", requireAuth, async (req, res) => {
     try {
-      const { productId, quantity, date, unitPrice, unitTransport, sellerId, directorId } = req.body;
+      const { productId, quantity, date, unitPrice, unitTransport, sellerId, directorId, deliveryId } = req.body;
       const userId = getEffectiveUserId(req);
       
       const product = await storage.getProduct(productId);
@@ -1555,14 +1605,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const normalizedSellerId =
-        sellerId === undefined || sellerId === null || String(sellerId).trim() === ""
-          ? null
-          : String(sellerId).trim();
-      const normalizedDirectorIdInput =
-        directorId === undefined || directorId === null || String(directorId).trim() === ""
-          ? null
-          : String(directorId).trim();
+      const normalizedSellerId = normalizeOptionalId(sellerId);
+      const normalizedDirectorIdInput = normalizeOptionalId(directorId);
+      const normalizedDeliveryId = normalizeOptionalId(deliveryId);
 
       let seller: Awaited<ReturnType<typeof storage.getSeller>> | null = null;
       if (normalizedSellerId) {
@@ -1594,6 +1639,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      if (normalizedDeliveryId) {
+        const deliveries = await storage.getDeliveries(userId);
+        const exists = deliveries.some((delivery) => delivery.id === normalizedDeliveryId);
+        if (!exists) {
+          return res.status(404).json({ error: "Delivery no encontrado" });
+        }
+
+        const availability = await getDeliveryProductAvailability({
+          userId,
+          deliveryId: normalizedDeliveryId,
+          productId,
+        });
+
+        if (parsedQuantity > availability.available) {
+          return res.status(400).json({
+            error: `Stock insuficiente en delivery. Disponible: ${availability.available} und`,
+          });
+        }
+      }
+
       const sale = await storage.createSale({
         productId,
         quantity: parsedQuantity,
@@ -1601,6 +1666,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         unitTransport: parsedUnitTransport.toFixed(2),
         sellerId: normalizedSellerId,
         directorId: finalDirectorId,
+        deliveryId: normalizedDeliveryId,
         saleDate: date,
         userId,
       });
@@ -1725,6 +1791,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const hasSellerId = Object.prototype.hasOwnProperty.call(req.body, "sellerId");
       const hasDirectorId = Object.prototype.hasOwnProperty.call(req.body, "directorId");
+      const hasDeliveryId = Object.prototype.hasOwnProperty.call(req.body, "deliveryId");
 
       const nextProductId =
         req.body.productId !== undefined && req.body.productId !== null && String(req.body.productId).trim() !== ""
@@ -1784,14 +1851,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const normalizedSellerIdInput =
-        req.body.sellerId === undefined || req.body.sellerId === null || String(req.body.sellerId).trim() === ""
-          ? null
-          : String(req.body.sellerId).trim();
-      const normalizedDirectorIdInput =
-        req.body.directorId === undefined || req.body.directorId === null || String(req.body.directorId).trim() === ""
-          ? null
-          : String(req.body.directorId).trim();
+      const normalizedSellerIdInput = normalizeOptionalId(req.body.sellerId);
+      const normalizedDirectorIdInput = normalizeOptionalId(req.body.directorId);
+      const normalizedDeliveryIdInput = normalizeOptionalId(req.body.deliveryId);
 
       let finalSellerId: string | null = hasSellerId
         ? normalizedSellerIdInput
@@ -1799,6 +1861,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let finalDirectorId: string | null = hasDirectorId
         ? normalizedDirectorIdInput
         : (currentSale.directorId as string | null) ?? null;
+      const finalDeliveryId: string | null = hasDeliveryId
+        ? normalizedDeliveryIdInput
+        : (currentSale.deliveryId as string | null) ?? null;
       const currentSellerId = (currentSale.sellerId as string | null) ?? null;
       const currentDirectorId = (currentSale.directorId as string | null) ?? null;
 
@@ -1830,6 +1895,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      if (finalDeliveryId) {
+        const deliveries = await storage.getDeliveries(userId);
+        const exists = deliveries.some((delivery) => delivery.id === finalDeliveryId);
+        if (!exists) {
+          return res.status(404).json({ error: "Delivery no encontrado" });
+        }
+
+        const availability = await getDeliveryProductAvailability({
+          userId,
+          deliveryId: finalDeliveryId,
+          productId: nextProductId,
+          excludeSaleId: id,
+        });
+
+        if (parsedQuantity > availability.available) {
+          return res.status(400).json({
+            error: `Stock insuficiente en delivery. Disponible: ${availability.available} und`,
+          });
+        }
+      }
+
       const saleDate =
         req.body.saleDate !== undefined && req.body.saleDate !== null && String(req.body.saleDate).trim() !== ""
           ? String(req.body.saleDate)
@@ -1843,6 +1929,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         saleDate,
         sellerId: finalSellerId,
         directorId: finalDirectorId,
+        deliveryId: finalDeliveryId,
       });
       if (!sale) {
         return res.status(404).json({ error: "Venta no encontrada" });

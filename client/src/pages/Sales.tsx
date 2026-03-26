@@ -3,6 +3,7 @@ import SalesForm from "@/components/SalesForm";
 import {
   useCreateSale,
   useDeleteSale,
+  useDeliveries,
   useDirectors,
   useProducts,
   useSales,
@@ -54,6 +55,7 @@ type SaleEditDraft = {
   productId: string;
   sellerId: string;
   directorId: string;
+  deliveryId: string;
   quantity: string;
   unitPrice: string;
   saleDate: string;
@@ -65,6 +67,7 @@ export default function Sales() {
   const { data: products = [], isLoading } = useProducts();
   const { data: directors = [], isLoading: loadingDirectors } = useDirectors();
   const { data: sellers = [], isLoading: loadingSellers } = useSellers();
+  const { data: deliveries = [], isLoading: loadingDeliveries } = useDeliveries();
   const { data: sales = [], isLoading: loadingSales } = useSales();
   const createSale = useCreateSale();
   const updateSale = useUpdateSale();
@@ -80,6 +83,7 @@ export default function Sales() {
   const [textReportEndDate, setTextReportEndDate] = useState(todayIso);
   const [textFilterDirector, setTextFilterDirector] = useState("all");
   const [textFilterSeller, setTextFilterSeller] = useState("all");
+  const [textFilterDelivery, setTextFilterDelivery] = useState("all");
   const [textIncludeSaleDate, setTextIncludeSaleDate] = useState(true);
   const [textIncludeProduct, setTextIncludeProduct] = useState(true);
   const [textIncludeQuantity, setTextIncludeQuantity] = useState(true);
@@ -87,6 +91,7 @@ export default function Sales() {
   const [textIncludeLineTotal, setTextIncludeLineTotal] = useState(true);
   const [textIncludeSeller, setTextIncludeSeller] = useState(true);
   const [textIncludeDirector, setTextIncludeDirector] = useState(true);
+  const [textIncludeDelivery, setTextIncludeDelivery] = useState(true);
   const [textIncludeSummary, setTextIncludeSummary] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
@@ -101,6 +106,7 @@ export default function Sales() {
     unitTransport: number;
     sellerId?: string | null;
     directorId?: string | null;
+    deliveryId?: string | null;
   }) => {
     try {
       await createSale.mutateAsync(data);
@@ -121,7 +127,7 @@ export default function Sales() {
     return <div className="flex items-center justify-center h-64">Cargando...</div>;
   }
 
-  if (loadingDirectors || loadingSellers) {
+  if (loadingDirectors || loadingSellers || loadingDeliveries) {
     return <div className="flex items-center justify-center h-64">Cargando equipo comercial...</div>;
   }
 
@@ -132,6 +138,7 @@ export default function Sales() {
   const allProducts = products as any[];
   const allDirectors = directors as any[];
   const allSellers = sellers as any[];
+  const allDeliveries = deliveries as any[];
   const allSales = sales as any[];
 
   const activeProducts = (products as any[]).filter((p: any) => p.isActive !== false);
@@ -158,6 +165,11 @@ export default function Sales() {
     directorId: s.directorId || null,
   }));
 
+  const formattedDeliveries = allDeliveries.map((delivery: any) => ({
+    id: delivery.id,
+    name: delivery.name,
+  }));
+
   const normalizedStartDate =
     reportStartDate <= reportEndDate ? reportStartDate : reportEndDate;
   const normalizedEndDate =
@@ -176,6 +188,9 @@ export default function Sales() {
   const sellerMap = new Map(
     allSellers.map((seller: any) => [seller.id, seller.name])
   );
+  const deliveryMap = new Map(
+    allDeliveries.map((delivery: any) => [delivery.id, delivery.name])
+  );
 
   const startEdit = (sale: any) => {
     const product = productMap.get(sale.productId);
@@ -187,6 +202,7 @@ export default function Sales() {
       productId: String(sale.productId || ""),
       sellerId: toSelectValue(sale.sellerId),
       directorId: toSelectValue(sale.directorId),
+      deliveryId: toSelectValue(sale.deliveryId),
       quantity: String(Number.isFinite(quantity) && quantity > 0 ? quantity : 1),
       unitPrice: Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice.toFixed(2) : "0.00",
       saleDate: toIsoDate(sale.saleDate) || todayIso,
@@ -323,6 +339,7 @@ export default function Sales() {
           saleDate: editDraft.saleDate,
           sellerId: editDraft.sellerId === "none" ? null : editDraft.sellerId,
           directorId: editDraft.directorId === "none" ? null : editDraft.directorId,
+          deliveryId: editDraft.deliveryId === "none" ? null : editDraft.deliveryId,
         },
       });
       toast({
@@ -396,6 +413,7 @@ export default function Sales() {
   const editingSaleProductId = editingSale ? String(editingSale.productId || "") : "";
   const editingSaleSellerId = editingSale ? toSelectValue(editingSale.sellerId) : "none";
   const editingSaleDirectorId = editingSale ? toSelectValue(editingSale.directorId) : "none";
+  const editingSaleDeliveryId = editingSale ? toSelectValue(editingSale.deliveryId) : "none";
 
   const productOptions = [...activeProducts];
   if (editingSaleProductId && !productOptions.some((candidate: any) => candidate.id === editingSaleProductId)) {
@@ -427,6 +445,15 @@ export default function Sales() {
     }
   }
 
+  const draftDeliveryId = editDraft?.deliveryId ?? editingSaleDeliveryId;
+  const deliveryOptions = [...allDeliveries];
+  if (draftDeliveryId !== "none" && !deliveryOptions.some((candidate: any) => candidate.id === draftDeliveryId)) {
+    const currentDelivery = allDeliveries.find((candidate: any) => candidate.id === draftDeliveryId);
+    if (currentDelivery) {
+      deliveryOptions.push(currentDelivery);
+    }
+  }
+
   const modalQuantity = Number.parseInt(editDraft?.quantity || "0", 10);
   const modalUnitPrice = Number.parseFloat(editDraft?.unitPrice || "0");
   const modalTotal =
@@ -438,6 +465,7 @@ export default function Sales() {
     const productName = product?.name || "Producto";
     const sellerName = sale.sellerId ? sellerMap.get(sale.sellerId) || "Vendedor" : "-";
     const directorName = sale.directorId ? directorMap.get(sale.directorId) || "Director" : "-";
+    const deliveryName = sale.deliveryId ? deliveryMap.get(sale.deliveryId) || "Delivery" : "-";
     const qty = Number.parseInt(String(sale.quantity || 0), 10);
     const safeQty = Number.isFinite(qty) ? qty : 0;
     const unitPrice = Number.parseFloat(String(sale.unitPrice ?? product?.price ?? 0));
@@ -448,6 +476,7 @@ export default function Sales() {
       productName,
       sellerName,
       directorName,
+      deliveryName,
       safeQty,
       safeUnitPrice,
       total: safeQty * safeUnitPrice,
@@ -465,6 +494,12 @@ export default function Sales() {
       : textFilterSeller === "none"
         ? "Sin vendedor"
         : sellerMap.get(textFilterSeller) || "Vendedor";
+  const selectedTextDeliveryLabel =
+    textFilterDelivery === "all"
+      ? "Todos"
+      : textFilterDelivery === "none"
+        ? "Sin delivery"
+        : deliveryMap.get(textFilterDelivery) || "Delivery";
 
   const textSalesFiltered = allSales
     .filter((sale: any) => {
@@ -489,8 +524,14 @@ export default function Sales() {
           : textFilterSeller === "none"
             ? !sale.sellerId
             : sale.sellerId === textFilterSeller;
+      const matchDelivery =
+        textFilterDelivery === "all"
+          ? true
+          : textFilterDelivery === "none"
+            ? !sale.deliveryId
+            : sale.deliveryId === textFilterDelivery;
 
-      return matchDate && matchDirector && matchSeller;
+      return matchDate && matchDirector && matchSeller && matchDelivery;
     })
     .sort((a: any, b: any) => toIsoDate(a.saleDate).localeCompare(toIsoDate(b.saleDate)));
 
@@ -528,6 +569,7 @@ export default function Sales() {
     lines.push(`Periodo: ${textReportPeriodLabel}`);
     lines.push(`Director: ${selectedTextDirectorLabel}`);
     lines.push(`Vendedor: ${selectedTextSellerLabel}`);
+    lines.push(`Delivery: ${selectedTextDeliveryLabel}`);
     lines.push("");
 
     if (textReportRows.length === 0) {
@@ -544,6 +586,7 @@ export default function Sales() {
       if (textIncludeLineTotal) lines.push(`Total: ${row.total.toFixed(2)} Bs`);
       if (textIncludeSeller) lines.push(`Vendedor: ${row.sellerName}`);
       if (textIncludeDirector) lines.push(`Director: ${row.directorName}`);
+      if (textIncludeDelivery) lines.push(`Delivery: ${row.deliveryName}`);
       lines.push("");
     });
 
@@ -575,6 +618,7 @@ export default function Sales() {
           products={formattedProducts}
           directors={formattedDirectors}
           sellers={formattedSellers}
+          deliveries={formattedDeliveries}
           onSubmit={handleSubmit}
         />
       )}
@@ -670,6 +714,7 @@ export default function Sales() {
                       <th className="p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Producto</th>
                       <th className="p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vendedor</th>
                       <th className="p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Director</th>
+                      <th className="p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Delivery</th>
                       <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cantidad</th>
                       <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">P. Unit</th>
                       <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total</th>
@@ -687,6 +732,7 @@ export default function Sales() {
                           </td>
                           <td className="p-3 text-sm">{row.sellerName}</td>
                           <td className="p-3 text-sm">{row.directorName}</td>
+                          <td className="p-3 text-sm">{row.deliveryName}</td>
                           <td className="p-3 text-right text-sm">{row.safeQty}</td>
                           <td className="p-3 text-right text-sm">{row.safeUnitPrice.toFixed(2)} Bs</td>
                           <td className="p-3 text-right text-sm font-semibold">{row.total.toFixed(2)} Bs</td>
@@ -742,6 +788,9 @@ export default function Sales() {
 
                         <span className="text-xs text-muted-foreground">Director</span>
                         <span className="text-right">{row.directorName}</span>
+
+                        <span className="text-xs text-muted-foreground">Delivery</span>
+                        <span className="text-right">{row.deliveryName}</span>
 
                         <span className="text-xs text-muted-foreground">Cantidad</span>
                         <span className="text-right">{row.safeQty}</span>
@@ -854,7 +903,7 @@ export default function Sales() {
             </div>
           )}
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-2">
               <Label>Director</Label>
               <Select
@@ -891,6 +940,24 @@ export default function Sales() {
                   {textSellerOptions.map((seller: any) => (
                     <SelectItem key={seller.id} value={seller.id}>
                       {seller.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Delivery</Label>
+              <Select value={textFilterDelivery} onValueChange={setTextFilterDelivery}>
+                <SelectTrigger data-testid="select-sales-text-filter-delivery">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos deliveries</SelectItem>
+                  <SelectItem value="none">Sin delivery</SelectItem>
+                  {allDeliveries.map((delivery: any) => (
+                    <SelectItem key={delivery.id} value={delivery.id}>
+                      {delivery.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -958,6 +1025,14 @@ export default function Sales() {
                 />
               </label>
               <label className="flex items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm">
+                Delivery
+                <Checkbox
+                  checked={textIncludeDelivery}
+                  onCheckedChange={(checked) => setTextIncludeDelivery(checked === true)}
+                  data-testid="checkbox-sales-text-include-delivery"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2 rounded border bg-white px-3 py-2 text-sm">
                 Resumen final
                 <Checkbox
                   checked={textIncludeSummary}
@@ -1003,7 +1078,7 @@ export default function Sales() {
           <DialogHeader>
             <DialogTitle>Editar venta</DialogTitle>
             <DialogDescription>
-              Actualiza producto, vendedor, director, cantidad, monto y fecha sin salir de esta pagina.
+              Actualiza producto, vendedor, director, delivery, cantidad, monto y fecha sin salir de esta pagina.
             </DialogDescription>
           </DialogHeader>
 
@@ -1069,7 +1144,7 @@ export default function Sales() {
                 </Select>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-2">
                   <Label>Director</Label>
                   <Select value={editDraft.directorId} onValueChange={handleEditDirectorChange}>
@@ -1100,6 +1175,35 @@ export default function Sales() {
                         <SelectItem key={candidate.id} value={candidate.id}>
                           {candidate.name}
                           {candidate.isActive === false ? " (Inactivo)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Delivery</Label>
+                  <Select
+                    value={editDraft.deliveryId}
+                    onValueChange={(value) =>
+                      setEditDraft((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              deliveryId: value,
+                            }
+                          : prev
+                      )
+                    }
+                  >
+                    <SelectTrigger data-testid="select-sale-edit-delivery">
+                      <SelectValue placeholder="Sin delivery" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin delivery</SelectItem>
+                      {deliveryOptions.map((candidate: any) => (
+                        <SelectItem key={candidate.id} value={candidate.id}>
+                          {candidate.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

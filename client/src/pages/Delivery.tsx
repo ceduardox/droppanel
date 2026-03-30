@@ -1,5 +1,6 @@
 ﻿import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMemo } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, TruckIcon, Pencil, Trash2, Check, X, Calendar as CalendarIcon, ArrowRight } from "lucide-react";
+import { Plus, TruckIcon, Pencil, Trash2, Check, X, Calendar as CalendarIcon, ArrowRight, Boxes, Clock3, Search, PackageSearch } from "lucide-react";
 import {
   useDeliveries,
   useCreateDelivery,
@@ -49,6 +50,10 @@ export default function Delivery() {
   const [stockQuantity, setStockQuantity] = useState("");
   const [stockNote, setStockNote] = useState("");
   const [stockEntryDate, setStockEntryDate] = useState("");
+  const [stockSearchQuery, setStockSearchQuery] = useState("");
+  const [stockProductsPage, setStockProductsPage] = useState(1);
+  const [stockHistoryProductId, setStockHistoryProductId] = useState("all");
+  const [stockEntriesPage, setStockEntriesPage] = useState(1);
 
   // Stock editing state
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
@@ -318,29 +323,36 @@ export default function Delivery() {
     }
   };
 
-  // Calculate stock balance per product
-  const stockBalance = new Map<string, number>();
-  stockEntries.forEach((entry: any) => {
-    const current = stockBalance.get(entry.productId) || 0;
-    stockBalance.set(entry.productId, current + entry.quantity);
-  });
-  deliveryAssignments.forEach((assignment: any) => {
-    const current = stockBalance.get(assignment.productId) || 0;
-    stockBalance.set(assignment.productId, current - assignment.quantity);
-  });
+  const getEntryReferenceDate = (entry: any) => entry.entryDate || entry.createdAt || null;
 
-  const deliveryAvailableBalance = new Map<string, number>();
-  deliveryAssignments.forEach((assignment: any) => {
-    const current = deliveryAvailableBalance.get(assignment.deliveryId) || 0;
-    deliveryAvailableBalance.set(assignment.deliveryId, current + assignment.quantity);
-  });
-  sales.forEach((sale: any) => {
-    if (!sale.deliveryId) return;
-    const soldQty = Number.parseInt(String(sale.quantity ?? 0), 10);
-    if (!Number.isFinite(soldQty) || soldQty <= 0) return;
-    const current = deliveryAvailableBalance.get(sale.deliveryId) || 0;
-    deliveryAvailableBalance.set(sale.deliveryId, current - soldQty);
-  });
+  const stockBalance = useMemo(() => {
+    const balance = new Map<string, number>();
+    stockEntries.forEach((entry: any) => {
+      const current = balance.get(entry.productId) || 0;
+      balance.set(entry.productId, current + entry.quantity);
+    });
+    deliveryAssignments.forEach((assignment: any) => {
+      const current = balance.get(assignment.productId) || 0;
+      balance.set(assignment.productId, current - assignment.quantity);
+    });
+    return balance;
+  }, [stockEntries, deliveryAssignments]);
+
+  const deliveryAvailableBalance = useMemo(() => {
+    const balance = new Map<string, number>();
+    deliveryAssignments.forEach((assignment: any) => {
+      const current = balance.get(assignment.deliveryId) || 0;
+      balance.set(assignment.deliveryId, current + assignment.quantity);
+    });
+    sales.forEach((sale: any) => {
+      if (!sale.deliveryId) return;
+      const soldQty = Number.parseInt(String(sale.quantity ?? 0), 10);
+      if (!Number.isFinite(soldQty) || soldQty <= 0) return;
+      const current = balance.get(sale.deliveryId) || 0;
+      balance.set(sale.deliveryId, current - soldQty);
+    });
+    return balance;
+  }, [deliveryAssignments, sales]);
 
   const bentoCardClass =
     "rounded-[2rem] border border-slate-100 bg-white shadow-[0_4px_20px_-5px_rgba(0,0,0,0.05)]";
@@ -363,6 +375,83 @@ export default function Delivery() {
       minute: "2-digit",
     }).format(date);
   };
+  const formatShortDate = (value: string | Date | null | undefined) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return new Intl.DateTimeFormat("es-BO", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(date);
+  };
+
+  const stockProductSummaries = useMemo(() => {
+    return products
+      .map((product: any) => {
+        const relatedEntries = stockEntries
+          .filter((entry: any) => entry.productId === product.id)
+          .sort(
+            (a: any, b: any) =>
+              new Date(getEntryReferenceDate(b) || 0).getTime() - new Date(getEntryReferenceDate(a) || 0).getTime()
+          );
+        const assignedUnits = deliveryAssignments.reduce((sum: number, assignment: any) => {
+          if (assignment.productId !== product.id) return sum;
+          return sum + Number.parseInt(String(assignment.quantity ?? 0), 10);
+        }, 0);
+
+        return {
+          product,
+          balance: stockBalance.get(product.id) || 0,
+          entriesCount: relatedEntries.length,
+          assignedUnits,
+          lastEntryDate: relatedEntries[0] ? getEntryReferenceDate(relatedEntries[0]) : null,
+        };
+      })
+      .sort((a, b) => {
+        if ((b.balance || 0) !== (a.balance || 0)) return (b.balance || 0) - (a.balance || 0);
+        return String(a.product?.name || "").localeCompare(String(b.product?.name || ""));
+      });
+  }, [products, stockEntries, deliveryAssignments, stockBalance]);
+
+  const normalizedStockSearch = stockSearchQuery.trim().toLowerCase();
+  const filteredStockProductSummaries = useMemo(() => {
+    if (!normalizedStockSearch) return stockProductSummaries;
+    return stockProductSummaries.filter((item) =>
+      String(item.product?.name || "").toLowerCase().includes(normalizedStockSearch)
+    );
+  }, [normalizedStockSearch, stockProductSummaries]);
+
+  const stockProductsPerPage = 6;
+  const stockProductsTotalPages = Math.max(1, Math.ceil(filteredStockProductSummaries.length / stockProductsPerPage));
+  const safeStockProductsPage = Math.min(stockProductsPage, stockProductsTotalPages);
+  const paginatedStockProducts = filteredStockProductSummaries.slice(
+    (safeStockProductsPage - 1) * stockProductsPerPage,
+    safeStockProductsPage * stockProductsPerPage
+  );
+
+  const filteredStockEntries = useMemo(() => {
+    const entries =
+      stockHistoryProductId === "all"
+        ? stockEntries
+        : stockEntries.filter((entry: any) => entry.productId === stockHistoryProductId);
+    return [...entries].sort(
+      (a: any, b: any) =>
+        new Date(getEntryReferenceDate(b) || 0).getTime() - new Date(getEntryReferenceDate(a) || 0).getTime()
+    );
+  }, [stockEntries, stockHistoryProductId]);
+
+  const stockEntriesPerPage = 8;
+  const stockEntriesTotalPages = Math.max(1, Math.ceil(filteredStockEntries.length / stockEntriesPerPage));
+  const safeStockEntriesPage = Math.min(stockEntriesPage, stockEntriesTotalPages);
+  const paginatedStockEntries = filteredStockEntries.slice(
+    (safeStockEntriesPage - 1) * stockEntriesPerPage,
+    safeStockEntriesPage * stockEntriesPerPage
+  );
+
+  const stockProductsWithBalance = stockProductSummaries.filter((item) => item.balance > 0).length;
+  const totalUnitsAvailable = stockProductSummaries.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
+  const totalUnitsAssigned = stockProductSummaries.reduce((sum, item) => sum + Math.max(item.assignedUnits, 0), 0);
 
   return (
     <div className="mx-auto w-full max-w-none space-y-5 px-1 sm:px-4 lg:px-6">
@@ -567,144 +656,290 @@ export default function Delivery() {
             </CardContent>
           </Card>
 
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Card className={bentoCardClass}>
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Productos con saldo</p>
+                    <p className="mt-2 text-3xl font-bold text-slate-900">{stockProductsWithBalance}</p>
+                  </div>
+                  <span className="rounded-2xl bg-cyan-50 p-3 text-cyan-600">
+                    <Boxes className="h-5 w-5" />
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className={bentoCardClass}>
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Unidades disponibles</p>
+                    <p className="mt-2 text-3xl font-bold text-slate-900">{totalUnitsAvailable}</p>
+                  </div>
+                  <span className="rounded-2xl bg-emerald-50 p-3 text-emerald-600">
+                    <PackageSearch className="h-5 w-5" />
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className={bentoCardClass}>
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Unidades asignadas</p>
+                    <p className="mt-2 text-3xl font-bold text-slate-900">{totalUnitsAssigned}</p>
+                  </div>
+                  <span className="rounded-2xl bg-violet-50 p-3 text-violet-600">
+                    <TruckIcon className="h-5 w-5" />
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className={bentoCardClass}>
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Movimientos cargados</p>
+                    <p className="mt-2 text-3xl font-bold text-slate-900">{stockEntries.length}</p>
+                  </div>
+                  <span className="rounded-2xl bg-amber-50 p-3 text-amber-600">
+                    <Clock3 className="h-5 w-5" />
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           <Card className={bentoCardClass}>
             <CardHeader className="pb-3">
-              <CardTitle className="text-2xl font-bold text-slate-800">Balance de Stock por Producto</CardTitle>
+              <CardTitle className="text-2xl font-bold text-slate-800">Explorador de Productos</CardTitle>
             </CardHeader>
-            <CardContent>
-              {products.length > 0 ? (
+            <CardContent className="space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                <Label htmlFor="stock-search" className={bentoLabelClass}>Buscar producto</Label>
+                <div className="relative mt-2">
+                  <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    id="stock-search"
+                    value={stockSearchQuery}
+                    onChange={(e) => {
+                      setStockSearchQuery(e.target.value);
+                      setStockProductsPage(1);
+                    }}
+                    placeholder="Ej: Citrato, Berberina, Magnesio"
+                    className={`${bentoInputClass} pl-11`}
+                    data-testid="input-stock-search"
+                  />
+                </div>
+              </div>
+
+              {filteredStockProductSummaries.length > 0 ? (
                 <div className="space-y-3">
-                  {products.map((product: any) => {
-                    const balance = stockBalance.get(product.id) || 0;
-                    return (
-                      <Link key={product.id} href={`/delivery/producto/${product.id}`}>
-                        <div
-                          className="group relative flex cursor-pointer items-start justify-between gap-4 overflow-hidden rounded-2xl border border-slate-200/90 bg-white px-5 py-4 shadow-[0_14px_28px_-18px_rgba(37,99,235,0.45)] transition-all hover:-translate-y-0.5 hover:border-[#9ec2ef] hover:shadow-[0_16px_34px_-16px_rgba(37,99,235,0.35)]"
-                          data-testid={`stock-balance-${product.id}`}
-                        >
-                          <span className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-indigo-500 to-cyan-500" />
-                          <div className="max-w-[68%] space-y-1">
-                            <span className="block break-words text-[1.05rem] font-semibold leading-snug text-slate-800">
-                              {product.name}
-                            </span>
-                            <p className="text-xs font-medium text-[#6c87ab] transition-colors group-hover:text-[#1d4f97]">
-                              Toca para ver historial de vendedores y cantidades
-                            </p>
-                          </div>
-                          <div className="min-w-[98px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right">
-                            <p className={`font-mono text-2xl font-bold leading-none ${balance < 0 ? "text-destructive" : "text-slate-800"}`}>
-                              {balance}
-                            </p>
-                            <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                              Unidades
-                            </p>
-                          </div>
+                  {paginatedStockProducts.map((item) => (
+                    <div
+                      key={item.product.id}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-[0_16px_34px_-20px_rgba(37,99,235,0.18)]"
+                      data-testid={`stock-balance-${item.product.id}`}
+                    >
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-base font-semibold text-slate-900">{item.product.name}</p>
+                          <p className="mt-1 text-xs font-medium text-slate-500">
+                            {item.entriesCount} ingresos registrados • ultimo movimiento {formatShortDate(item.lastEntryDate)}
+                          </p>
                         </div>
-                      </Link>
-                    );
-                  })}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Saldo</p>
+                            <p className={`mt-1 text-lg font-bold ${item.balance < 0 ? "text-rose-600" : "text-slate-900"}`}>
+                              {item.balance}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Asignado</p>
+                            <p className="mt-1 text-lg font-bold text-slate-900">{item.assignedUnits}</p>
+                          </div>
+                          <Link href={`/delivery/producto/${item.product.id}`}>
+                            <Button type="button" variant="outline" size="sm">
+                              Ver historial
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
-                <p className="text-center text-muted-foreground py-8">No hay productos registrados</p>
+                <p className="rounded-2xl border border-dashed border-slate-200 py-10 text-center text-muted-foreground">
+                  No hay productos que coincidan con la busqueda.
+                </p>
+              )}
+
+              {stockProductsTotalPages > 1 && (
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                  <p className="text-sm text-slate-500">
+                    Pagina {safeStockProductsPage} de {stockProductsTotalPages}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStockProductsPage((prev) => Math.max(prev - 1, 1))}
+                      disabled={safeStockProductsPage === 1}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStockProductsPage((prev) => Math.min(prev + 1, stockProductsTotalPages))}
+                      disabled={safeStockProductsPage === stockProductsTotalPages}
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
 
           <Card className={bentoCardClass}>
-            <CardHeader>
-              <CardTitle>Historial de Entradas de Stock</CardTitle>
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <CardTitle>Movimientos de Stock</CardTitle>
+                  <p className="mt-1 text-sm text-slate-500">Historial filtrable y paginado para no saturar la vista.</p>
+                </div>
+                <div className="w-full lg:w-[320px]">
+                  <Label className={bentoLabelClass}>Filtrar por producto</Label>
+                  <Select
+                    value={stockHistoryProductId}
+                    onValueChange={(value) => {
+                      setStockHistoryProductId(value);
+                      setStockEntriesPage(1);
+                    }}
+                  >
+                    <SelectTrigger className={`${bentoInputClass} mt-2`} data-testid="select-stock-history-product">
+                      <SelectValue placeholder="Todos los productos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los productos</SelectItem>
+                      {products.map((product: any) => (
+                        <SelectItem key={product.id} value={product.id}>
+                          {product.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
-              {stockEntries.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">No hay entradas de stock registradas</p>
+            <CardContent className="space-y-4">
+              {filteredStockEntries.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-slate-200 py-10 text-center text-muted-foreground">
+                  No hay entradas de stock para ese filtro.
+                </p>
               ) : (
-                <div className="rounded-lg border">
-                  <table className="w-full">
-                    <thead className="border-b bg-muted/50">
-                      <tr>
-                        <th className="p-3 text-left font-medium">Producto</th>
-                        <th className="p-3 text-center font-medium">Cantidad</th>
-                        <th className="p-3 text-center font-medium">Fecha Entrega</th>
-                        <th className="p-3 text-center font-medium">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {stockEntries.map((entry: any) => {
-                        const product = products.find((p: any) => p.id === entry.productId);
-                        return (
-                          <tr key={entry.id} className="border-b" data-testid={`row-stock-${entry.id}`}>
-                            {editingStockId === entry.id ? (
-                              <>
-                                <td className="p-3">
-                                  <Select value={editStockProductId} onValueChange={setEditStockProductId}>
-                                    <SelectTrigger className="h-8">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {products.map((p: any) => (
-                                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </td>
-                                <td className="p-3">
-                                  <Input
-                                    type="number"
-                                    value={editStockQuantity}
-                                    onChange={(e) => setEditStockQuantity(e.target.value)}
-                                    className="h-8 text-center"
-                                    data-testid="edit-input-stock-quantity"
-                                  />
-                                </td>
-                                <td className="p-3">
-                                  <Input
-                                    type="date"
-                                    value={editStockEntryDate}
-                                    onChange={(e) => setEditStockEntryDate(e.target.value)}
-                                    className="h-8"
-                                    data-testid="edit-input-stock-date"
-                                  />
-                                </td>
-                                <td className="p-3 text-center">
-                                  <div className="flex justify-center gap-1">
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveEditStock} data-testid="button-save-stock">
-                                      <Check className="h-4 w-4 text-green-600" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCancelEditStock} data-testid="button-cancel-stock">
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </td>
-                              </>
-                            ) : (
-                              <>
-                                <td className="p-3 font-medium">{product?.name || "Producto eliminado"}</td>
-                                <td className="p-3 text-center font-mono">{entry.quantity}</td>
-                                <td className="p-3 text-center">
-                                  {entry.entryDate ? (
-                                    <span className="inline-flex items-center gap-1 text-sm">
-                                      <CalendarIcon className="h-3 w-3" />
-                                      {entry.entryDate}
-                                    </span>
-                                  ) : "-"}
-                                </td>
-                                <td className="p-3 text-center">
-                                  <div className="flex justify-center gap-1">
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEditStock(entry)} data-testid={`button-edit-stock-${entry.id}`}>
-                                      <Pencil className="h-3 w-3" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteStock(entry.id)} data-testid={`button-delete-stock-${entry.id}`}>
-                                      <Trash2 className="h-3 w-3 text-red-500" />
-                                    </Button>
-                                  </div>
-                                </td>
-                              </>
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className="rounded-2xl border border-slate-200 bg-white">
+                  <div className="hidden border-b bg-slate-50/80 px-4 py-3 md:grid md:grid-cols-[minmax(220px,1.2fr)_110px_170px_110px] md:items-center md:gap-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Producto</p>
+                    <p className="text-center text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Cantidad</p>
+                    <p className="text-center text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Fecha</p>
+                    <p className="text-center text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Acciones</p>
+                  </div>
+                  <div className="divide-y">
+                    {paginatedStockEntries.map((entry: any) => {
+                      const product = products.find((p: any) => p.id === entry.productId);
+                      return (
+                        <div key={entry.id} className="px-4 py-4" data-testid={`row-stock-${entry.id}`}>
+                          {editingStockId === entry.id ? (
+                            <div className="grid gap-3 md:grid-cols-[minmax(220px,1.2fr)_110px_170px_110px] md:items-center">
+                              <Select value={editStockProductId} onValueChange={setEditStockProductId}>
+                                <SelectTrigger className="h-11">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {products.map((p: any) => (
+                                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                type="number"
+                                value={editStockQuantity}
+                                onChange={(e) => setEditStockQuantity(e.target.value)}
+                                className="h-11 text-center"
+                                data-testid="edit-input-stock-quantity"
+                              />
+                              <Input
+                                type="date"
+                                value={editStockEntryDate}
+                                onChange={(e) => setEditStockEntryDate(e.target.value)}
+                                className="h-11"
+                                data-testid="edit-input-stock-date"
+                              />
+                              <div className="flex justify-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleSaveEditStock} data-testid="button-save-stock">
+                                  <Check className="h-4 w-4 text-green-600" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleCancelEditStock} data-testid="button-cancel-stock">
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="grid gap-3 md:grid-cols-[minmax(220px,1.2fr)_110px_170px_110px] md:items-center">
+                              <div>
+                                <p className="font-semibold text-slate-900">{product?.name || "Producto eliminado"}</p>
+                                <p className="mt-1 text-xs text-slate-500">{entry.note ? entry.note : "Sin nota registrada"}</p>
+                              </div>
+                              <p className="text-center font-mono text-lg font-bold text-slate-900">{entry.quantity}</p>
+                              <p className="text-center text-sm text-slate-600">{formatShortDate(getEntryReferenceDate(entry))}</p>
+                              <div className="flex justify-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleStartEditStock(entry)} data-testid={`button-edit-stock-${entry.id}`}>
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteStock(entry.id)} data-testid={`button-delete-stock-${entry.id}`}>
+                                  <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {stockEntriesTotalPages > 1 && (
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                  <p className="text-sm text-slate-500">
+                    Pagina {safeStockEntriesPage} de {stockEntriesTotalPages}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStockEntriesPage((prev) => Math.max(prev - 1, 1))}
+                      disabled={safeStockEntriesPage === 1}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStockEntriesPage((prev) => Math.min(prev + 1, stockEntriesTotalPages))}
+                      disabled={safeStockEntriesPage === stockEntriesTotalPages}
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>

@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Check, X, Image, Eye, Calendar as CalendarIcon, Upload, Trash2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -212,7 +213,6 @@ export default function Expenses() {
         title: "Categoria actualizada",
         description: "La categoria se actualizo correctamente",
       });
-      setCategoryEditorOpen(false);
       cancelCategoryEdit();
     } catch {
       toast({
@@ -322,12 +322,13 @@ export default function Expenses() {
 
           {editingCategoryId && (
             <>
-              <CommandSeparator />
+              <Separator />
               <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-category-name">Nuevo nombre</Label>
                   <Input
                     id="edit-category-name"
+                    autoFocus
                     value={editingCategoryName}
                     onChange={(e) => setEditingCategoryName(e.target.value)}
                     data-testid={`input-edit-category-name-${editingCategoryId}`}

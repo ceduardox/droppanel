@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import {
   useExpenseCategories,
   useCreateExpenseCategory,
+  useUpdateExpenseCategory,
   useCreateExpense,
   useExpensesSummary,
   useUpdateExpense,
@@ -84,6 +85,8 @@ function DateField({ id, label, value, onChange, testId }: DateFieldProps) {
 export default function Expenses() {
   const { toast } = useToast();
   const [newCategory, setNewCategory] = useState("");
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
@@ -100,6 +103,7 @@ export default function Expenses() {
 
   const { data: categories = [], isLoading: categoriesLoading } = useExpenseCategories() as { data: any[], isLoading: boolean };
   const createCategory = useCreateExpenseCategory();
+  const updateCategory = useUpdateExpenseCategory();
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
@@ -183,6 +187,38 @@ export default function Expenses() {
     }
   };
 
+  const startCategoryEdit = (category: any) => {
+    setEditingCategoryId(category.id);
+    setEditingCategoryName(category.name);
+  };
+
+  const cancelCategoryEdit = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryName("");
+  };
+
+  const saveCategoryEdit = async () => {
+    if (!editingCategoryId || !editingCategoryName.trim()) return;
+
+    try {
+      await updateCategory.mutateAsync({
+        id: editingCategoryId,
+        data: { name: editingCategoryName.trim() },
+      });
+      toast({
+        title: "Categoria actualizada",
+        description: "La categoria se actualizo correctamente",
+      });
+      cancelCategoryEdit();
+    } catch {
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la categoria",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDeleteExpense = async (expenseId: string) => {
     const confirmed = window.confirm("¿Seguro que deseas eliminar este gasto?");
     if (!confirmed) return;
@@ -206,7 +242,7 @@ export default function Expenses() {
         <CardHeader>
           <CardTitle>Crear Categoría de Gasto</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <form onSubmit={handleCreateCategory} className="flex gap-2">
             <Input
               placeholder="Ej: Gasolina, Papel, etc."
@@ -219,6 +255,65 @@ export default function Expenses() {
               Crear
             </Button>
           </form>
+
+          {categoriesLoading ? (
+            <p className="text-sm text-muted-foreground">Cargando categorias...</p>
+          ) : categories.length > 0 ? (
+            <div className="space-y-2">
+              {categories.map((category: any) => (
+                <div
+                  key={category.id}
+                  className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  {editingCategoryId === category.id ? (
+                    <>
+                      <Input
+                        value={editingCategoryName}
+                        onChange={(e) => setEditingCategoryName(e.target.value)}
+                        data-testid={`input-edit-category-name-${category.id}`}
+                      />
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={saveCategoryEdit}
+                          disabled={updateCategory.isPending || !editingCategoryName.trim()}
+                          data-testid={`button-save-category-${category.id}`}
+                        >
+                          <Check className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={cancelCategoryEdit}
+                          data-testid={`button-cancel-category-${category.id}`}
+                        >
+                          <X className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium">{category.name}</span>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => startCategoryEdit(category)}
+                        data-testid={`button-edit-category-${category.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No hay categorias creadas todavia.</p>
+          )}
         </CardContent>
       </Card>
 

@@ -130,6 +130,7 @@ export interface IStorage {
   // Expense Categories
   getExpenseCategories(userId: string): Promise<ExpenseCategory[]>;
   createExpenseCategory(category: InsertExpenseCategory): Promise<ExpenseCategory>;
+  updateExpenseCategory(id: string, userId: string, data: { name: string }): Promise<ExpenseCategory | undefined>;
 
   // Expenses
   getExpenses(userId: string): Promise<Expense[]>;
@@ -480,6 +481,19 @@ export class DbStorage implements IStorage {
 
   async createExpenseCategory(category: InsertExpenseCategory): Promise<ExpenseCategory> {
     const result = await db.insert(expenseCategories).values(category).returning();
+    return result[0];
+  }
+
+  async updateExpenseCategory(
+    id: string,
+    userId: string,
+    data: { name: string }
+  ): Promise<ExpenseCategory | undefined> {
+    const result = await db
+      .update(expenseCategories)
+      .set({ name: data.name })
+      .where(and(eq(expenseCategories.id, id), eq(expenseCategories.userId, userId)))
+      .returning();
     return result[0];
   }
 

@@ -379,6 +379,22 @@ export function useCreateExpenseCategory() {
   });
 }
 
+export function useUpdateExpenseCategory() {
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { name: string } }) => {
+      return apiRequest(`/api/expense-categories/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/expense-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/expenses", "summary"] });
+    },
+  });
+}
+
 // Expenses
 export function useExpenses() {
   return useQuery({

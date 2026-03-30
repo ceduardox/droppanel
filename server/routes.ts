@@ -2026,6 +2026,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/expense-categories/:id", requireAuth, async (req, res) => {
+    try {
+      const name = z.string().trim().min(1, "El nombre es obligatorio").parse(req.body?.name);
+      const category = await storage.updateExpenseCategory(req.params.id, getEffectiveUserId(req), { name });
+
+      if (!category) {
+        return res.status(404).json({ error: "Categoria no encontrada" });
+      }
+
+      res.json(category);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al actualizar categoria" });
+    }
+  });
+
   // Expenses routes
   app.get("/api/expenses", requireAuth, async (req, res) => {
     try {

@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Check, X, Image, Eye, Calendar as CalendarIcon, Upload, Trash2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -85,6 +87,7 @@ function DateField({ id, label, value, onChange, testId }: DateFieldProps) {
 export default function Expenses() {
   const { toast } = useToast();
   const [newCategory, setNewCategory] = useState("");
+  const [categoryEditorOpen, setCategoryEditorOpen] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -209,6 +212,7 @@ export default function Expenses() {
         title: "Categoria actualizada",
         description: "La categoria se actualizo correctamente",
       });
+      setCategoryEditorOpen(false);
       cancelCategoryEdit();
     } catch {
       toast({
@@ -256,66 +260,97 @@ export default function Expenses() {
             </Button>
           </form>
 
-          {categoriesLoading ? (
-            <p className="text-sm text-muted-foreground">Cargando categorias...</p>
-          ) : categories.length > 0 ? (
-            <div className="space-y-2">
-              {categories.map((category: any) => (
-                <div
-                  key={category.id}
-                  className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  {editingCategoryId === category.id ? (
-                    <>
-                      <Input
-                        value={editingCategoryName}
-                        onChange={(e) => setEditingCategoryName(e.target.value)}
-                        data-testid={`input-edit-category-name-${category.id}`}
-                      />
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={saveCategoryEdit}
-                          disabled={updateCategory.isPending || !editingCategoryName.trim()}
-                          data-testid={`button-save-category-${category.id}`}
-                        >
-                          <Check className="h-4 w-4 text-green-600" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={cancelCategoryEdit}
-                          data-testid={`button-cancel-category-${category.id}`}
-                        >
-                          <X className="h-4 w-4 text-red-600" />
-                        </Button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <span className="font-medium">{category.name}</span>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => startCategoryEdit(category)}
-                        data-testid={`button-edit-category-${category.id}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-              ))}
+          <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium">Editar categoria existente</p>
+              <p className="text-sm text-muted-foreground">
+                {categoriesLoading ? "Cargando categorias..." : `${categories.length} categorias registradas`}
+              </p>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No hay categorias creadas todavia.</p>
-          )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCategoryEditorOpen(true)}
+              disabled={categoriesLoading || categories.length === 0}
+              data-testid="button-open-category-editor"
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              Buscar y editar
+            </Button>
+          </div>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={categoryEditorOpen}
+        onOpenChange={(open) => {
+          setCategoryEditorOpen(open);
+          if (!open) {
+            cancelCategoryEdit();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Editar categoria</DialogTitle>
+            <DialogDescription>
+              Busca una categoria y cambia su nombre sin mostrar una lista larga en la pagina.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="overflow-hidden rounded-lg border">
+            <Command shouldFilter>
+              <CommandInput placeholder="Buscar categoria..." />
+              <CommandList>
+                <CommandEmpty>No se encontraron categorias.</CommandEmpty>
+                <CommandGroup heading="Categorias">
+                  {categories.map((category: any) => (
+                    <CommandItem
+                      key={category.id}
+                      value={`${category.name} ${category.id}`}
+                      onSelect={() => startCategoryEdit(category)}
+                      data-testid={`button-edit-category-${category.id}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      <span>{category.name}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </div>
+
+          {editingCategoryId && (
+            <>
+              <CommandSeparator />
+              <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category-name">Nuevo nombre</Label>
+                  <Input
+                    id="edit-category-name"
+                    value={editingCategoryName}
+                    onChange={(e) => setEditingCategoryName(e.target.value)}
+                    data-testid={`input-edit-category-name-${editingCategoryId}`}
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="ghost" onClick={cancelCategoryEdit}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={saveCategoryEdit}
+                    disabled={updateCategory.isPending || !editingCategoryName.trim()}
+                    data-testid={`button-save-category-${editingCategoryId}`}
+                  >
+                    Guardar cambio
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>

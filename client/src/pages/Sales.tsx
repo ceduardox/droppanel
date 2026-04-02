@@ -87,6 +87,8 @@ export default function Sales() {
   const [reportDate, setReportDate] = useState(todayIso);
   const [reportStartDate, setReportStartDate] = useState(todayIso);
   const [reportEndDate, setReportEndDate] = useState(todayIso);
+  const [reportSellerSelectionById, setReportSellerSelectionById] = useState<Record<string, boolean>>({});
+  const [reportIncludeUnassignedSeller, setReportIncludeUnassignedSeller] = useState(true);
   const [textReportMode, setTextReportMode] = useState<"day" | "range">("day");
   const [textReportDate, setTextReportDate] = useState(todayIso);
   const [textReportStartDate, setTextReportStartDate] = useState(todayIso);
@@ -197,6 +199,17 @@ export default function Sales() {
     id: delivery.id,
     name: delivery.name,
   }));
+
+  const reportSellers = [...allSellers].sort((a: any, b: any) =>
+    String(a?.name || "").localeCompare(String(b?.name || ""))
+  );
+
+  const selectedReportSellerIds = reportSellers
+    .filter((seller: any) => reportSellerSelectionById[seller.id] !== false)
+    .map((seller: any) => seller.id);
+  const selectedReportSellerIdSet = new Set(selectedReportSellerIds);
+  const reportSelectedDropshippersCount = selectedReportSellerIds.length;
+  const reportTotalDropshippersCount = reportSellers.length;
 
   const normalizedStartDate =
     reportStartDate <= reportEndDate ? reportStartDate : reportEndDate;
@@ -448,7 +461,32 @@ export default function Sales() {
     }
   };
 
-  const filteredSales = (allSales as any[])
+  const handleToggleReportSeller = (sellerId: string, checked: boolean) => {
+    setReportSellerSelectionById((current) => {
+      if (checked) {
+        const next = { ...current };
+        delete next[sellerId];
+        return next;
+      }
+      return { ...current, [sellerId]: false };
+    });
+  };
+
+  const handleSelectAllReportSellers = () => {
+    setReportSellerSelectionById({});
+    setReportIncludeUnassignedSeller(true);
+  };
+
+  const handleClearReportSellers = () => {
+    const next: Record<string, boolean> = {};
+    reportSellers.forEach((seller: any) => {
+      next[seller.id] = false;
+    });
+    setReportSellerSelectionById(next);
+    setReportIncludeUnassignedSeller(false);
+  };
+
+  const salesInPeriod = (allSales as any[])
     .filter((sale: any) => {
       const saleDate = toIsoDate(sale.saleDate);
       if (!saleDate) return false;
@@ -458,6 +496,12 @@ export default function Sales() {
       return saleDate >= normalizedStartDate && saleDate <= normalizedEndDate;
     })
     .sort((a: any, b: any) => toIsoDate(b.saleDate).localeCompare(toIsoDate(a.saleDate)));
+
+  const filteredSales = salesInPeriod.filter((sale: any) => {
+    const sellerId = toOptionalId(sale.sellerId);
+    if (!sellerId) return reportIncludeUnassignedSeller;
+    return selectedReportSellerIdSet.has(sellerId);
+  });
 
   const totalUnits = filteredSales.reduce((sum: number, sale: any) => {
     const qty = Number.parseInt(String(sale.quantity || 0), 10);
@@ -472,6 +516,44 @@ export default function Sales() {
     const safePrice = Number.isFinite(unitPrice) ? unitPrice : 0;
     return sum + safeQty * safePrice;
   }, 0);
+
+  const reportSalesByDropshipperRecord: Record<
+    string,
+    {
+      label: string;
+      tickets: number;
+      units: number;
+      total: number;
+    }
+  > = {};
+
+  filteredSales.forEach((sale: any) => {
+    const sellerId = toOptionalId(sale.sellerId);
+    const key = sellerId || "none";
+    const label = sellerId ? sellerMap.get(sellerId) || "Dropshipper" : "Sin dropshipper";
+    const qty = Number.parseInt(String(sale.quantity || 0), 10);
+    const product = productMap.get(sale.productId);
+    const unitPrice = Number.parseFloat(String(sale.unitPrice ?? product?.price ?? 0));
+    const safeQty = Number.isFinite(qty) ? qty : 0;
+    const safePrice = Number.isFinite(unitPrice) ? unitPrice : 0;
+
+    if (!reportSalesByDropshipperRecord[key]) {
+      reportSalesByDropshipperRecord[key] = {
+        label,
+        tickets: 0,
+        units: 0,
+        total: 0,
+      };
+    }
+
+    reportSalesByDropshipperRecord[key].tickets += 1;
+    reportSalesByDropshipperRecord[key].units += safeQty;
+    reportSalesByDropshipperRecord[key].total += safeQty * safePrice;
+  });
+
+  const reportSalesByDropshipper = Object.values(reportSalesByDropshipperRecord).sort(
+    (a, b) => b.total - a.total
+  );
 
   const reportPeriodLabel =
     reportMode === "day"
@@ -774,20 +856,93 @@ export default function Sales() {
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-[#d1dff2] bg-[#f7fbff] p-3 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-[#1a2a43]">Filtro por dropshippers (checkbox)</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSelectAllReportSellers}
+                  data-testid="button-sales-report-select-all-dropshippers"
+                >
+                  Marcar todos
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleClearReportSellers}
+                  data-testid="button-sales-report-clear-dropshippers"
+                >
+                  Limpiar
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Selecciona uno, varios o todos. El reporte y los totales se calculan solo con los dropshippers marcados.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-sm">
+                <Checkbox
+                  checked={reportIncludeUnassignedSeller}
+                  onCheckedChange={(checked) => setReportIncludeUnassignedSeller(checked === true)}
+                  data-testid="checkbox-sales-report-unassigned-seller"
+                />
+                Sin dropshipper
+              </label>
+              {reportSellers.map((seller: any) => (
+                <label
+                  key={seller.id}
+                  className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-sm"
+                >
+                  <Checkbox
+                    checked={reportSellerSelectionById[seller.id] !== false}
+                    onCheckedChange={(checked) => handleToggleReportSeller(seller.id, checked === true)}
+                    data-testid={`checkbox-sales-report-dropshipper-${seller.id}`}
+                  />
+                  {seller.name}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
               <p className="text-xs text-muted-foreground">Periodo</p>
               <p className="text-sm font-semibold text-[#1a2a43]">{reportPeriodLabel}</p>
+            </div>
+            <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
+              <p className="text-xs text-muted-foreground">Dropshippers seleccionados</p>
+              <p className="text-sm font-semibold text-[#1a2a43]">
+                {reportSelectedDropshippersCount} de {reportTotalDropshippersCount}
+              </p>
             </div>
             <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
               <p className="text-xs text-muted-foreground">Ventas registradas</p>
               <p className="text-sm font-semibold text-[#1a2a43]">{filteredSales.length}</p>
             </div>
             <div className="rounded-lg border border-[#d1dff2] bg-[#f7fbff] p-3">
-              <p className="text-xs text-muted-foreground">Total del periodo</p>
+              <p className="text-xs text-muted-foreground">Total filtrado</p>
               <p className="text-sm font-semibold text-[#1a2a43]">{totalSalesAmount.toFixed(2)} Bs ({totalUnits} und)</p>
             </div>
           </div>
+
+          {reportSalesByDropshipper.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {reportSalesByDropshipper.map((item) => (
+                <div key={item.label} className="rounded-lg border border-[#d1dff2] bg-white p-3">
+                  <p className="text-xs text-muted-foreground">Dropshipper</p>
+                  <p className="text-sm font-semibold text-[#1a2a43]">{item.label}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {item.tickets} tickets - {item.units} und
+                  </p>
+                  <p className="text-sm font-semibold text-[#1a2a43]">{item.total.toFixed(2)} Bs</p>
+                </div>
+              ))}
+            </div>
+          )}
 
           {filteredSales.length === 0 ? (
             <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCapitalMovements, useExpenses, useGrossCapitalMovements, useReports } from "@/lib/api";
@@ -151,6 +153,10 @@ export default function FinancialStatus() {
 
   const [startDate, setStartDate] = useState(getMonthStartIsoLocal());
   const [endDate, setEndDate] = useState(getTodayIsoLocal());
+  const [ledgerSearch, setLedgerSearch] = useState("");
+  const [ledgerModuleFilter, setLedgerModuleFilter] = useState("all");
+  const [showOnlySelectedRows, setShowOnlySelectedRows] = useState(false);
+  const [selectedLedgerRowsById, setSelectedLedgerRowsById] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!isAccountant || !visibleFrom) return;
@@ -521,6 +527,106 @@ export default function FinancialStatus() {
     isAccountant,
   ]);
 
+  useEffect(() => {
+    setSelectedLedgerRowsById((current) => {
+      const next: Record<string, boolean> = {};
+      rowsWithBalance.forEach((row) => {
+        if (current[row.id]) {
+          next[row.id] = true;
+        }
+      });
+      return next;
+    });
+  }, [rowsWithBalance]);
+
+  const ledgerModules = useMemo(
+    () => Array.from(new Set(rowsWithBalance.map((row) => row.module))).sort((a, b) => a.localeCompare(b)),
+    [rowsWithBalance]
+  );
+
+  const normalizedLedgerSearch = ledgerSearch.trim().toLowerCase();
+
+  const visibleLedgerRows = useMemo(
+    () =>
+      rowsWithBalance.filter((row) => {
+        if (ledgerModuleFilter !== "all" && row.module !== ledgerModuleFilter) return false;
+        if (normalizedLedgerSearch) {
+          const searchableText = `${row.module} ${row.detail} ${row.date}`.toLowerCase();
+          if (!searchableText.includes(normalizedLedgerSearch)) return false;
+        }
+        if (showOnlySelectedRows && !selectedLedgerRowsById[row.id]) return false;
+        return true;
+      }),
+    [
+      rowsWithBalance,
+      ledgerModuleFilter,
+      normalizedLedgerSearch,
+      showOnlySelectedRows,
+      selectedLedgerRowsById,
+    ]
+  );
+
+  const selectedLedgerRows = useMemo(
+    () => rowsWithBalance.filter((row) => selectedLedgerRowsById[row.id]),
+    [rowsWithBalance, selectedLedgerRowsById]
+  );
+
+  const selectedLedgerNetTotal = useMemo(
+    () => selectedLedgerRows.reduce((sum, row) => sum + row.signedAmount, 0),
+    [selectedLedgerRows]
+  );
+
+  const selectedLedgerIncomeTotal = useMemo(
+    () =>
+      selectedLedgerRows.reduce(
+        (sum, row) => (row.signedAmount > 0 ? sum + row.signedAmount : sum),
+        0
+      ),
+    [selectedLedgerRows]
+  );
+
+  const selectedLedgerExpenseTotal = useMemo(
+    () =>
+      selectedLedgerRows.reduce(
+        (sum, row) => (row.signedAmount < 0 ? sum + Math.abs(row.signedAmount) : sum),
+        0
+      ),
+    [selectedLedgerRows]
+  );
+
+  const selectedVisibleCount = useMemo(
+    () => visibleLedgerRows.reduce((sum, row) => (selectedLedgerRowsById[row.id] ? sum + 1 : sum), 0),
+    [visibleLedgerRows, selectedLedgerRowsById]
+  );
+
+  const allVisibleSelected = visibleLedgerRows.length > 0 && selectedVisibleCount === visibleLedgerRows.length;
+  const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
+
+  const toggleLedgerRowSelection = (rowId: string, checked: boolean) => {
+    setSelectedLedgerRowsById((current) => {
+      if (checked) {
+        return { ...current, [rowId]: true };
+      }
+      const next = { ...current };
+      delete next[rowId];
+      return next;
+    });
+  };
+
+  const setVisibleRowsSelection = (checked: boolean) => {
+    setSelectedLedgerRowsById((current) => {
+      const next = { ...current };
+      visibleLedgerRows.forEach((row) => {
+        if (checked) {
+          next[row.id] = true;
+        } else {
+          delete next[row.id];
+        }
+      });
+      return next;
+    });
+  };
+
   const fundDataWarning = !isAccountant && (grossCapitalQuery.isError || capitalMovementsQuery.isError);
   const isLoading =
     salesQuery.isLoading ||
@@ -762,42 +868,171 @@ export default function FinancialStatus() {
         <CardHeader>
           <CardTitle>Libro de movimientos financieros</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {rowsWithBalance.length === 0 ? (
             <p className="py-6 text-center text-muted-foreground">No hay movimientos en el periodo seleccionado.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[860px]">
-                <thead className="border-b bg-muted/50">
-                  <tr>
-                    <th className="p-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Fecha</th>
-                    <th className="p-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Modulo</th>
-                    <th className="p-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Detalle</th>
-                    <th className="p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Ingreso</th>
-                    <th className="p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Egreso</th>
-                    <th className="p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Saldo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rowsWithBalance.map((row) => (
-                    <tr key={row.id} className="border-b">
-                      <td className="p-3 text-sm">{formatDate(row.date)}</td>
-                      <td className="p-3 text-sm font-medium">{row.module}</td>
-                      <td className="p-3 text-sm text-muted-foreground">{row.detail}</td>
-                      <td className="p-3 text-right font-mono text-sm text-green-700">
-                        {row.signedAmount > 0 ? formatMoney(row.signedAmount) : "-"}
-                      </td>
-                      <td className="p-3 text-right font-mono text-sm text-red-700">
-                        {row.signedAmount < 0 ? formatMoney(Math.abs(row.signedAmount)) : "-"}
-                      </td>
-                      <td className={`p-3 text-right font-mono text-sm font-semibold ${row.running >= 0 ? "text-foreground" : "text-red-700"}`}>
-                        {formatMoney(row.running)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto]">
+                <div className="space-y-2">
+                  <Label htmlFor="financial-ledger-search">Buscar por modulo o detalle</Label>
+                  <Input
+                    id="financial-ledger-search"
+                    value={ledgerSearch}
+                    onChange={(e) => setLedgerSearch(e.target.value)}
+                    placeholder="Ej: publicidad, retiro, producto..."
+                    data-testid="input-financial-ledger-search"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="financial-ledger-module">Modulo</Label>
+                  <select
+                    id="financial-ledger-module"
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={ledgerModuleFilter}
+                    onChange={(e) => setLedgerModuleFilter(e.target.value)}
+                    data-testid="select-financial-ledger-module"
+                  >
+                    <option value="all">Todos los modulos</option>
+                    {ledgerModules.map((moduleName) => (
+                      <option key={moduleName} value={moduleName}>
+                        {moduleName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end pb-1">
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={showOnlySelectedRows}
+                      onCheckedChange={(checked) => setShowOnlySelectedRows(checked === true)}
+                      data-testid="checkbox-financial-only-selected"
+                    />
+                    Solo seleccionados
+                  </label>
+                </div>
+              </div>
+
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Seleccionados: {selectedLedgerRows.length} de {rowsWithBalance.length} movimientos
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setVisibleRowsSelection(true)}
+                      disabled={visibleLedgerRows.length === 0}
+                      data-testid="button-financial-select-visible"
+                    >
+                      Marcar visibles
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setVisibleRowsSelection(false)}
+                      disabled={visibleLedgerRows.length === 0}
+                      data-testid="button-financial-unselect-visible"
+                    >
+                      Desmarcar visibles
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedLedgerRowsById({})}
+                      disabled={selectedLedgerRows.length === 0}
+                      data-testid="button-financial-clear-selection"
+                    >
+                      Limpiar seleccion
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <div className="rounded border bg-background px-3 py-2 text-sm">
+                    <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Neto seleccionado</p>
+                    <p
+                      className={`font-mono font-semibold ${
+                        selectedLedgerNetTotal >= 0 ? "text-green-700" : "text-red-700"
+                      }`}
+                      data-testid="text-financial-selected-net"
+                    >
+                      {selectedLedgerNetTotal >= 0 ? "+" : "-"}
+                      {formatMoney(Math.abs(selectedLedgerNetTotal))}
+                    </p>
+                  </div>
+                  <div className="rounded border bg-background px-3 py-2 text-sm">
+                    <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Ingresos seleccionados</p>
+                    <p className="font-mono font-semibold text-green-700" data-testid="text-financial-selected-income">
+                      +{formatMoney(selectedLedgerIncomeTotal)}
+                    </p>
+                  </div>
+                  <div className="rounded border bg-background px-3 py-2 text-sm">
+                    <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Egresos seleccionados</p>
+                    <p className="font-mono font-semibold text-red-700" data-testid="text-financial-selected-expense">
+                      -{formatMoney(selectedLedgerExpenseTotal)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {visibleLedgerRows.length === 0 ? (
+                <p className="py-4 text-center text-muted-foreground">
+                  No hay movimientos que coincidan con los filtros seleccionados.
+                </p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full min-w-[940px]">
+                    <thead className="border-b bg-muted/50">
+                      <tr>
+                        <th className="w-[52px] p-3 text-center">
+                          <Checkbox
+                            checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                            onCheckedChange={(checked) => setVisibleRowsSelection(checked === true)}
+                            data-testid="checkbox-financial-select-all-visible"
+                          />
+                        </th>
+                        <th className="p-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Fecha</th>
+                        <th className="p-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Modulo</th>
+                        <th className="p-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Detalle</th>
+                        <th className="p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Ingreso</th>
+                        <th className="p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Egreso</th>
+                        <th className="p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Saldo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleLedgerRows.map((row) => (
+                        <tr key={row.id} className="border-b">
+                          <td className="p-3 text-center">
+                            <Checkbox
+                              checked={selectedLedgerRowsById[row.id] === true}
+                              onCheckedChange={(checked) => toggleLedgerRowSelection(row.id, checked === true)}
+                              data-testid={`checkbox-financial-ledger-row-${row.id}`}
+                            />
+                          </td>
+                          <td className="p-3 text-sm">{formatDate(row.date)}</td>
+                          <td className="p-3 text-sm font-medium">{row.module}</td>
+                          <td className="p-3 text-sm text-muted-foreground">{row.detail}</td>
+                          <td className="p-3 text-right font-mono text-sm text-green-700">
+                            {row.signedAmount > 0 ? formatMoney(row.signedAmount) : "-"}
+                          </td>
+                          <td className="p-3 text-right font-mono text-sm text-red-700">
+                            {row.signedAmount < 0 ? formatMoney(Math.abs(row.signedAmount)) : "-"}
+                          </td>
+                          <td className={`p-3 text-right font-mono text-sm font-semibold ${row.running >= 0 ? "text-foreground" : "text-red-700"}`}>
+                            {formatMoney(row.running)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

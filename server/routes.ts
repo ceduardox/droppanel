@@ -1548,8 +1548,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/sales", requireAuth, async (req, res) => {
     try {
-      const { productId, quantity, date, unitPrice, unitTransport, sellerId, directorId, deliveryId } = req.body;
+      const access = await getAccessContext(req);
+      const { productId, quantity, date: saleDate, unitPrice, unitTransport, sellerId, directorId, deliveryId } = req.body;
       const userId = getEffectiveUserId(req);
+
+      if (access.isAccountant && access.visibleFrom && saleDate && String(saleDate) < access.visibleFrom) {
+        return res.status(400).json({ error: `Solo puedes registrar ventas desde ${access.visibleFrom}` });
+      }
       
       const product = await storage.getProduct(productId);
       
@@ -1667,7 +1672,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sellerId: normalizedSellerId,
         directorId: finalDirectorId,
         deliveryId: normalizedDeliveryId,
-        saleDate: date,
+        saleDate: saleDate,
         userId,
       });
       

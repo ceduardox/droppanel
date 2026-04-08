@@ -110,6 +110,7 @@ export default function Sales() {
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<SaleEditDraft | null>(null);
   const isAccountant = user?.role?.trim().toLowerCase() === "contador";
+  const visibleFrom = isAccountant ? user?.visibleFrom ?? null : null;
 
   const handleSubmit = async (data: {
     productId: string;
@@ -760,7 +761,9 @@ export default function Sales() {
           <h1 className="text-3xl font-bold">{isAccountant ? "Ventas (contador)" : "Registrar Venta"}</h1>
           <p className="text-muted-foreground mt-1">
             {isAccountant
-              ? "Vista contador: puedes revisar reportes y editar ventas visibles."
+              ? `Vista contador: puedes registrar y editar ventas visibles${
+                  visibleFrom ? ` desde ${formatDateShort(visibleFrom)}` : ""
+                }.`
               : "Ingresa los detalles de la nueva venta"}
           </p>
         </div>
@@ -774,13 +777,16 @@ export default function Sales() {
         </Button>
       </div>
 
-      {isAccountant ? (
+      {isAccountant && (
         <Card className="rounded-2xl border-[#b7c9e6] bg-white/90 shadow-sm">
           <CardContent className="py-4 text-sm text-muted-foreground">
-            El rol contador no puede registrar ni eliminar ventas desde este formulario.
+            Rol contador: puedes registrar y editar ventas
+            {visibleFrom ? ` desde ${formatDateShort(visibleFrom)}` : ""}. No puedes eliminar ventas.
           </CardContent>
         </Card>
-      ) : formattedProducts.length === 0 ? (
+      )}
+
+      {formattedProducts.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-muted-foreground">Primero debes agregar productos</p>
         </div>

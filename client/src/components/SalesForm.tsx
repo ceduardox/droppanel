@@ -53,6 +53,8 @@ interface SalesFormProps {
 
 export default function SalesForm({ products, directors, sellers, deliveries, onSubmit }: SalesFormProps) {
   const { user } = useAuth();
+  const isAccountant = user?.role?.trim().toLowerCase() === "contador";
+  const visibleFrom = isAccountant ? user?.visibleFrom ?? null : null;
   const { toast } = useToast();
   const [productId, setProductId] = useState("");
   const [directorId, setDirectorId] = useState("none");
@@ -61,7 +63,8 @@ export default function SalesForm({ products, directors, sellers, deliveries, on
   const [quantity, setQuantity] = useState("1");
   const [unitPrice, setUnitPrice] = useState("");
   const [unitTransport, setUnitTransport] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const todayIso = new Date().toISOString().split("T")[0];
+  const [date, setDate] = useState(todayIso);
 
   const parsedQuantity = Number.parseInt(quantity || "0", 10);
   const safeQuantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity : 0;
@@ -86,7 +89,6 @@ export default function SalesForm({ products, directors, sellers, deliveries, on
   const totalCost = effectiveUnitCost * safeQuantity;
   const profit = total - totalCost;
   const profitPerPartner = profit / 2;
-  const isAccountant = user?.role?.trim().toLowerCase() === "contador";
 
   useEffect(() => {
     if (selectedProduct) {
@@ -94,6 +96,13 @@ export default function SalesForm({ products, directors, sellers, deliveries, on
       setUnitTransport((selectedProduct.costTransport ?? 0).toFixed(2));
     }
   }, [selectedProduct?.id]);
+
+  useEffect(() => {
+    if (!visibleFrom) return;
+    if (!date || date < visibleFrom) {
+      setDate(visibleFrom);
+    }
+  }, [visibleFrom, date]);
 
   useEffect(() => {
     if (sellerId === "none") return;
@@ -148,6 +157,16 @@ export default function SalesForm({ products, directors, sellers, deliveries, on
         description: `El precio no puede ser menor al capital bruto (${minUnitPrice.toFixed(2)} Bs)`,
         variant: "destructive",
       });
+      return;
+    }
+
+    if (visibleFrom && date < visibleFrom) {
+      toast({
+        title: "Fecha invalida",
+        description: `Solo puedes registrar ventas desde ${visibleFrom}`,
+        variant: "destructive",
+      });
+      setDate(visibleFrom);
       return;
     }
 
@@ -312,6 +331,7 @@ export default function SalesForm({ products, directors, sellers, deliveries, on
                   data-testid="input-date"
                   type="date"
                   className="pl-10"
+                  min={visibleFrom ?? undefined}
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                   required

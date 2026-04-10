@@ -75,6 +75,7 @@ type DeliveryAssignmentAuditPayload = {
     quantity: number;
     unitPriceSnapshot: string;
     note?: string | null;
+    assignedAt?: string | null;
     isPaid: number;
   } | null;
   userId: string;
@@ -162,6 +163,7 @@ export interface IStorage {
       quantity?: number;
       unitPriceSnapshot?: string;
       note?: string | null;
+      assignedAt?: Date;
     }
   ): Promise<DeliveryAssignment | undefined>;
   deleteDeliveryAssignment(id: string): Promise<boolean>;
@@ -604,6 +606,7 @@ export class DbStorage implements IStorage {
       quantity?: number;
       unitPriceSnapshot?: string;
       note?: string | null;
+      assignedAt?: Date;
     }
   ): Promise<DeliveryAssignment | undefined> {
     const result = await db

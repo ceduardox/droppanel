@@ -216,7 +216,6 @@ export const deliveryAssignments = pgTable("delivery_assignments", {
 
 export const insertDeliveryAssignmentSchema = createInsertSchema(deliveryAssignments).omit({
   id: true,
-  assignedAt: true,
 });
 
 export type InsertDeliveryAssignment = z.infer<typeof insertDeliveryAssignmentSchema>;
@@ -239,6 +238,7 @@ export const deliveryAssignmentAuditLogs = pgTable("delivery_assignment_audit_lo
     quantity: number;
     unitPriceSnapshot: string;
     note?: string | null;
+    assignedAt?: string | null;
     isPaid: number;
   } | null>(),
   userId: varchar("user_id").notNull().references(() => users.id),

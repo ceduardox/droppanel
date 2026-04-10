@@ -61,11 +61,13 @@ export default function Delivery() {
   const [assignProductId, setAssignProductId] = useState("");
   const [assignQuantity, setAssignQuantity] = useState("");
   const [assignNote, setAssignNote] = useState("");
+  const [assignDate, setAssignDate] = useState("");
   const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
   const [editAssignDeliveryId, setEditAssignDeliveryId] = useState("");
   const [editAssignProductId, setEditAssignProductId] = useState("");
   const [editAssignQuantity, setEditAssignQuantity] = useState("");
   const [editAssignNote, setEditAssignNote] = useState("");
+  const [editAssignDate, setEditAssignDate] = useState("");
   const [assignmentToDelete, setAssignmentToDelete] = useState<any | null>(null);
   
   // Report state
@@ -92,6 +94,13 @@ export default function Delivery() {
   const updateAssignment = useUpdateDeliveryAssignment();
   const deleteAssignment = useDeleteDeliveryAssignment();
   const updatePaidStatus = useUpdateDeliveryAssignmentPaid();
+
+  const toIsoDateString = (value: string | Date | null | undefined) => {
+    if (!value) return "";
+    if (value instanceof Date) return value.toISOString().split("T")[0];
+    if (value.includes("T")) return value.split("T")[0];
+    return value.slice(0, 10);
+  };
 
   // Handlers
   const handleCreateDelivery = async (e: React.FormEvent) => {
@@ -197,12 +206,14 @@ export default function Delivery() {
         quantity: parseInt(assignQuantity),
         unitPriceSnapshot: product.price,
         note: assignNote || undefined,
+        ...(assignDate ? { assignedAt: assignDate } : {}),
         isPaid: 0,
       });
       setAssignDeliveryId("");
       setAssignProductId("");
       setAssignQuantity("");
       setAssignNote("");
+      setAssignDate("");
       toast({
         title: "Asignacion creada",
         description: "El stock se ha asignado al delivery correctamente",
@@ -222,6 +233,7 @@ export default function Delivery() {
     setEditAssignProductId(assignment.productId);
     setEditAssignQuantity(String(assignment.quantity));
     setEditAssignNote(assignment.note || "");
+    setEditAssignDate(toIsoDateString(assignment.assignedAt));
   };
 
   const handleCancelEditAssignment = () => {
@@ -230,6 +242,7 @@ export default function Delivery() {
     setEditAssignProductId("");
     setEditAssignQuantity("");
     setEditAssignNote("");
+    setEditAssignDate("");
   };
 
   const handleSaveEditAssignment = async () => {
@@ -254,6 +267,7 @@ export default function Delivery() {
           quantity: parseInt(editAssignQuantity, 10),
           unitPriceSnapshot: String(product.price),
           note: editAssignNote.trim() || null,
+          ...(editAssignDate ? { assignedAt: editAssignDate } : {}),
         },
       });
       toast({
@@ -771,6 +785,20 @@ export default function Delivery() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="assignDate" className={bentoLabelClass}>
+                    Fecha <span className="normal-case font-medium text-slate-300">(opcional)</span>
+                  </Label>
+                  <Input
+                    id="assignDate"
+                    type="date"
+                    className={bentoInputClass}
+                    value={assignDate}
+                    onChange={(e) => setAssignDate(e.target.value)}
+                    data-testid="input-assign-date"
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="assignNote" className={bentoLabelClass}>
                     Nota <span className="normal-case font-medium text-slate-300">(opcional)</span>
                   </Label>
@@ -848,6 +876,7 @@ export default function Delivery() {
                                   <tr>
                                     <th className="p-2 text-left text-sm font-medium">Producto</th>
                                     <th className="p-2 text-center text-sm font-medium">Cant.</th>
+                                    <th className="p-2 text-center text-sm font-medium">Fecha</th>
                                     <th className="p-2 text-right text-sm font-medium">Precio</th>
                                     <th className="p-2 text-right text-sm font-medium">Total</th>
                                     <th className="p-2 text-center text-sm font-medium">Pagado</th>
@@ -906,6 +935,18 @@ export default function Delivery() {
                                             />
                                           ) : (
                                             assignment.quantity
+                                          )}
+                                        </td>
+                                        <td className="p-2 text-center text-sm">
+                                          {editing ? (
+                                            <Input
+                                              type="date"
+                                              value={editAssignDate}
+                                              onChange={(e) => setEditAssignDate(e.target.value)}
+                                              className="mx-auto h-9 w-[140px]"
+                                            />
+                                          ) : (
+                                            <span className="font-mono">{toIsoDateString(assignment.assignedAt) || "-"}</span>
                                           )}
                                         </td>
                                         <td className="p-2 text-right text-sm font-mono">
@@ -1024,6 +1065,12 @@ export default function Delivery() {
                                           className="h-11"
                                         />
                                         <Input
+                                          type="date"
+                                          value={editAssignDate}
+                                          onChange={(e) => setEditAssignDate(e.target.value)}
+                                          className="h-11"
+                                        />
+                                        <Input
                                           value={editAssignNote}
                                           onChange={(e) => setEditAssignNote(e.target.value)}
                                           placeholder="Nota opcional"
@@ -1036,6 +1083,9 @@ export default function Delivery() {
                                           <div className="min-w-0">
                                             <p className="font-semibold text-slate-900">{assignment.product?.name}</p>
                                             <p className="text-sm text-slate-500">{assignment.delivery?.name}</p>
+                                            <p className="text-xs text-slate-400">
+                                              Fecha: {toIsoDateString(assignment.assignedAt) || "-"}
+                                            </p>
                                             {assignment.note ? (
                                               <p className="mt-1 text-xs text-slate-500">{assignment.note}</p>
                                             ) : null}
@@ -1178,6 +1228,9 @@ export default function Delivery() {
                                         {log.nextDelivery?.name || "Delivery"}
                                       </p>
                                       <p>Precio: {parseFloat(log.nextState.unitPriceSnapshot).toFixed(2)} Bs</p>
+                                      {log.nextState.assignedAt ? (
+                                        <p>Fecha: {formatShortDateTime(log.nextState.assignedAt)}</p>
+                                      ) : null}
                                       {log.nextState.note ? <p>Nota: {log.nextState.note}</p> : null}
                                     </div>
                                   ) : (

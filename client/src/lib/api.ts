@@ -545,7 +545,7 @@ export function useDeliveryAssignments() {
 
 export function useCreateDeliveryAssignment() {
   return useMutation({
-    mutationFn: async (data: { deliveryId: string; productId: string; quantity: number; unitPriceSnapshot: string; note?: string; isPaid?: number }) => {
+    mutationFn: async (data: { deliveryId: string; productId: string; quantity: number; unitPriceSnapshot: string; note?: string; isPaid?: number; assignedAt?: string }) => {
       return apiRequest("/api/delivery-assignments", {
         method: "POST",
         body: JSON.stringify(data),
@@ -571,6 +571,7 @@ export function useUpdateDeliveryAssignment() {
         quantity: number;
         unitPriceSnapshot: string;
         note?: string | null;
+        assignedAt?: string | null;
       };
     }) => {
       return apiRequest(`/api/delivery-assignments/${id}`, {

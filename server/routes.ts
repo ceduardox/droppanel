@@ -99,15 +99,28 @@ const adminUserNameUpdateSchema = z.object({
   name: z.string().trim().min(2).max(120),
 });
 
+const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha invalida. Usa YYYY-MM-DD");
+
+const parseOptionalIsoDate = (value: unknown) => {
+  if (value === undefined || value === null) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const normalized = raw.includes("T") ? raw.split("T")[0] : raw.slice(0, 10);
+  const iso = isoDateSchema.parse(normalized);
+  return {
+    iso,
+    date: new Date(`${iso}T00:00:00.000`),
+  };
+};
+
 const deliveryAssignmentUpdateSchema = z.object({
   deliveryId: z.string().min(1),
   productId: z.string().min(1),
   quantity: z.number().int().positive(),
   unitPriceSnapshot: z.string().min(1),
   note: z.string().trim().max(1000).nullable().optional(),
+  assignedAt: isoDateSchema.optional(),
 });
-
-const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha invalida. Usa YYYY-MM-DD");
 
 const sellerDirectorUpdateSchema = z.object({
   directorId: z.string().trim().min(1).nullable().optional(),
@@ -2284,8 +2297,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/delivery-assignments", requireAuth, async (req, res) => {
     try {
+      const access = await getAccessContext(req);
+      const assignedAtInput = parseOptionalIsoDate(req.body.assignedAt);
+      if (access.isAccountant && access.visibleFrom && assignedAtInput?.iso && assignedAtInput.iso < access.visibleFrom) {
+        return res.status(400).json({ error: `Solo puedes asignar stock desde ${access.visibleFrom}` });
+      }
+
       const data = insertDeliveryAssignmentSchema.parse({
         ...req.body,
+        ...(assignedAtInput?.date ? { assignedAt: assignedAtInput.date } : {}),
         userId: getEffectiveUserId(req),
       });
       const assignment = await storage.createDeliveryAssignment(data);
@@ -2301,6 +2321,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/delivery-assignments/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      const access = await getAccessContext(req);
       const assignment = await storage.getDeliveryAssignment(id);
       if (!assignment || assignment.userId !== getEffectiveUserId(req)) {
         return res.status(404).json({ error: "Asignacion no encontrada" });
@@ -2310,6 +2331,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         note: req.body.note ?? null,
       });
+      const assignedAtInput = parseOptionalIsoDate(data.assignedAt);
+      if (access.isAccountant && access.visibleFrom && assignedAtInput?.iso && assignedAtInput.iso < access.visibleFrom) {
+        return res.status(400).json({ error: `Solo puedes asignar stock desde ${access.visibleFrom}` });
+      }
+
+      const updateData = {
+        deliveryId: data.deliveryId,
+        productId: data.productId,
+        quantity: data.quantity,
+        unitPriceSnapshot: data.unitPriceSnapshot,
+        note: data.note ?? null,
+        ...(assignedAtInput?.date ? { assignedAt: assignedAtInput.date } : {}),
+      };
 
       await storage.createDeliveryAssignmentAuditLog({
         assignmentId: assignment.id,
@@ -2327,12 +2361,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           quantity: data.quantity,
           unitPriceSnapshot: data.unitPriceSnapshot,
           note: data.note ?? null,
+          ...(assignedAtInput?.date ? { assignedAt: assignedAtInput.date.toISOString() } : {}),
           isPaid: assignment.isPaid,
         },
         userId: assignment.userId,
       });
 
-      const updated = await storage.updateDeliveryAssignment(id, data);
+      const updated = await storage.updateDeliveryAssignment(id, updateData);
       res.json(updated);
     } catch (error) {
       if (error instanceof z.ZodError) {

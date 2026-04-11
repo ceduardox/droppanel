@@ -205,6 +205,7 @@ export default function CapitalIncrease() {
     .filter((entry) => entry.kind === "debito")
     .reduce((sum, entry) => sum + entry.amount, 0);
 
+  const netRangeBalance = totalFromSales + totalCredits - totalDebits;
   const closingBalance = openingBalance + totalFromSales + totalCredits - totalDebits;
 
   const handleViewImage = (imageUrl: string) => {
@@ -347,8 +348,15 @@ export default function CapitalIncrease() {
                 <span className="text-muted-foreground">Debitos/Pagos:</span>
                 <span className="font-medium text-red-600">-{totalDebits.toFixed(2)} Bs</span>
               </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Saldo Neto del Periodo:</span>
+                <span className={`font-medium ${netRangeBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {netRangeBalance >= 0 ? "+" : "-"}
+                  {Math.abs(netRangeBalance).toFixed(2)} Bs
+                </span>
+              </div>
               <div className="flex justify-between pt-2 border-t">
-                <span className="font-bold">Saldo Final del Periodo:</span>
+                <span className="font-bold">Saldo Final (Acumulado):</span>
                 <span
                   className={`inline-flex items-baseline gap-1 whitespace-nowrap text-xl font-bold sm:text-2xl ${closingBalance >= 0 ? "text-green-600" : "text-red-600"}`}
                   data-testid="text-total-capital"

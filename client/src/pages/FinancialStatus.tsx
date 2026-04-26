@@ -1279,7 +1279,8 @@ export default function FinancialStatus() {
                   No hay cierres pagados dentro del periodo seleccionado.
                 </p>
               ) : (
-                <div className="overflow-x-auto rounded-lg border">
+                <>
+                <div className="hidden overflow-x-auto rounded-lg border md:block">
                   <table className="w-full min-w-[860px]">
                     <thead className="border-b bg-muted/50">
                       <tr>
@@ -1405,6 +1406,149 @@ export default function FinancialStatus() {
                     </tbody>
                   </table>
                 </div>
+                <div className="space-y-3 md:hidden">
+                  {filteredProfitSettlements.map((settlement) => (
+                    <details key={settlement.id} className="group rounded-lg border bg-background">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">
+                            {formatDate(settlement.periodStart)} - {formatDate(settlement.periodEnd)}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Pagado el {formatDate(settlement.settlementDate)}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="font-mono text-sm font-semibold">
+                            {formatMoney(parseAmount(settlement.payableProfitSnapshot))}
+                          </p>
+                          <p className="text-xs text-muted-foreground group-open:hidden">Ver detalle</p>
+                          <p className="hidden text-xs text-muted-foreground group-open:block">Ocultar</p>
+                        </div>
+                      </summary>
+
+                      <div className="space-y-3 border-t p-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-md border bg-muted/20 p-2">
+                            <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Jose Eduardo</p>
+                            <p className="mt-1 font-mono text-sm font-semibold">
+                              {formatMoney(parseAmount(settlement.joseAmount))}
+                            </p>
+                          </div>
+                          <div className="rounded-md border bg-muted/20 p-2">
+                            <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Jhonatan</p>
+                            <p className="mt-1 font-mono text-sm font-semibold">
+                              {formatMoney(parseAmount(settlement.jhonatanAmount))}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-muted-foreground">Nota</span>
+                            <div className="min-w-0 text-right">
+                              {settlement.note ? (
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8"
+                                      data-testid={`button-mobile-view-profit-settlement-note-${settlement.id}`}
+                                    >
+                                      <Eye className="mr-1 h-3.5 w-3.5" />
+                                      Ver nota
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent className="max-w-2xl">
+                                    <DialogHeader>
+                                      <DialogTitle>Nota del cierre</DialogTitle>
+                                      <DialogDescription>
+                                        Cierre del {formatDate(settlement.periodStart)} al {formatDate(settlement.periodEnd)}, pagado el {formatDate(settlement.settlementDate)}.
+                                      </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="max-h-[60vh] overflow-y-auto rounded-md border bg-muted/20 p-4">
+                                      <p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground">
+                                        {settlement.note}
+                                      </p>
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                              ) : (
+                                <span>-</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-muted-foreground">Voucher</span>
+                            <div className="text-right">
+                              {settlement.imageUrl ? (
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8"
+                                      data-testid={`button-mobile-view-profit-settlement-image-${settlement.id}`}
+                                    >
+                                      <ImageIcon className="mr-1 h-3.5 w-3.5" />
+                                      Ver imagen
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent className="max-w-3xl">
+                                    <DialogHeader>
+                                      <DialogTitle>Voucher del cierre</DialogTitle>
+                                      <DialogDescription>
+                                        Cierre del {formatDate(settlement.periodStart)} al {formatDate(settlement.periodEnd)}, pagado el {formatDate(settlement.settlementDate)}.
+                                      </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="max-h-[72vh] overflow-auto rounded-md border bg-muted/20 p-2">
+                                      <img
+                                        src={getStorageImageUrl(settlement.imageUrl)}
+                                        alt="Voucher del cierre de utilidad"
+                                        className="mx-auto max-h-[68vh] w-auto max-w-full rounded object-contain"
+                                      />
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                              ) : (
+                                <span>-</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 border-t pt-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditProfitSettlement(settlement)}
+                            data-testid={`button-mobile-edit-profit-settlement-${settlement.id}`}
+                          >
+                            <Pencil className="mr-1 h-4 w-4" />
+                            Editar
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteProfitSettlement(settlement.id)}
+                            disabled={deleteProfitSettlementMutation.isPending}
+                            data-testid={`button-mobile-delete-profit-settlement-${settlement.id}`}
+                          >
+                            <Trash2 className="mr-1 h-4 w-4" />
+                            Eliminar
+                          </Button>
+                        </div>
+                      </div>
+                    </details>
+                  ))}
+                </div>
+                </>
               )}
             </CardContent>
           </Card>

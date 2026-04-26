@@ -191,6 +191,11 @@ export interface IStorage {
   // Profit Settlements
   getProfitSettlements(userId: string): Promise<ProfitSettlement[]>;
   createProfitSettlement(settlement: InsertProfitSettlement): Promise<ProfitSettlement>;
+  updateProfitSettlement(
+    id: string,
+    userId: string,
+    data: Partial<InsertProfitSettlement>
+  ): Promise<ProfitSettlement | undefined>;
   deleteProfitSettlement(id: string, userId: string): Promise<boolean>;
 
   // Directors
@@ -712,6 +717,19 @@ export class DbStorage implements IStorage {
 
   async createProfitSettlement(settlement: InsertProfitSettlement): Promise<ProfitSettlement> {
     const result = await db.insert(profitSettlements).values(settlement).returning();
+    return result[0];
+  }
+
+  async updateProfitSettlement(
+    id: string,
+    userId: string,
+    data: Partial<InsertProfitSettlement>
+  ): Promise<ProfitSettlement | undefined> {
+    const result = await db
+      .update(profitSettlements)
+      .set(data)
+      .where(and(eq(profitSettlements.id, id), eq(profitSettlements.userId, userId)))
+      .returning();
     return result[0];
   }
 

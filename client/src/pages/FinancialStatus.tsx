@@ -32,11 +32,12 @@ import {
   useGrossCapitalMovements,
   useProfitSettlements,
   useReports,
+  useUpdateProfitSettlement,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { getEffectiveUnitBaseCost, getEffectiveUnitCost, getSaleUnitPrice } from "@/lib/sales-pricing";
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarCheck, Eye, ImageIcon, Info, Scale, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarCheck, Eye, ImageIcon, Info, Pencil, Scale, Trash2 } from "lucide-react";
 
 type SaleBreakdown = {
   id: string;
@@ -77,6 +78,14 @@ type ProfitSettlement = {
   jhonatanAmount: string | number;
   note?: string | null;
   imageUrl?: string | null;
+};
+
+type SettlementEditForm = {
+  periodStart: string;
+  periodEnd: string;
+  settlementDate: string;
+  payableProfitSnapshot: string;
+  note: string;
 };
 
 function getTodayIsoLocal(): string {
@@ -207,6 +216,15 @@ export default function FinancialStatus() {
   const [settlementNote, setSettlementNote] = useState("");
   const [settlementImageFile, setSettlementImageFile] = useState<File | null>(null);
   const [isSettlementDialogOpen, setIsSettlementDialogOpen] = useState(false);
+  const [editingSettlement, setEditingSettlement] = useState<ProfitSettlement | null>(null);
+  const [editSettlementForm, setEditSettlementForm] = useState<SettlementEditForm>({
+    periodStart: "",
+    periodEnd: "",
+    settlementDate: "",
+    payableProfitSnapshot: "",
+    note: "",
+  });
+  const [editSettlementImageFile, setEditSettlementImageFile] = useState<File | null>(null);
   const [ledgerSearch, setLedgerSearch] = useState("");
   const [ledgerModuleFilter, setLedgerModuleFilter] = useState("all");
   const [showOnlySelectedRows, setShowOnlySelectedRows] = useState(false);
@@ -261,6 +279,7 @@ export default function FinancialStatus() {
   const capitalMovementsQuery = useCapitalMovements(!isAccountant);
   const profitSettlementsQuery = useProfitSettlements(!isAccountant);
   const createProfitSettlementMutation = useCreateProfitSettlement();
+  const updateProfitSettlementMutation = useUpdateProfitSettlement();
   const deleteProfitSettlementMutation = useDeleteProfitSettlement();
 
   const salesWithProducts = (salesQuery.data as any[]) || [];
@@ -790,6 +809,51 @@ export default function FinancialStatus() {
     }
   };
 
+  const openEditProfitSettlement = (settlement: ProfitSettlement) => {
+    setEditingSettlement(settlement);
+    setEditSettlementForm({
+      periodStart: settlement.periodStart,
+      periodEnd: settlement.periodEnd,
+      settlementDate: settlement.settlementDate,
+      payableProfitSnapshot: String(parseAmount(settlement.payableProfitSnapshot).toFixed(2)),
+      note: settlement.note || "",
+    });
+    setEditSettlementImageFile(null);
+  };
+
+  const handleUpdateProfitSettlement = async () => {
+    if (!editingSettlement) return;
+
+    try {
+      const formData = new FormData();
+      formData.append("periodStart", editSettlementForm.periodStart);
+      formData.append("periodEnd", editSettlementForm.periodEnd);
+      formData.append("settlementDate", editSettlementForm.settlementDate);
+      formData.append("payableProfitSnapshot", editSettlementForm.payableProfitSnapshot);
+      formData.append("note", editSettlementForm.note);
+      if (editSettlementImageFile) {
+        formData.append("image", editSettlementImageFile);
+      }
+
+      await updateProfitSettlementMutation.mutateAsync({
+        id: editingSettlement.id,
+        data: formData,
+      });
+      setEditingSettlement(null);
+      setEditSettlementImageFile(null);
+      toast({
+        title: "Cierre actualizado",
+        description: "Los datos del cierre fueron editados correctamente.",
+      });
+    } catch (error) {
+      toast({
+        title: "No se pudo editar el cierre",
+        description: error instanceof Error ? error.message : "Intenta nuevamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const canRegisterSettlement =
     !isAccountant && payableNetProfit > 0 && !hasOverlappingSettlement && !createProfitSettlementMutation.isPending;
   const fundDataWarning = !isAccountant && (grossCapitalQuery.isError || capitalMovementsQuery.isError || profitSettlementsQuery.isError);
@@ -1106,6 +1170,105 @@ export default function FinancialStatus() {
             </CardContent>
           </Card>
 
+          <Dialog open={!!editingSettlement} onOpenChange={(open) => !open && setEditingSettlement(null)}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Editar cierre de utilidad</DialogTitle>
+                <DialogDescription>
+                  Cambia el periodo, fecha, total, nota o voucher. Los montos de Jose Eduardo y Jhonatan se recalculan 50/50.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="editSettlementStart">Fecha inicial</Label>
+                  <Input
+                    id="editSettlementStart"
+                    type="date"
+                    value={editSettlementForm.periodStart}
+                    onChange={(e) => setEditSettlementForm((current) => ({ ...current, periodStart: e.target.value }))}
+                    data-testid="input-edit-profit-settlement-start"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editSettlementEnd">Fecha final</Label>
+                  <Input
+                    id="editSettlementEnd"
+                    type="date"
+                    value={editSettlementForm.periodEnd}
+                    onChange={(e) => setEditSettlementForm((current) => ({ ...current, periodEnd: e.target.value }))}
+                    data-testid="input-edit-profit-settlement-end"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editSettlementDate">Fecha de pago</Label>
+                  <Input
+                    id="editSettlementDate"
+                    type="date"
+                    value={editSettlementForm.settlementDate}
+                    onChange={(e) => setEditSettlementForm((current) => ({ ...current, settlementDate: e.target.value }))}
+                    data-testid="input-edit-profit-settlement-date"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editSettlementTotal">Total pagado</Label>
+                  <Input
+                    id="editSettlementTotal"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editSettlementForm.payableProfitSnapshot}
+                    onChange={(e) =>
+                      setEditSettlementForm((current) => ({ ...current, payableProfitSnapshot: e.target.value }))
+                    }
+                    data-testid="input-edit-profit-settlement-total"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    50/50: {formatMoney(parseAmount(editSettlementForm.payableProfitSnapshot) / 2)} por socio.
+                  </p>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="editSettlementNote">Nota</Label>
+                  <Textarea
+                    id="editSettlementNote"
+                    value={editSettlementForm.note}
+                    onChange={(e) => setEditSettlementForm((current) => ({ ...current, note: e.target.value }))}
+                    data-testid="textarea-edit-profit-settlement-note"
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="editSettlementImage">Reemplazar voucher o imagen</Label>
+                  <Input
+                    id="editSettlementImage"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setEditSettlementImageFile(e.target.files?.[0] || null)}
+                    data-testid="input-edit-profit-settlement-image"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {editSettlementImageFile
+                      ? `Archivo seleccionado: ${editSettlementImageFile.name}`
+                      : editingSettlement?.imageUrl
+                        ? "Ya existe un voucher guardado. Selecciona otro archivo solo si quieres reemplazarlo."
+                        : "Este cierre no tiene voucher guardado."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" onClick={() => setEditingSettlement(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleUpdateProfitSettlement}
+                  disabled={updateProfitSettlementMutation.isPending}
+                  data-testid="button-save-edit-profit-settlement"
+                >
+                  Guardar cambios
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           <Card>
             <CardHeader>
               <CardTitle>Historial de cierres de utilidad</CardTitle>
@@ -1127,7 +1290,7 @@ export default function FinancialStatus() {
                         <th className="p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Jhonatan</th>
                         <th className="p-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Nota</th>
                         <th className="p-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Voucher</th>
-                        <th className="w-[72px] p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Accion</th>
+                        <th className="w-[116px] p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Accion</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1217,6 +1380,15 @@ export default function FinancialStatus() {
                             )}
                           </td>
                           <td className="p-3 text-right">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditProfitSettlement(settlement)}
+                              data-testid={`button-edit-profit-settlement-${settlement.id}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
                             <Button
                               type="button"
                               variant="ghost"

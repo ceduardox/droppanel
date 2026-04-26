@@ -743,6 +743,21 @@ export function useCreateProfitSettlement() {
   });
 }
 
+export function useUpdateProfitSettlement() {
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: FormData }) => {
+      return apiRequest(`/api/profit-settlements/${id}`, {
+        method: "PUT",
+        body: data,
+        headers: {},
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/profit-settlements"] });
+    },
+  });
+}
+
 export function useDeleteProfitSettlement() {
   return useMutation({
     mutationFn: async (id: string) => {

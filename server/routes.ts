@@ -2777,6 +2777,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/profit-settlements/:id", requireAuth, upload.single("image"), async (req, res) => {
+    try {
+      const access = await getAccessContext(req);
+      if (access.isAccountant) {
+        return res.status(403).json({ error: "El rol contador no puede editar cierres de utilidad" });
+      }
+
+      const parsed = profitSettlementPayloadSchema.parse(req.body);
+      if (parsed.periodEnd < parsed.periodStart) {
+        return res.status(400).json({ error: "La fecha final no puede ser anterior a la inicial" });
+      }
+
+      const userId = getEffectiveUserId(req);
+      const existingSettlements = await storage.getProfitSettlements(userId);
+      const current = existingSettlements.find((settlement) => settlement.id === req.params.id);
+      if (!current) {
+        return res.status(404).json({ error: "Cierre no encontrado" });
+      }
+
+      const overlapping = existingSettlements.find((settlement) => {
+        if (settlement.id === req.params.id) return false;
+        const existingStart = toIsoDate(settlement.periodStart);
+        const existingEnd = toIsoDate(settlement.periodEnd);
+        if (!existingStart || !existingEnd) return false;
+        return parsed.periodStart <= existingEnd && parsed.periodEnd >= existingStart;
+      });
+
+      if (overlapping) {
+        return res.status(409).json({
+          error: `Ya existe un cierre entre ${toIsoDate(overlapping.periodStart)} y ${toIsoDate(overlapping.periodEnd)}`,
+        });
+      }
+
+      const payableProfit = Math.round(parsed.payableProfitSnapshot * 100) / 100;
+      const joseAmount = Math.round((payableProfit / 2) * 100) / 100;
+      const jhonatanAmount = Math.round((payableProfit - joseAmount) * 100) / 100;
+      let imageUrl = current.imageUrl || null;
+
+      if (req.file) {
+        const fileName = buildStorageKey("profit-settlements", req.file.originalname);
+        const ok = await uploadToStorage(fileName, req.file.buffer);
+        if (ok) imageUrl = fileName;
+      }
+
+      const updated = await storage.updateProfitSettlement(req.params.id, userId, {
+        periodStart: parsed.periodStart,
+        periodEnd: parsed.periodEnd,
+        settlementDate: parsed.settlementDate,
+        payableProfitSnapshot: payableProfit.toFixed(2),
+        joseAmount: joseAmount.toFixed(2),
+        jhonatanAmount: jhonatanAmount.toFixed(2),
+        note: parsed.note?.trim() || null,
+        imageUrl,
+        userId,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al editar cierre de utilidad" });
+    }
+  });
+
   app.delete("/api/profit-settlements/:id", requireAuth, async (req, res) => {
     try {
       const access = await getAccessContext(req);

@@ -17,6 +17,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   useCapitalMovements,
   useCreateProfitSettlement,
   useDeleteProfitSettlement,
@@ -28,7 +36,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { getEffectiveUnitBaseCost, getEffectiveUnitCost, getSaleUnitPrice } from "@/lib/sales-pricing";
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarCheck, Info, Scale, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarCheck, Eye, Info, Scale, Trash2 } from "lucide-react";
 
 type SaleBreakdown = {
   id: string;
@@ -1105,8 +1113,41 @@ export default function FinancialStatus() {
                           <td className="p-3 text-right font-mono text-sm">
                             {formatMoney(parseAmount(settlement.jhonatanAmount))}
                           </td>
-                          <td className="max-w-[260px] truncate p-3 text-sm text-muted-foreground">
-                            {settlement.note || "-"}
+                          <td className="max-w-[300px] p-3 text-sm text-muted-foreground">
+                            {settlement.note ? (
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="min-w-0 flex-1 truncate">{settlement.note}</span>
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 shrink-0 px-2"
+                                      data-testid={`button-view-profit-settlement-note-${settlement.id}`}
+                                    >
+                                      <Eye className="mr-1 h-3.5 w-3.5" />
+                                      Ver nota
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent className="max-w-2xl">
+                                    <DialogHeader>
+                                      <DialogTitle>Nota del cierre</DialogTitle>
+                                      <DialogDescription>
+                                        Cierre del {formatDate(settlement.periodStart)} al {formatDate(settlement.periodEnd)}, pagado el {formatDate(settlement.settlementDate)}.
+                                      </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="max-h-[60vh] overflow-y-auto rounded-md border bg-muted/20 p-4">
+                                      <p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground">
+                                        {settlement.note}
+                                      </p>
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                              </div>
+                            ) : (
+                              "-"
+                            )}
                           </td>
                           <td className="p-3 text-right">
                             <Button

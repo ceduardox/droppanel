@@ -1561,7 +1561,8 @@ export default function FinancialStatus() {
               {productSummary.length === 0 ? (
                 <p className="py-4 text-center text-muted-foreground">No hay ventas para el periodo seleccionado.</p>
               ) : (
-                <div className="overflow-x-auto rounded-lg border">
+                <>
+                <div className="hidden overflow-x-auto rounded-lg border md:block">
                   <table className="w-full min-w-[920px]">
                     <thead className="border-b bg-muted/50">
                       <tr>
@@ -1589,6 +1590,45 @@ export default function FinancialStatus() {
                     </tbody>
                   </table>
                 </div>
+                <div className="space-y-3 md:hidden">
+                  {productSummary.map((item) => (
+                    <details key={item.productName} className="group rounded-lg border bg-background">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">{item.productName}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{item.quantity.toFixed(0)} unidades</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="font-mono text-sm font-semibold">{formatMoney(item.incomeAmount)}</p>
+                          <p className="text-xs text-muted-foreground group-open:hidden">Ver detalle</p>
+                          <p className="hidden text-xs text-muted-foreground group-open:block">Ocultar</p>
+                        </div>
+                      </summary>
+
+                      <div className="space-y-2 border-t p-3 text-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">Ingresos</span>
+                          <span className="font-mono font-medium">{formatMoney(item.incomeAmount)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">Costo bruto</span>
+                          <span className="font-mono font-medium text-red-700">-{formatMoney(item.baseCostAmount)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">Reserva</span>
+                          <span className="font-mono font-medium text-red-700">-{formatMoney(item.reserveAmount)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 border-t pt-2">
+                          <span className="font-medium">Margen despues reserva</span>
+                          <span className={`font-mono font-semibold ${item.grossAfterReserve >= 0 ? "text-foreground" : "text-red-700"}`}>
+                            {formatMoney(item.grossAfterReserve)}
+                          </span>
+                        </div>
+                      </div>
+                    </details>
+                  ))}
+                </div>
+                </>
               )}
             </CardContent>
           </Card>

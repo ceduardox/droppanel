@@ -720,6 +720,47 @@ export function useDeleteGrossCapitalMovement() {
   });
 }
 
+// Profit Settlements
+export function useProfitSettlements(enabled = true) {
+  return useQuery({
+    queryKey: ["/api/profit-settlements"],
+    enabled,
+  });
+}
+
+export function useCreateProfitSettlement() {
+  return useMutation({
+    mutationFn: async (data: {
+      periodStart: string;
+      periodEnd: string;
+      settlementDate: string;
+      payableProfitSnapshot: number;
+      note?: string | null;
+    }) => {
+      return apiRequest("/api/profit-settlements", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/profit-settlements"] });
+    },
+  });
+}
+
+export function useDeleteProfitSettlement() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/profit-settlements/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/profit-settlements"] });
+    },
+  });
+}
+
 // Sellers
 export function useSellers() {
   return useQuery({

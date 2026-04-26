@@ -51,6 +51,7 @@ const defaultTableOrder = [
   "delivery_assignment_audit_logs",
   "capital_movements",
   "gross_capital_movements",
+  "profit_settlements",
   "sellers",
   "seller_sales",
 ];

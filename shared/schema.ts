@@ -291,6 +291,28 @@ export const insertGrossCapitalMovementSchema = createInsertSchema(grossCapitalM
 export type InsertGrossCapitalMovement = z.infer<typeof insertGrossCapitalMovementSchema>;
 export type GrossCapitalMovement = typeof grossCapitalMovements.$inferSelect;
 
+// Cierres de utilidad pagada 50/50 entre socios
+export const profitSettlements = pgTable("profit_settlements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  periodStart: date("period_start").notNull(),
+  periodEnd: date("period_end").notNull(),
+  settlementDate: date("settlement_date").notNull(),
+  payableProfitSnapshot: numeric("payable_profit_snapshot", { precision: 10, scale: 2 }).notNull(),
+  joseAmount: numeric("jose_amount", { precision: 10, scale: 2 }).notNull(),
+  jhonatanAmount: numeric("jhonatan_amount", { precision: 10, scale: 2 }).notNull(),
+  note: text("note"),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertProfitSettlementSchema = createInsertSchema(profitSettlements).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertProfitSettlement = z.infer<typeof insertProfitSettlementSchema>;
+export type ProfitSettlement = typeof profitSettlements.$inferSelect;
+
 // Directores
 export const directors = pgTable("directors", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

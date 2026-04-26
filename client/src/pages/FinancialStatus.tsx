@@ -4,10 +4,31 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCapitalMovements, useExpenses, useGrossCapitalMovements, useReports } from "@/lib/api";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  useCapitalMovements,
+  useCreateProfitSettlement,
+  useDeleteProfitSettlement,
+  useExpenses,
+  useGrossCapitalMovements,
+  useProfitSettlements,
+  useReports,
+} from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 import { getEffectiveUnitBaseCost, getEffectiveUnitCost, getSaleUnitPrice } from "@/lib/sales-pricing";
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, Info, Scale } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarCheck, Info, Scale, Trash2 } from "lucide-react";
 
 type SaleBreakdown = {
   id: string;
@@ -36,6 +57,17 @@ type BridgeStep = {
   id: string;
   label: string;
   amount: number;
+};
+
+type ProfitSettlement = {
+  id: string;
+  periodStart: string;
+  periodEnd: string;
+  settlementDate: string;
+  payableProfitSnapshot: string | number;
+  joseAmount: string | number;
+  jhonatanAmount: string | number;
+  note?: string | null;
 };
 
 function getTodayIsoLocal(): string {
@@ -148,11 +180,15 @@ function KpiCard({
 
 export default function FinancialStatus() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const isAccountant = user?.role?.trim().toLowerCase() === "contador";
   const visibleFrom = user?.visibleFrom || null;
 
   const [startDate, setStartDate] = useState(getMonthStartIsoLocal());
   const [endDate, setEndDate] = useState(getTodayIsoLocal());
+  const [settlementDate, setSettlementDate] = useState(getTodayIsoLocal());
+  const [settlementNote, setSettlementNote] = useState("");
+  const [isSettlementDialogOpen, setIsSettlementDialogOpen] = useState(false);
   const [ledgerSearch, setLedgerSearch] = useState("");
   const [ledgerModuleFilter, setLedgerModuleFilter] = useState("all");
   const [showOnlySelectedRows, setShowOnlySelectedRows] = useState(false);
@@ -205,11 +241,20 @@ export default function FinancialStatus() {
   const expensesQuery = useExpenses();
   const grossCapitalQuery = useGrossCapitalMovements(!isAccountant);
   const capitalMovementsQuery = useCapitalMovements(!isAccountant);
+  const profitSettlementsQuery = useProfitSettlements(!isAccountant);
+  const createProfitSettlementMutation = useCreateProfitSettlement();
+  const deleteProfitSettlementMutation = useDeleteProfitSettlement();
 
   const salesWithProducts = (salesQuery.data as any[]) || [];
   const expenses = (expensesQuery.data as any[]) || [];
   const grossCapitalMovements = (grossCapitalQuery.data as any[]) || [];
   const capitalMovements = (capitalMovementsQuery.data as any[]) || [];
+  const profitSettlements = ((profitSettlementsQuery.data as ProfitSettlement[]) || []).map((settlement) => ({
+    ...settlement,
+    periodStart: toIsoDate(settlement.periodStart),
+    periodEnd: toIsoDate(settlement.periodEnd),
+    settlementDate: toIsoDate(settlement.settlementDate),
+  }));
 
   const allSaleBreakdowns = useMemo(
     () => (salesWithProducts as any[]).map((sale: any) => buildSaleBreakdown(sale)),
@@ -240,6 +285,16 @@ export default function FinancialStatus() {
         inRange(toIsoDate(item.movementDate), effectiveStartDate, effectiveEndDate)
       ),
     [capitalMovements, effectiveStartDate, effectiveEndDate]
+  );
+
+  const filteredProfitSettlements = useMemo(
+    () =>
+      profitSettlements.filter(
+        (settlement) =>
+          settlement.periodStart >= effectiveStartDate &&
+          settlement.periodEnd <= effectiveEndDate
+      ),
+    [profitSettlements, effectiveStartDate, effectiveEndDate]
   );
 
   const totalIncome = useMemo(
@@ -279,6 +334,35 @@ export default function FinancialStatus() {
     : operatingAfterExpenses - grossCapitalWithdrawals;
 
   const sharePerPartner = payableNetProfit / 2;
+
+  const settledProfitTotal = useMemo(
+    () => filteredProfitSettlements.reduce((sum, settlement) => sum + parseAmount(settlement.payableProfitSnapshot), 0),
+    [filteredProfitSettlements]
+  );
+
+  const settledJoseTotal = useMemo(
+    () => filteredProfitSettlements.reduce((sum, settlement) => sum + parseAmount(settlement.joseAmount), 0),
+    [filteredProfitSettlements]
+  );
+
+  const settledJhonatanTotal = useMemo(
+    () => filteredProfitSettlements.reduce((sum, settlement) => sum + parseAmount(settlement.jhonatanAmount), 0),
+    [filteredProfitSettlements]
+  );
+
+  const pendingPayableNetProfit = payableNetProfit - settledProfitTotal;
+  const pendingJoseAmount = sharePerPartner - settledJoseTotal;
+  const pendingJhonatanAmount = sharePerPartner - settledJhonatanTotal;
+  const hasOverlappingSettlement = useMemo(
+    () =>
+      profitSettlements.some(
+        (settlement) =>
+          effectiveStartDate <= settlement.periodEnd && effectiveEndDate >= settlement.periodStart
+      ),
+    [profitSettlements, effectiveStartDate, effectiveEndDate]
+  );
+
+  const latestFilteredSettlement = filteredProfitSettlements[0] || null;
 
   const periodManualCapitalNet = useMemo(
     () => filteredCapitalMovements.reduce((sum, movement) => sum + getCapitalMovementSignedAmount(movement), 0),
@@ -409,6 +493,7 @@ export default function FinancialStatus() {
       { id: "reserve", label: "Reserva aumento capital", amount: -totalReserve },
       { id: "expenses", label: "Gastos operativos", amount: -totalExpenses },
       { id: "gross-withdraw", label: "Retiros capital bruto", amount: -grossCapitalWithdrawals },
+      { id: "profit-settlements", label: "Cierres de utilidad pagados", amount: -settledProfitTotal },
     ];
   }, [
     isAccountant,
@@ -417,6 +502,7 @@ export default function FinancialStatus() {
     totalReserve,
     totalExpenses,
     grossCapitalWithdrawals,
+    settledProfitTotal,
   ]);
 
   const bridgeRows = useMemo(() => {
@@ -504,6 +590,17 @@ export default function FinancialStatus() {
           order: 30,
         });
       });
+
+      filteredProfitSettlements.forEach((settlement) => {
+        rows.push({
+          id: `profit-settlement-${settlement.id}`,
+          date: settlement.settlementDate,
+          module: "Cierre utilidad",
+          detail: `Pago 50/50 del ${formatDate(settlement.periodStart)} al ${formatDate(settlement.periodEnd)}`,
+          signedAmount: -parseAmount(settlement.payableProfitSnapshot),
+          order: 35,
+        });
+      });
     }
 
     const sorted = rows
@@ -524,6 +621,7 @@ export default function FinancialStatus() {
     filteredExpenses,
     filteredGrossCapitalMovements,
     filteredCapitalMovements,
+    filteredProfitSettlements,
     isAccountant,
   ]);
 
@@ -627,11 +725,53 @@ export default function FinancialStatus() {
     });
   };
 
-  const fundDataWarning = !isAccountant && (grossCapitalQuery.isError || capitalMovementsQuery.isError);
+  const handleCreateProfitSettlement = async () => {
+    try {
+      await createProfitSettlementMutation.mutateAsync({
+        periodStart: effectiveStartDate,
+        periodEnd: effectiveEndDate,
+        settlementDate,
+        payableProfitSnapshot: payableNetProfit,
+        note: settlementNote,
+      });
+      setSettlementNote("");
+      setIsSettlementDialogOpen(false);
+      toast({
+        title: "Cierre registrado",
+        description: "La utilidad del periodo fue marcada como pagada 50/50.",
+      });
+    } catch (error) {
+      toast({
+        title: "No se pudo registrar el cierre",
+        description: error instanceof Error ? error.message : "Intenta nuevamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteProfitSettlement = async (id: string) => {
+    try {
+      await deleteProfitSettlementMutation.mutateAsync(id);
+      toast({
+        title: "Cierre eliminado",
+        description: "El pago vuelve a quedar pendiente en el periodo correspondiente.",
+      });
+    } catch (error) {
+      toast({
+        title: "No se pudo eliminar el cierre",
+        description: error instanceof Error ? error.message : "Intenta nuevamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const canRegisterSettlement =
+    !isAccountant && payableNetProfit > 0 && !hasOverlappingSettlement && !createProfitSettlementMutation.isPending;
+  const fundDataWarning = !isAccountant && (grossCapitalQuery.isError || capitalMovementsQuery.isError || profitSettlementsQuery.isError);
   const isLoading =
     salesQuery.isLoading ||
     expensesQuery.isLoading ||
-    (!isAccountant && (grossCapitalQuery.isLoading || capitalMovementsQuery.isLoading));
+    (!isAccountant && (grossCapitalQuery.isLoading || capitalMovementsQuery.isLoading || profitSettlementsQuery.isLoading));
 
   if (isLoading) {
     return <div className="flex h-64 items-center justify-center">Cargando...</div>;
@@ -720,7 +860,7 @@ export default function FinancialStatus() {
         </div>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
             <KpiCard title="Ingresos" value={formatMoney(totalIncome)} subtitle="Ventas del periodo" />
             <KpiCard title="Costo bruto" value={formatMoney(totalBaseCost)} subtitle="Reposicion por ventas" />
             <KpiCard title="Reserva aumento" value={formatMoney(totalReserve)} subtitle="Aporte separado por producto" />
@@ -732,10 +872,16 @@ export default function FinancialStatus() {
               emphasize={operatingAfterExpenses >= 0 ? "positive" : "negative"}
             />
             <KpiCard
-              title="Utilidad neta pagable"
+              title="Utilidad generada"
               value={formatMoney(payableNetProfit)}
               subtitle="Operativa - retiros capital bruto"
               emphasize={payableNetProfit >= 0 ? "positive" : "negative"}
+            />
+            <KpiCard
+              title="Saldo pendiente"
+              value={formatMoney(pendingPayableNetProfit)}
+              subtitle="Generada - cierres pagados"
+              emphasize={pendingPayableNetProfit >= 0 ? "positive" : "negative"}
             />
           </div>
 
@@ -774,40 +920,212 @@ export default function FinancialStatus() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                <Scale className="h-4 w-4" />
-                Reparto 50/50
-              </CardTitle>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <CardTitle className="flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                  <Scale className="h-4 w-4" />
+                  Reparto 50/50
+                </CardTitle>
+                <AlertDialog open={isSettlementDialogOpen} onOpenChange={setIsSettlementDialogOpen}>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={!canRegisterSettlement}
+                      data-testid="button-create-profit-settlement"
+                    >
+                      <CalendarCheck className="mr-2 h-4 w-4" />
+                      Registrar cierre 50/50
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Registrar cierre de utilidad</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Se marcara como pagada la utilidad del {formatDate(effectiveStartDate)} al {formatDate(effectiveEndDate)}.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="space-y-4">
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <div className="rounded border bg-muted/30 p-3">
+                          <p className="text-xs text-muted-foreground">Total pagado</p>
+                          <p className="font-mono text-lg font-semibold">{formatMoney(payableNetProfit)}</p>
+                        </div>
+                        <div className="rounded border bg-muted/30 p-3">
+                          <p className="text-xs text-muted-foreground">Jose Eduardo</p>
+                          <p className="font-mono text-lg font-semibold">{formatMoney(sharePerPartner)}</p>
+                        </div>
+                        <div className="rounded border bg-muted/30 p-3">
+                          <p className="text-xs text-muted-foreground">Jhonatan</p>
+                          <p className="font-mono text-lg font-semibold">{formatMoney(sharePerPartner)}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="settlementDate">Fecha de pago</Label>
+                        <Input
+                          id="settlementDate"
+                          type="date"
+                          value={settlementDate}
+                          onChange={(e) => setSettlementDate(e.target.value)}
+                          data-testid="input-profit-settlement-date"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="settlementNote">Nota opcional</Label>
+                        <Textarea
+                          id="settlementNote"
+                          value={settlementNote}
+                          onChange={(e) => setSettlementNote(e.target.value)}
+                          placeholder="Ej: cierre quincenal pagado por transferencia"
+                          data-testid="textarea-profit-settlement-note"
+                        />
+                      </div>
+                    </div>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={(event) => {
+                          event.preventDefault();
+                          handleCreateProfitSettlement();
+                        }}
+                        disabled={createProfitSettlementMutation.isPending}
+                      >
+                        Confirmar pago 50/50
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2">
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border bg-background p-3">
+                  <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Generado</p>
+                  <p className={`text-2xl font-bold ${payableNetProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {formatMoney(payableNetProfit)}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-background p-3">
+                  <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Pagado</p>
+                  <p className="text-2xl font-bold text-foreground">{formatMoney(settledProfitTotal)}</p>
+                </div>
+                <div className="rounded-lg border bg-background p-3">
+                  <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Pendiente</p>
+                  <p className={`text-2xl font-bold ${pendingPayableNetProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {formatMoney(pendingPayableNetProfit)}
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg border bg-background p-3">
                 <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Jose Eduardo</p>
-                <p className={`text-2xl font-bold ${sharePerPartner >= 0 ? "text-green-600" : "text-red-600"}`}>
-                  {formatMoney(sharePerPartner)}
+                <p className={`text-2xl font-bold ${pendingJoseAmount >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {formatMoney(pendingJoseAmount)}
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Generado {formatMoney(sharePerPartner)} - pagado {formatMoney(settledJoseTotal)}
                 </p>
               </div>
               <div className="rounded-lg border bg-background p-3">
                 <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Jhonatan</p>
-                <p className={`text-2xl font-bold ${sharePerPartner >= 0 ? "text-green-600" : "text-red-600"}`}>
-                  {formatMoney(sharePerPartner)}
+                <p className={`text-2xl font-bold ${pendingJhonatanAmount >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {formatMoney(pendingJhonatanAmount)}
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Generado {formatMoney(sharePerPartner)} - pagado {formatMoney(settledJhonatanTotal)}
                 </p>
               </div>
-              <p className="text-xs text-muted-foreground sm:col-span-2">
-                Formula aplicada: utilidad neta pagable / 2.
-              </p>
-              <p className="inline-flex items-center gap-1 text-sm font-medium sm:col-span-2">
-                {payableNetProfit >= 0 ? (
+              </div>
+              <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-muted-foreground">
+                  Formula aplicada: utilidad generada / 2; saldo pendiente = generado - cierres pagados.
+                </p>
+                <p className="inline-flex items-center gap-1 font-medium">
+                {pendingPayableNetProfit > 0 ? (
                   <>
                     <ArrowUpRight className="h-4 w-4 text-green-600" />
-                    Resultado a favor
+                    Pendiente por pagar
                   </>
                 ) : (
                   <>
-                    <ArrowDownRight className="h-4 w-4 text-red-600" />
-                    Resultado en contra
+                    <ArrowDownRight className="h-4 w-4 text-muted-foreground" />
+                    Sin saldo pendiente
                   </>
                 )}
               </p>
+              </div>
+              {hasOverlappingSettlement && pendingPayableNetProfit > 0 && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  El rango seleccionado contiene un cierre ya registrado. Para registrar otro pago, selecciona solo fechas no cerradas.
+                </div>
+              )}
+              {latestFilteredSettlement && (
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                  Ultimo cierre visible: pagado el {formatDate(latestFilteredSettlement.settlementDate)} por {formatMoney(parseAmount(latestFilteredSettlement.payableProfitSnapshot))}.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Historial de cierres de utilidad</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {filteredProfitSettlements.length === 0 ? (
+                <p className="py-4 text-center text-muted-foreground">
+                  No hay cierres pagados dentro del periodo seleccionado.
+                </p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full min-w-[860px]">
+                    <thead className="border-b bg-muted/50">
+                      <tr>
+                        <th className="p-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Periodo cerrado</th>
+                        <th className="p-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Fecha pago</th>
+                        <th className="p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Total</th>
+                        <th className="p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Jose Eduardo</th>
+                        <th className="p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Jhonatan</th>
+                        <th className="p-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Nota</th>
+                        <th className="w-[72px] p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Accion</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProfitSettlements.map((settlement) => (
+                        <tr key={settlement.id} className="border-b">
+                          <td className="p-3 text-sm font-medium">
+                            {formatDate(settlement.periodStart)} - {formatDate(settlement.periodEnd)}
+                          </td>
+                          <td className="p-3 text-sm">{formatDate(settlement.settlementDate)}</td>
+                          <td className="p-3 text-right font-mono text-sm font-semibold">
+                            {formatMoney(parseAmount(settlement.payableProfitSnapshot))}
+                          </td>
+                          <td className="p-3 text-right font-mono text-sm">
+                            {formatMoney(parseAmount(settlement.joseAmount))}
+                          </td>
+                          <td className="p-3 text-right font-mono text-sm">
+                            {formatMoney(parseAmount(settlement.jhonatanAmount))}
+                          </td>
+                          <td className="max-w-[260px] truncate p-3 text-sm text-muted-foreground">
+                            {settlement.note || "-"}
+                          </td>
+                          <td className="p-3 text-right">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteProfitSettlement(settlement.id)}
+                              disabled={deleteProfitSettlementMutation.isPending}
+                              data-testid={`button-delete-profit-settlement-${settlement.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
 

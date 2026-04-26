@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db, pool } from "./db";
 import multer from "multer";
-import { insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema, insertGrossCapitalMovementSchema, insertDirectorSchema, insertDirectorExpenseSchema, insertSellerSchema, insertSellerSaleSchema } from "@shared/schema";
+import { insertProductSchema, insertSaleSchema, insertDailyPaymentSchema, insertExpenseCategorySchema, insertExpenseSchema, insertDeliverySchema, insertDeliveryStockEntrySchema, insertDeliveryAssignmentSchema, insertCapitalMovementSchema, insertGrossCapitalMovementSchema, insertProfitSettlementSchema, insertDirectorSchema, insertDirectorExpenseSchema, insertSellerSchema, insertSellerSaleSchema } from "@shared/schema";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import session from "express-session";
@@ -133,6 +133,14 @@ const directorReportVisibilitySchema = z.object({
 
 const entityStatusSchema = z.object({
   isActive: z.boolean(),
+});
+
+const profitSettlementPayloadSchema = z.object({
+  periodStart: isoDateSchema,
+  periodEnd: isoDateSchema,
+  settlementDate: isoDateSchema,
+  payableProfitSnapshot: z.coerce.number().positive(),
+  note: z.string().trim().max(1000).optional().nullable(),
 });
 
 const requireAdmin = (req: any, res: any, next: any) => {
@@ -901,6 +909,26 @@ async function ensureSystemTables() {
   await db.execute(sql`
     ALTER TABLE delivery_assignment_audit_logs
     ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now();
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS profit_settlements (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      period_start date NOT NULL,
+      period_end date NOT NULL,
+      settlement_date date NOT NULL,
+      payable_profit_snapshot numeric(10,2) NOT NULL,
+      jose_amount numeric(10,2) NOT NULL,
+      jhonatan_amount numeric(10,2) NOT NULL,
+      note text,
+      user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at timestamp NOT NULL DEFAULT now()
+    );
+  `);
+
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS profit_settlements_user_period_idx
+    ON profit_settlements (user_id, period_start, period_end);
   `);
 }
 
@@ -2661,6 +2689,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting gross capital movement:", error);
       res.status(500).json({ error: "Error al eliminar retiro" });
+    }
+  });
+
+  // Profit Settlements routes (cierres 50/50 de utilidad)
+  app.get("/api/profit-settlements", requireAuth, async (req, res) => {
+    try {
+      const access = await getAccessContext(req);
+      if (access.isAccountant) {
+        return res.status(403).json({ error: "El rol contador no puede acceder a cierres de utilidad" });
+      }
+      const settlements = await storage.getProfitSettlements(getEffectiveUserId(req));
+      res.json(settlements);
+    } catch (error) {
+      res.status(500).json({ error: "Error al obtener cierres de utilidad" });
+    }
+  });
+
+  app.post("/api/profit-settlements", requireAuth, async (req, res) => {
+    try {
+      const access = await getAccessContext(req);
+      if (access.isAccountant) {
+        return res.status(403).json({ error: "El rol contador no puede registrar cierres de utilidad" });
+      }
+
+      const parsed = profitSettlementPayloadSchema.parse(req.body);
+      if (parsed.periodEnd < parsed.periodStart) {
+        return res.status(400).json({ error: "La fecha final no puede ser anterior a la inicial" });
+      }
+
+      const userId = getEffectiveUserId(req);
+      const existingSettlements = await storage.getProfitSettlements(userId);
+      const overlapping = existingSettlements.find((settlement) => {
+        const existingStart = toIsoDate(settlement.periodStart);
+        const existingEnd = toIsoDate(settlement.periodEnd);
+        if (!existingStart || !existingEnd) return false;
+        return parsed.periodStart <= existingEnd && parsed.periodEnd >= existingStart;
+      });
+
+      if (overlapping) {
+        return res.status(409).json({
+          error: `Ya existe un cierre entre ${toIsoDate(overlapping.periodStart)} y ${toIsoDate(overlapping.periodEnd)}`,
+        });
+      }
+
+      const payableProfit = Math.round(parsed.payableProfitSnapshot * 100) / 100;
+      const joseAmount = Math.round((payableProfit / 2) * 100) / 100;
+      const jhonatanAmount = Math.round((payableProfit - joseAmount) * 100) / 100;
+
+      const data = insertProfitSettlementSchema.parse({
+        periodStart: parsed.periodStart,
+        periodEnd: parsed.periodEnd,
+        settlementDate: parsed.settlementDate,
+        payableProfitSnapshot: payableProfit.toFixed(2),
+        joseAmount: joseAmount.toFixed(2),
+        jhonatanAmount: jhonatanAmount.toFixed(2),
+        note: parsed.note?.trim() || null,
+        userId,
+      });
+
+      const settlement = await storage.createProfitSettlement(data);
+      res.json(settlement);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Error al registrar cierre de utilidad" });
+    }
+  });
+
+  app.delete("/api/profit-settlements/:id", requireAuth, async (req, res) => {
+    try {
+      const access = await getAccessContext(req);
+      if (access.isAccountant) {
+        return res.status(403).json({ error: "El rol contador no puede eliminar cierres de utilidad" });
+      }
+      const deleted = await storage.deleteProfitSettlement(req.params.id, getEffectiveUserId(req));
+      if (!deleted) {
+        return res.status(404).json({ error: "Cierre no encontrado" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Error al eliminar cierre de utilidad" });
     }
   });
 

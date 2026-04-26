@@ -15,6 +15,7 @@ import {
   deliveryAssignmentAuditLogs,
   capitalMovements,
   grossCapitalMovements,
+  profitSettlements,
   directors,
   directorExpenses,
   sellers,
@@ -46,6 +47,8 @@ import {
   type InsertCapitalMovement,
   type GrossCapitalMovement,
   type InsertGrossCapitalMovement,
+  type ProfitSettlement,
+  type InsertProfitSettlement,
   type Director,
   type InsertDirector,
   type DirectorExpense,
@@ -184,6 +187,11 @@ export interface IStorage {
   createGrossCapitalMovement(movement: InsertGrossCapitalMovement): Promise<GrossCapitalMovement>;
   updateGrossCapitalMovement(id: string, data: { description?: string; amount?: string; movementDate?: string }): Promise<GrossCapitalMovement | undefined>;
   deleteGrossCapitalMovement(id: string): Promise<boolean>;
+
+  // Profit Settlements
+  getProfitSettlements(userId: string): Promise<ProfitSettlement[]>;
+  createProfitSettlement(settlement: InsertProfitSettlement): Promise<ProfitSettlement>;
+  deleteProfitSettlement(id: string, userId: string): Promise<boolean>;
 
   // Directors
   getDirector(id: string): Promise<Director | undefined>;
@@ -690,6 +698,28 @@ export class DbStorage implements IStorage {
 
   async deleteGrossCapitalMovement(id: string): Promise<boolean> {
     const result = await db.delete(grossCapitalMovements).where(eq(grossCapitalMovements.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Profit Settlements
+  async getProfitSettlements(userId: string): Promise<ProfitSettlement[]> {
+    return db
+      .select()
+      .from(profitSettlements)
+      .where(eq(profitSettlements.userId, userId))
+      .orderBy(desc(profitSettlements.settlementDate));
+  }
+
+  async createProfitSettlement(settlement: InsertProfitSettlement): Promise<ProfitSettlement> {
+    const result = await db.insert(profitSettlements).values(settlement).returning();
+    return result[0];
+  }
+
+  async deleteProfitSettlement(id: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(profitSettlements)
+      .where(and(eq(profitSettlements.id, id), eq(profitSettlements.userId, userId)))
+      .returning();
     return result.length > 0;
   }
 

@@ -921,16 +921,24 @@ export default function FinancialStatus() {
           {bridgeRows.map((step) => (
             <div
               key={step.id}
-              className="grid grid-cols-[minmax(0,1fr)_140px_140px] items-center gap-2 rounded border bg-muted/30 p-2 text-sm"
+              className="rounded border bg-muted/30 p-3 text-sm md:grid md:grid-cols-[minmax(0,1fr)_140px_140px] md:items-center md:gap-2 md:p-2"
             >
-              <span className="font-medium">{step.label}</span>
-              <span className={`text-right font-mono ${step.amount >= 0 ? "text-green-700" : "text-red-700"}`}>
-                {step.amount >= 0 ? "+" : "-"}
-                {formatMoney(Math.abs(step.amount))}
-              </span>
-              <span className={`text-right font-mono font-semibold ${step.running >= 0 ? "text-foreground" : "text-red-700"}`}>
-                {formatMoney(step.running)}
-              </span>
+              <span className="block font-medium md:inline">{step.label}</span>
+              <div className="mt-3 grid grid-cols-2 gap-2 md:contents">
+                <div className="rounded-md border bg-background/70 px-2 py-1.5 md:rounded-none md:border-0 md:bg-transparent md:p-0">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground md:hidden">Movimiento</p>
+                  <p className={`font-mono md:text-right ${step.amount >= 0 ? "text-green-700" : "text-red-700"}`}>
+                    {step.amount >= 0 ? "+" : "-"}
+                    {formatMoney(Math.abs(step.amount))}
+                  </p>
+                </div>
+                <div className="rounded-md border bg-background/70 px-2 py-1.5 md:rounded-none md:border-0 md:bg-transparent md:p-0">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground md:hidden">Saldo</p>
+                  <p className={`font-mono font-semibold md:text-right ${step.running >= 0 ? "text-foreground" : "text-red-700"}`}>
+                    {formatMoney(step.running)}
+                  </p>
+                </div>
+              </div>
             </div>
           ))}
         </CardContent>

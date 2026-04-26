@@ -613,6 +613,11 @@ const storageReferenceQueries: Array<{ label: string; query: string }> = [
     query:
       "SELECT DISTINCT image_url AS key FROM gross_capital_movements WHERE image_url IS NOT NULL AND btrim(image_url) <> ''",
   },
+  {
+    label: "profit_settlements.image_url",
+    query:
+      "SELECT DISTINCT image_url AS key FROM profit_settlements WHERE image_url IS NOT NULL AND btrim(image_url) <> ''",
+  },
 ];
 
 async function collectReferencedStorageKeys(): Promise<{
@@ -921,9 +926,15 @@ async function ensureSystemTables() {
       jose_amount numeric(10,2) NOT NULL,
       jhonatan_amount numeric(10,2) NOT NULL,
       note text,
+      image_url text,
       user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       created_at timestamp NOT NULL DEFAULT now()
     );
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE profit_settlements
+    ADD COLUMN IF NOT EXISTS image_url text;
   `);
 
   await db.execute(sql`
@@ -2706,7 +2717,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/profit-settlements", requireAuth, async (req, res) => {
+  app.post("/api/profit-settlements", requireAuth, upload.single("image"), async (req, res) => {
     try {
       const access = await getAccessContext(req);
       if (access.isAccountant) {
@@ -2736,6 +2747,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const payableProfit = Math.round(parsed.payableProfitSnapshot * 100) / 100;
       const joseAmount = Math.round((payableProfit / 2) * 100) / 100;
       const jhonatanAmount = Math.round((payableProfit - joseAmount) * 100) / 100;
+      let imageUrl = null;
+
+      if (req.file) {
+        const fileName = buildStorageKey("profit-settlements", req.file.originalname);
+        const ok = await uploadToStorage(fileName, req.file.buffer);
+        if (ok) imageUrl = fileName;
+      }
 
       const data = insertProfitSettlementSchema.parse({
         periodStart: parsed.periodStart,
@@ -2745,6 +2763,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         joseAmount: joseAmount.toFixed(2),
         jhonatanAmount: jhonatanAmount.toFixed(2),
         note: parsed.note?.trim() || null,
+        imageUrl,
         userId,
       });
 

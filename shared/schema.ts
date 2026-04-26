@@ -301,6 +301,7 @@ export const profitSettlements = pgTable("profit_settlements", {
   joseAmount: numeric("jose_amount", { precision: 10, scale: 2 }).notNull(),
   jhonatanAmount: numeric("jhonatan_amount", { precision: 10, scale: 2 }).notNull(),
   note: text("note"),
+  imageUrl: text("image_url"),
   userId: varchar("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

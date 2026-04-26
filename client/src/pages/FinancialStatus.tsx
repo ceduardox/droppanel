@@ -36,7 +36,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { getEffectiveUnitBaseCost, getEffectiveUnitCost, getSaleUnitPrice } from "@/lib/sales-pricing";
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarCheck, Eye, Info, Scale, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarCheck, Eye, ImageIcon, Info, Scale, Trash2 } from "lucide-react";
 
 type SaleBreakdown = {
   id: string;
@@ -76,6 +76,7 @@ type ProfitSettlement = {
   joseAmount: string | number;
   jhonatanAmount: string | number;
   note?: string | null;
+  imageUrl?: string | null;
 };
 
 function getTodayIsoLocal(): string {
@@ -113,6 +114,14 @@ function formatDate(date: string): string {
 
 function formatMoney(value: number): string {
   return `${value.toFixed(2)} Bs`;
+}
+
+function getStorageImageUrl(imageUrl?: string | null): string {
+  if (!imageUrl) return "";
+  if (imageUrl.startsWith("/api/storage/") || imageUrl.startsWith("/uploads/")) return imageUrl;
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) return imageUrl;
+  if (!imageUrl.startsWith("/")) return `/api/storage/${imageUrl}`;
+  return imageUrl;
 }
 
 function inRange(date: string, startDate: string, endDate: string): boolean {
@@ -196,6 +205,7 @@ export default function FinancialStatus() {
   const [endDate, setEndDate] = useState(getTodayIsoLocal());
   const [settlementDate, setSettlementDate] = useState(getTodayIsoLocal());
   const [settlementNote, setSettlementNote] = useState("");
+  const [settlementImageFile, setSettlementImageFile] = useState<File | null>(null);
   const [isSettlementDialogOpen, setIsSettlementDialogOpen] = useState(false);
   const [ledgerSearch, setLedgerSearch] = useState("");
   const [ledgerModuleFilter, setLedgerModuleFilter] = useState("all");
@@ -735,18 +745,25 @@ export default function FinancialStatus() {
 
   const handleCreateProfitSettlement = async () => {
     try {
-      await createProfitSettlementMutation.mutateAsync({
-        periodStart: effectiveStartDate,
-        periodEnd: effectiveEndDate,
-        settlementDate,
-        payableProfitSnapshot: payableNetProfit,
-        note: settlementNote,
-      });
+      const formData = new FormData();
+      formData.append("periodStart", effectiveStartDate);
+      formData.append("periodEnd", effectiveEndDate);
+      formData.append("settlementDate", settlementDate);
+      formData.append("payableProfitSnapshot", String(payableNetProfit));
+      formData.append("note", settlementNote);
+      if (settlementImageFile) {
+        formData.append("image", settlementImageFile);
+      }
+
+      await createProfitSettlementMutation.mutateAsync(formData);
       setSettlementNote("");
+      setSettlementImageFile(null);
       setIsSettlementDialogOpen(false);
       toast({
         title: "Cierre registrado",
-        description: "La utilidad del periodo fue marcada como pagada 50/50.",
+        description: settlementImageFile
+          ? "La utilidad fue marcada como pagada 50/50 con voucher adjunto."
+          : "La utilidad del periodo fue marcada como pagada 50/50.",
       });
     } catch (error) {
       toast({
@@ -987,6 +1004,21 @@ export default function FinancialStatus() {
                           data-testid="textarea-profit-settlement-note"
                         />
                       </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="settlementImage">Voucher o imagen opcional</Label>
+                        <Input
+                          id="settlementImage"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setSettlementImageFile(e.target.files?.[0] || null)}
+                          data-testid="input-profit-settlement-image"
+                        />
+                        {settlementImageFile && (
+                          <p className="text-xs text-muted-foreground">
+                            Archivo seleccionado: {settlementImageFile.name}
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
@@ -1094,6 +1126,7 @@ export default function FinancialStatus() {
                         <th className="p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Jose Eduardo</th>
                         <th className="p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Jhonatan</th>
                         <th className="p-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Nota</th>
+                        <th className="p-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Voucher</th>
                         <th className="w-[72px] p-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Accion</th>
                       </tr>
                     </thead>
@@ -1145,6 +1178,40 @@ export default function FinancialStatus() {
                                   </DialogContent>
                                 </Dialog>
                               </div>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td className="p-3 text-sm text-muted-foreground">
+                            {settlement.imageUrl ? (
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    data-testid={`button-view-profit-settlement-image-${settlement.id}`}
+                                  >
+                                    <ImageIcon className="mr-1 h-3.5 w-3.5" />
+                                    Ver imagen
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-3xl">
+                                  <DialogHeader>
+                                    <DialogTitle>Voucher del cierre</DialogTitle>
+                                    <DialogDescription>
+                                      Cierre del {formatDate(settlement.periodStart)} al {formatDate(settlement.periodEnd)}, pagado el {formatDate(settlement.settlementDate)}.
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="max-h-[72vh] overflow-auto rounded-md border bg-muted/20 p-2">
+                                    <img
+                                      src={getStorageImageUrl(settlement.imageUrl)}
+                                      alt="Voucher del cierre de utilidad"
+                                      className="mx-auto max-h-[68vh] w-auto max-w-full rounded object-contain"
+                                    />
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
                             ) : (
                               "-"
                             )}

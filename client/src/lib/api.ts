@@ -730,16 +730,11 @@ export function useProfitSettlements(enabled = true) {
 
 export function useCreateProfitSettlement() {
   return useMutation({
-    mutationFn: async (data: {
-      periodStart: string;
-      periodEnd: string;
-      settlementDate: string;
-      payableProfitSnapshot: number;
-      note?: string | null;
-    }) => {
+    mutationFn: async (data: FormData) => {
       return apiRequest("/api/profit-settlements", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: data,
+        headers: {},
       });
     },
     onSuccess: () => {
